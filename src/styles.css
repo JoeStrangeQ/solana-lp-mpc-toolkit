@@ -3,13 +3,15 @@
 
 @theme default {
   --color-primary: #b6d162;
-  --color-text: #c7c7cc;
-  --color-textSecondary: #c7c7cc60;
+  --color-text: #ffffff;
+  --color-textSecondary: #acacb0;
   --color-background: #0c0c12;
-  --color-backgroundSecondary: #1b1b1f;
-  --color-backgroundTertiary: #222226;
+  --color-backgroundSecondary: #11131a;
+  --color-backgroundTertiary: #161922;
+  --color-backgroundQuaternary: #232835;
+  --color-b: #232835;
   --color-red: #fd4a4a;
-  --color-green: #30c225;
+  --color-green: #29cc88;
   --color-purple: #a866dd;
   --color-yellow: #f1ce29;
   --color-ai: #38bdf8;

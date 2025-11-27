@@ -22,32 +22,28 @@ export function formatUsdValue(
   return formatFiatValue(value, {
     minimumFractionDigits: options?.minimumFractionDigits,
     maximumFractionDigits: options?.maximumFractionDigits,
+    renderCurrency: options?.renderCurrency ?? true,
   });
 }
 
 export function formatFiatValue(
   value: number,
   options?: {
+    renderCurrency?: boolean;
     minimumFractionDigits?: number;
     maximumFractionDigits?: number;
   }
 ) {
-  // Clamp to the Intl.NumberFormat allowed range (0..20) and ensure max >= min
-  const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), hi);
+  const renderCurrency = options?.renderCurrency ?? true;
 
-  const minRaw = options?.minimumFractionDigits ?? 0;
-  const min = clamp(minRaw, 0, 20);
-
-  // If max not provided, make it at least min (and at least 2 for currency/fiat look)
-  const defaultMax = Math.max(2, min);
-  const max = clamp(options?.maximumFractionDigits ?? defaultMax, min, 20);
+  const clampedMin = Math.min(Math.max(options?.minimumFractionDigits ?? 0, 0), 20);
+  const clampedMax = Math.min(Math.max(options?.maximumFractionDigits ?? Math.max(2, clampedMin), clampedMin), 20);
 
   return new Intl.NumberFormat("en", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: min,
-    maximumFractionDigits: max,
-    notation: "standard",
+    style: renderCurrency ? "currency" : "decimal",
+    currency: renderCurrency ? "USD" : undefined,
+    minimumFractionDigits: clampedMin,
+    maximumFractionDigits: clampedMax,
   }).format(value);
 }
 

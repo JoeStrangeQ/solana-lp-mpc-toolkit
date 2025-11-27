@@ -77,7 +77,7 @@ export async function fastTransactionConfirm(signatures: string[], timeoutMs = 1
   let latestStatuses = new Array(signatures.length).fill(null);
 
   while (Date.now() - start < timeoutMs) {
-    const { value} = await connection.getSignatureStatuses(signatures);
+    const { value } = await connection.getSignatureStatuses(signatures);
     latestStatuses = value;
 
     let allDecided = true;
@@ -129,23 +129,25 @@ export const mints = {
   met: toAddress("METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL"),
 } as const;
 
-export const tokensMetadata: Record<
-  Address | string,
-  { name: string; symbol: string; icon: string; decimals: number }
-> = {
+export type BaseTokenMetadata = { address: Address; name: string; symbol: string; icon: string; decimals: number };
+export const tokensMetadata: Record<Address | string, BaseTokenMetadata> = {
   [mints.sol]: {
+    address: mints.sol,
     name: "Solana",
     symbol: "SOL",
     icon: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
     decimals: 9,
   },
   [mints.usdc]: {
+    address: mints.usdc,
+
     name: "USD Coin",
     symbol: "USDC",
     icon: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
     decimals: 6,
   },
   [mints.met]: {
+    address: mints.met,
     name: "Meteora",
     symbol: "MET",
     icon: "https://assets.meteora.ag/met-token.svg",
