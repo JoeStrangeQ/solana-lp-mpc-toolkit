@@ -4,7 +4,7 @@ import { Address } from "../utils/solana";
 
 const MNM_SERVER_URL = "https://apparitional-noninterdependent-dori.ngrok-free.dev";
 
-export const QuoteDetails = v.object({
+export const vQuoteDetails = v.object({
   quoteId: v.string(),
   streamId: v.string(),
 });

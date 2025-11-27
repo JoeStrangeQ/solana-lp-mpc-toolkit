@@ -18,27 +18,75 @@ import { useBinsAroundActiveBin } from "~/states/dlmm";
 
 export default function Home() {
   const [quoteOn, setQuoteOn] = useState(false);
+
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null); // ms duration
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  // const removeLiquidity = useAction(api.actions.dlmmPosition.removeLiquidityV2.removeLiquidity);
+  const removeLiquidity = useAction(api.actions.dlmmPosition.removeLiquidityV2.removeLiquidity);
+
+  async function handleRemove() {
+    setStatus("loading");
+    setElapsedMs(null);
+
+    const start = performance.now();
+
+    try {
+      const res = await removeLiquidity({
+        percentageToWithdraw: 100,
+        trigger: "manual",
+        positionPubkey: "4GFgXypcGQC4MMZNewnNXvP4T2nYcv3rNj3ugaCYhJz7",
+      });
+
+      const end = performance.now();
+      setElapsedMs(Math.round(end - start));
+
+      if (res?.status === "success") {
+        setStatus("success");
+      } else {
+        setStatus("error");
+      }
+    } catch (err) {
+      const end = performance.now();
+      setElapsedMs(Math.round(end - start));
+      setStatus("error");
+    }
+  }
+
   return (
     <div className="flex flex-col items-center justify-start pt-12 ">
       <div className="text-text text-center mb-2">
-        You going to open a SOL/USDC position on a 4 Bin-step pool , your deposit is 0.007 SOL and asset distribution is
-        50%/50%
-        <br /> Make sure to have at least 0.07 SOL in the wallet
+        You going to open a SOL/USDC position on a 4 Bin-step pool , your deposit is 0.007 SOL...
       </div>
+
       <Button className="py-2" variant="neutral" onClick={() => setQuoteOn(!quoteOn)}>
         {quoteOn ? "Stop Quoting" : "Get Quotes"}
       </Button>
+
       {quoteOn && (
         <MnMSuspense fallback={<></>}>
           <SwapQuotesDisplay />
         </MnMSuspense>
       )}
+
+      <Button variant="liquidPrimary" onClick={handleRemove}>
+        {status === "loading" ? "Closing..." : "Close position"}
+      </Button>
+
+      {/* Status Display */}
+      {elapsedMs !== null && status === "success" && (
+        <div className="text-green mt-4">Closed position successfully in {elapsedMs}ms</div>
+      )}
+
+      {elapsedMs !== null && status === "error" && <div className="text-red mt-4">Failed after {elapsedMs}ms</div>}
     </div>
   );
 }
 
 function SwapQuotesDisplay() {
-  const createPosition = useAction(api.actions.dlmmPosition.createPosition.createPosition);
+  const [elapsedMs, setElapsedMs] = useState<number | null>(null); // ms duration
+
+  const createPosition = useAction(api.actions.dlmmPosition.createPositionV2.createPosition);
 
   const inputMint = "So11111111111111111111111111111111111111112" as Address;
   const tokenX = "So11111111111111111111111111111111111111112" as Address;
@@ -61,14 +109,16 @@ function SwapQuotesDisplay() {
     inputRawAmount: yInDepositRaw,
   });
 
-  const { binRange } = useBinsAroundActiveBin({
+  const { initialBins } = useBinsAroundActiveBin({
     poolAddress,
     numberOfBinsToTheLeft: 67,
     numberOfBinsToTheRight: 67,
   });
 
-  const lowerBin = binRange.bins[0];
-  const upperBin = binRange.bins[68];
+  initialBins[0].binId;
+
+  const lowerBin = initialBins[0];
+  const upperBin = initialBins[initialBins.length - 1];
 
   const quoteDetails = [
     xSwapQuote && { quoteId: xSwapQuote.id, streamId: xStreamId },
@@ -104,6 +154,7 @@ function SwapQuotesDisplay() {
       <Button
         variant="liquidPrimary"
         onClick={async () => {
+          const start = performance.now();
           const res = await createPosition({
             quoteDetails,
             poolAddress,
@@ -118,7 +169,7 @@ function SwapQuotesDisplay() {
             },
             strategyTypeString: "Spot",
             collateral: {
-              amount: 0.007,
+              amount: 0.004,
               decimals: 9,
               mint: inputMint,
             },
@@ -134,6 +185,9 @@ function SwapQuotesDisplay() {
             },
           });
 
+          const end = performance.now();
+          setElapsedMs(Math.round(end - start));
+
           if (res.status === "failed") {
             setError(res.errorMsg);
           } else {
@@ -144,7 +198,11 @@ function SwapQuotesDisplay() {
         Create position
       </Button>
       {error && <div className="text-red">{error}</div>}
-      {success && <div className="text-green">{"success"}</div>}
+      {success && (
+        <div className="text-green">
+          {"success"} {elapsedMs}ms
+        </div>
+      )}
     </div>
   );
 }

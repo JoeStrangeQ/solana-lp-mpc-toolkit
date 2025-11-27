@@ -1,5 +1,5 @@
 import { Transaction, VersionedTransaction } from "@solana/web3.js";
-import { Address, SOL_MINT, toVersioned } from "../utils/solana";
+import { Address, mints, toVersioned } from "../utils/solana";
 import { simulateTransaction } from "../services/solana";
 
 type TokenAmountRes = {
@@ -61,7 +61,7 @@ export async function simulateAndGetTokensBalance({
 
   const solDelta = BigInt(sim.postBalances[userIndex]) - BigInt(sim.preBalances[userIndex]);
   if (solDelta !== 0n) {
-    tokenBalancesChange[SOL_MINT] = {
+    tokenBalancesChange[mints.sol] = {
       rawAmount: solDelta,
       decimals: 9,
     };

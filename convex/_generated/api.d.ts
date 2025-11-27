@@ -8,17 +8,23 @@
  * @module
  */
 
-import type * as actions_dlmmPosition_createPosition from "../actions/dlmmPosition/createPosition.js";
-import type * as actions_dlmmPosition_removeLiquidity from "../actions/dlmmPosition/removeLiquidity.js";
+import type * as actions_dlmmPosition_createPositionV2 from "../actions/dlmmPosition/createPositionV2.js";
+import type * as actions_dlmmPosition_removeLiquidityV2 from "../actions/dlmmPosition/removeLiquidityV2.js";
 import type * as actions_fetch_dlmm from "../actions/fetch/dlmm.js";
 import type * as actions_fetch_tokenMetadata from "../actions/fetch/tokenMetadata.js";
 import type * as actions_fetch_tokenPrices from "../actions/fetch/tokenPrices.js";
 import type * as actions_fetch_walletBalances from "../actions/fetch/walletBalances.js";
 import type * as convexEnv from "../convexEnv.js";
+import type * as helpers_buildJupiterSwapTransaction from "../helpers/buildJupiterSwapTransaction.js";
 import type * as helpers_buildTitanSwapTransaction from "../helpers/buildTitanSwapTransaction.js";
+import type * as helpers_buildTransferTokenTransaction from "../helpers/buildTransferTokenTransaction.js";
+import type * as helpers_executeSwapsWithNozomi from "../helpers/executeSwapsWithNozomi.js";
 import type * as helpers_jito from "../helpers/jito.js";
 import type * as helpers_normalizeServerSwapQuote from "../helpers/normalizeServerSwapQuote.js";
+import type * as helpers_nozomi from "../helpers/nozomi.js";
+import type * as helpers_parseTransaction from "../helpers/parseTransaction.js";
 import type * as helpers_simulateAndGetTokensBalance from "../helpers/simulateAndGetTokensBalance.js";
+import type * as helpers_transferMnMFees from "../helpers/transferMnMFees.js";
 import type * as privy from "../privy.js";
 import type * as schema_activities from "../schema/activities.js";
 import type * as schema_positions from "../schema/positions.js";
@@ -38,6 +44,7 @@ import type * as types_solanaRpcValidations from "../types/solanaRpcValidations.
 import type * as types_titanSwapQuote from "../types/titanSwapQuote.js";
 import type * as utils_amounts from "../utils/amounts.js";
 import type * as utils_meteora from "../utils/meteora.js";
+import type * as utils_retry from "../utils/retry.js";
 import type * as utils_solana from "../utils/solana.js";
 import type * as utils_timeframe from "../utils/timeframe.js";
 import type * as utils_tryCatch from "../utils/tryCatch.js";
@@ -49,17 +56,23 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
-  "actions/dlmmPosition/createPosition": typeof actions_dlmmPosition_createPosition;
-  "actions/dlmmPosition/removeLiquidity": typeof actions_dlmmPosition_removeLiquidity;
+  "actions/dlmmPosition/createPositionV2": typeof actions_dlmmPosition_createPositionV2;
+  "actions/dlmmPosition/removeLiquidityV2": typeof actions_dlmmPosition_removeLiquidityV2;
   "actions/fetch/dlmm": typeof actions_fetch_dlmm;
   "actions/fetch/tokenMetadata": typeof actions_fetch_tokenMetadata;
   "actions/fetch/tokenPrices": typeof actions_fetch_tokenPrices;
   "actions/fetch/walletBalances": typeof actions_fetch_walletBalances;
   convexEnv: typeof convexEnv;
+  "helpers/buildJupiterSwapTransaction": typeof helpers_buildJupiterSwapTransaction;
   "helpers/buildTitanSwapTransaction": typeof helpers_buildTitanSwapTransaction;
+  "helpers/buildTransferTokenTransaction": typeof helpers_buildTransferTokenTransaction;
+  "helpers/executeSwapsWithNozomi": typeof helpers_executeSwapsWithNozomi;
   "helpers/jito": typeof helpers_jito;
   "helpers/normalizeServerSwapQuote": typeof helpers_normalizeServerSwapQuote;
+  "helpers/nozomi": typeof helpers_nozomi;
+  "helpers/parseTransaction": typeof helpers_parseTransaction;
   "helpers/simulateAndGetTokensBalance": typeof helpers_simulateAndGetTokensBalance;
+  "helpers/transferMnMFees": typeof helpers_transferMnMFees;
   privy: typeof privy;
   "schema/activities": typeof schema_activities;
   "schema/positions": typeof schema_positions;
@@ -79,6 +92,7 @@ declare const fullApi: ApiFromModules<{
   "types/titanSwapQuote": typeof types_titanSwapQuote;
   "utils/amounts": typeof utils_amounts;
   "utils/meteora": typeof utils_meteora;
+  "utils/retry": typeof utils_retry;
   "utils/solana": typeof utils_solana;
   "utils/timeframe": typeof utils_timeframe;
   "utils/tryCatch": typeof utils_tryCatch;

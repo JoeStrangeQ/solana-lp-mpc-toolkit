@@ -1,8 +1,8 @@
 import { Infer, v } from "convex/values";
 import { vPositionType, vTokenAmount } from "./positions";
 
-export const vActivityType = v.union(v.literal("create_position"), v.literal("transfer"));
-
+export const vActivityType = v.union(v.literal("create_position"), v.literal("close_position"), v.literal("transfer"));
+export const vTriggerType = v.union(v.literal("manual"), v.literal("sl"), v.literal("tp"));
 export const vTransactionId = v.object({
   description: v.string(),
   id: v.string(),
@@ -23,9 +23,34 @@ export const vCreatePositionActivityDetails = v.object({
   poolAddress: v.string(),
   collateral: vTokenAmount,
   range: v.string(),
-  jitoTipLamports: v.number(),
 });
 
+export const vClosePositionDetails = v.object({
+  trigger: vTriggerType,
+
+  positionType: vPositionType,
+  poolAddress: v.string(),
+
+  outputToken: vTokenAmount,
+  tokenX: v.object({
+    withdrawRaw: v.number(),
+    claimedFee: v.number(),
+    usdPrice: v.number(),
+  }),
+  tokenY: v.object({
+    withdrawRaw: v.number(),
+    claimedFee: v.number(),
+    usdPrice: v.number(),
+  }),
+
+  pnl: v.object({
+    usdAssetPnl: v.number(),
+    usdFeePnl: v.number(),
+    pctTotalPnl: v.number(),
+    xTotalFeesRaw: v.number(),
+    yTotalFeesRaw: v.number(),
+  }),
+});
 // Helper for union variants
 function createActivityInputVariant<D extends ReturnType<typeof v.object>>(details: D) {
   return v.object({
@@ -43,6 +68,10 @@ export const vActivityInput = v.union(
     ...createActivityInputVariant(vCreatePositionActivityDetails).fields,
   }),
   v.object({
+    type: v.literal("close_position"),
+    ...createActivityInputVariant(vClosePositionDetails).fields,
+  }),
+  v.object({
     type: v.literal("transfer"),
     ...createActivityInputVariant(vTransferActivityDetails).fields,
   })
@@ -50,6 +79,7 @@ export const vActivityInput = v.union(
 
 function createActivityVariant<T extends ActivityType, D extends ReturnType<typeof v.object>>(type: T, details: D) {
   return v.object({
+    _id: v.id("activities"),
     type: v.literal(type),
     userId: v.id("users"),
     transactionIds: v.optional(v.array(vTransactionId)),
@@ -60,6 +90,7 @@ function createActivityVariant<T extends ActivityType, D extends ReturnType<type
 
 export const vActivity = v.union(
   createActivityVariant("create_position", vCreatePositionActivityDetails),
+  createActivityVariant("close_position", vClosePositionDetails),
   createActivityVariant("transfer", vTransferActivityDetails)
 );
 

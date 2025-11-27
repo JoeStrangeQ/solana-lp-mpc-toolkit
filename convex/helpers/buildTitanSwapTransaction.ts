@@ -3,13 +3,16 @@ import { Infer } from "convex/values";
 import {
   ComputeBudgetProgram,
   PublicKey,
+  SystemProgram,
   TransactionInstruction,
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
 import { connection } from "../convexEnv";
 import { TitanSwapInstructionV } from "../types/titanSwapQuote";
+import { getRandomNozomiTipPubkey } from "./nozomi";
 
+const TITAN_JITO_FRONT_RUN = "jitodontfronttitana111111111111111111111111";
 export async function buildTitanSwapTransaction({
   instructions,
   lookupTables,
@@ -22,6 +25,8 @@ export async function buildTitanSwapTransaction({
   options?: {
     cuLimit?: number;
     cuPriceMicroLamports?: number;
+    useNozomi?: boolean;
+    removeJitoFrontRun?: boolean;
     recentBlockhash: string;
   };
 }) {
@@ -40,24 +45,39 @@ export async function buildTitanSwapTransaction({
 
   for (const ix of instructions) {
     const programId = new PublicKey(ix.program);
-    const keys = ix.accounts.map((acc) => ({
-      pubkey: new PublicKey(acc.pubkey),
-      isSigner: acc.s,
-      isWritable: acc.w,
-    }));
+    const keys = ix.accounts
+      .map((acc) => {
+        if (options?.removeJitoFrontRun && acc.pubkey === TITAN_JITO_FRONT_RUN) return null;
+        return {
+          pubkey: new PublicKey(acc.pubkey),
+          isSigner: acc.s,
+          isWritable: acc.w,
+        };
+      })
+      .filter((k): k is NonNullable<typeof k> => k !== null);
+
     const data = Buffer.from(ix.data, "base64");
-    ixList.push(new TransactionInstruction({ programId, keys, data }));
+    const instruction = new TransactionInstruction({ programId, keys, data });
+
+    ixList.push(instruction);
   }
 
-  ///lookup table
+  if (options?.useNozomi) {
+    ixList.push(
+      SystemProgram.transfer({
+        fromPubkey: new PublicKey(userAddress),
+        toPubkey: new PublicKey(getRandomNozomiTipPubkey()),
+        lamports: 1_050_000,
+      })
+    );
+  }
 
+  // const a = ixList.filter((_, i) => i !== 2);
   const fetchALT = lookupTables.map((lt) =>
     connection.getAddressLookupTable(new PublicKey(lt)).then((res) => res.value)
   );
   const altAccounts = await Promise.all(fetchALT);
 
-  console.log("ALTSSS==1==11=1=", altAccounts);
-  // ✅ compile with lookup tables
   const message = new TransactionMessage({
     payerKey: new PublicKey(userAddress),
     recentBlockhash: options?.recentBlockhash ?? (await connection.getLatestBlockhash()).blockhash,

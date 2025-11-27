@@ -1,14 +1,15 @@
-import { mutation } from "../../_generated/server";
-import { authenticateUser } from "../../privy";
+import { v } from "convex/values";
+import { internalMutation } from "../../_generated/server";
 import { vPosition } from "../../schema/positions";
 
-export const insertPosition = mutation({
-  args: vPosition.omit("closedAt", "isActive", "userId"),
+export const insertPosition = internalMutation({
+  args: { input: vPosition.omit("closedAt", "isActive", "userId"), userId: v.id("users") },
 
   handler: async (ctx, args) => {
+    const { userId, input } = args;
     const existing = await ctx.db
       .query("positions")
-      .withIndex("by_position_pk", (q) => q.eq("positionPubkey", args.positionPubkey))
+      .withIndex("by_position_pk", (q) => q.eq("positionPubkey", input.positionPubkey))
       .unique();
 
     if (existing) {
@@ -19,24 +20,50 @@ export const insertPosition = mutation({
       };
     }
 
-    const { user } = await authenticateUser({ ctx });
-    if (!user) throw new Error("Couldn't find user");
-
     return await ctx.db.insert("positions", {
-      userId: user._id,
-      type: args.type,
-      positionPubkey: args.positionPubkey,
-      poolAddress: args.poolAddress,
+      userId,
+      type: input.type,
+      positionPubkey: input.positionPubkey,
+      poolAddress: input.poolAddress,
 
-      collateral: args.collateral,
-      tokenX: args.tokenX,
-      tokenY: args.tokenY,
+      collateral: input.collateral,
+      tokenX: input.tokenX,
+      tokenY: input.tokenY,
 
-      details: args.details,
-      leverage: args.leverage,
+      details: input.details,
+      leverage: input.leverage,
 
       isActive: true,
       closedAt: undefined,
     });
+  },
+});
+
+export const closePositionByPubkey = internalMutation({
+  args: {
+    positionPubkey: v.string(),
+  },
+  handler: async (ctx, { positionPubkey }) => {
+    const pos = await ctx.db
+      .query("positions")
+      .withIndex("by_position_pk", (q) => q.eq("positionPubkey", positionPubkey))
+      .unique();
+
+    if (!pos) {
+      throw new Error(`Position not found for pubkey ${positionPubkey}`);
+    }
+
+    if (pos.isActive === false) {
+      // idempotent: nothing to do
+      return { id: pos._id, isActive: false, alreadyClosed: true };
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(pos._id, {
+      isActive: false,
+      closedAt: now,
+    });
+
+    return { id: pos._id, isActive: false, closedAt: now, alreadyClosed: false };
   },
 });
