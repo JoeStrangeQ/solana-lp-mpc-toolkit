@@ -1,6 +1,9 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import { MS_1M, MS_1S } from "../../convex/utils/timeframe";
+import { getMeteoraPoolsWithPagination } from "~/services/dlmm";
+import { Address } from "../../convex/utils/solana";
 
 export function useBinsAroundActiveBin({
   poolAddress,
@@ -32,4 +35,31 @@ export function useBinsAroundActiveBin({
   });
 
   return data;
+}
+
+export function useMeteoraPoolsSearch({
+  searchTerm,
+  includeTokenMints,
+}: {
+  searchTerm?: string;
+  includeTokenMints?: Address[];
+}) {
+  return useInfiniteQuery({
+    queryKey: ["pools/search", searchTerm],
+    queryFn: async ({ pageParam = 0 }) =>
+      await getMeteoraPoolsWithPagination({
+        page: pageParam,
+        search: searchTerm,
+        includeTokenMints,
+        limit: 30,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      const total = lastPage?.total ?? 0;
+      const fetched = allPages.flatMap((page) => page.pairs).length;
+      return fetched < total ? allPages.length : undefined;
+    },
+    refetchInterval: MS_1S * 30,
+    staleTime: MS_1M,
+  });
 }

@@ -4,7 +4,7 @@ import { useSwapQuote } from "~/states/swap";
 import { Address, toAddress } from "../../convex/utils/solana";
 import { MnMSuspense } from "~/components/MnMSuspense";
 import { Skeleton } from "~/components/ui/Skeleton";
-import { LabelValueRow } from "~/components/ui/labelValueRow";
+import { LabelValue } from "~/components/ui/labelValueRow";
 import { SwapQuotes } from "~/services/mnmServer/types";
 import { useToken, useTokenPrice } from "~/states/tokens";
 import { rawAmountToAmount } from "../../convex/utils/amounts";
@@ -35,7 +35,7 @@ export default function Home() {
       const res = await removeLiquidity({
         percentageToWithdraw: 100,
         trigger: "manual",
-        positionPubkey: "4GFgXypcGQC4MMZNewnNXvP4T2nYcv3rNj3ugaCYhJz7",
+        positionPubkey: "AVGwFtDcSWy3T6mdNQnhkXgvP3PXDAE5D3UcuctLTYD9",
       });
 
       const end = performance.now();
@@ -213,11 +213,11 @@ function QuoteDetailsSkeleton() {
       <Skeleton className="mb-3 w-32 h-7" />
       {/* labels */}
       <div className="flex flex-col gap-2">
-        <LabelValueRow label={`Receives`} isLoading value={<></>} />
+        <LabelValue label={`Receives`} isLoading value={<></>} />
 
-        <LabelValueRow label={`Route`} isLoading value={<></>} />
+        <LabelValue label={`Route`} isLoading value={<></>} />
 
-        <LabelValueRow label="Rate" isLoading value={<></>} />
+        <LabelValue label="Rate" isLoading value={<></>} />
       </div>
     </div>
   );
@@ -282,14 +282,14 @@ function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; txIndex: 
 
       {/* labels */}
       <div className="flex flex-col gap-0.5">
-        <LabelValueRow
+        <LabelValue
           label={`Receives`}
           value={formatUsdValue(outTokenPrice * outUiAmount, {
             minimumFractionDigits: 4,
           })}
         />
 
-        <LabelValueRow
+        <LabelValue
           label={`Route`}
           value={
             <Row className="gap-1">
@@ -303,7 +303,7 @@ function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; txIndex: 
           }
         />
 
-        <LabelValueRow
+        <LabelValue
           label="Rate"
           value={
             <Row

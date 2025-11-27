@@ -94,6 +94,8 @@ export const removeLiquidity = action({
           errorMsg: "Remove liquidation failed",
         };
       }
+      console.log("x removed", removeLiqRes.tokenBalancesChange[0].rawAmount.toString());
+      console.log("y removed", removeLiqRes.tokenBalancesChange[1].rawAmount.toString());
 
       const xDelta = removeLiqRes.tokenBalancesChange[xMint]?.rawAmount ?? new BN(0);
       const yDelta = removeLiqRes.tokenBalancesChange[yMint]?.rawAmount ?? new BN(0);

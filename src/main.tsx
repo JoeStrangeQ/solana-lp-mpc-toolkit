@@ -3,17 +3,31 @@ import "./styles.css";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { PrivyProviderWrapper } from "./providers/PrivyProvider";
 import { ConvexClientProvider } from "./providers/ConvexClientProvider";
-import { createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
-import Home from "./routes/Home";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Navigate,
+  Outlet,
+  redirect,
+  RouterProvider,
+} from "@tanstack/react-router";
 import { Navbar } from "./components/layout/Navbar";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { queryClient } from "./utils/queryClient";
+import DlmmTradePage from "./routes/trade/DlmmTradePage";
+import ClmmTradePage from "./routes/trade/ClmmTradePage";
+import { useLastVisitedPool } from "./providers/useLastVisitedPool";
+import Lend from "./routes/Lend";
+import { DEFAULT_DLMM_POOL } from "./components/layout/PairSelector";
+import { zAddress } from "../convex/utils/solana";
 
+const DEAFULT_POOL_ROUTE = `/dlmm/${DEFAULT_DLMM_POOL}`;
 const rootRoute = createRootRoute({
   component: () => (
     <div className="min-h-screen flex flex-col bg-background px-7 xl:px-20 py-12">
       <Navbar />
-      <main className="hidden xl:flex flex-1  justify-center ">
+      <main className="flex flex-1  justify-center ">
         <Outlet />
       </main>
     </div>
@@ -23,11 +37,83 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: Home,
+  component: () => <Navigate to="/trade" replace />,
 });
 
-const routeTree = rootRoute.addChildren([indexRoute]);
+const dlmmRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/dlmm",
+  component: () => <Outlet />,
+});
 
+const dlmmPoolRoute = createRoute({
+  getParentRoute: () => dlmmRoute,
+  path: "$poolAddress",
+  component: DlmmTradePage,
+  loader: async ({ params }) => {
+    const { poolAddress } = params;
+    const parsed = zAddress.safeParse(poolAddress);
+
+    if (!parsed.success) {
+      const store = useLastVisitedPool.getState();
+      const fallback = store.lastVisited ?? DEAFULT_POOL_ROUTE;
+
+      throw redirect({
+        to: fallback,
+        replace: true,
+      });
+    }
+
+    // Address is valid here
+    const validAddress = parsed.data;
+
+    useLastVisitedPool.getState().setLastVisited({ poolAddress: validAddress, protocol: "dlmm" });
+
+    return { poolAddress: validAddress };
+  },
+});
+
+const clmmRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/clmm",
+  component: () => <Outlet />,
+});
+
+const clmmPoolRoute = createRoute({
+  getParentRoute: () => clmmRoute,
+  path: "$poolAddress",
+  component: ClmmTradePage,
+  loader: async ({ params }) => {
+    const { poolAddress } = params;
+
+    useLastVisitedPool.getState().setLastVisited({ poolAddress, protocol: "clmm" });
+
+    return { poolAddress };
+  },
+});
+
+const tradeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/trade",
+  component: () => {
+    const lastPool = useLastVisitedPool.getState().lastVisited;
+    return <Navigate to={lastPool ?? DEAFULT_POOL_ROUTE} replace />;
+  },
+});
+
+const lendRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/lend",
+  component: Lend,
+});
+
+const routeTree = rootRoute.addChildren([
+  indexRoute,
+  tradeRoute,
+  dlmmRoute.addChildren([dlmmPoolRoute]),
+  clmmRoute.addChildren([clmmPoolRoute]),
+  lendRoute,
+]);
 const router = createRouter({
   routeTree,
   context: {},
