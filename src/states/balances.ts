@@ -27,12 +27,13 @@ export function useTokenBalance({ address, mint }: { address: string; mint: Addr
     return {
       balance: 0,
       decimals: tokenMetadata.decimals,
-      logoURI: tokenMetadata.logoURI,
+      icon: tokenMetadata.icon,
       mint,
       name: tokenMetadata.name,
       symbol: tokenMetadata.symbol,
       usdBalance: 0,
       usdPrice: 0,
+      priceChange: 0,
       tokenAccount: null,
       tokenProgram: null,
     };

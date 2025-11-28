@@ -67,7 +67,7 @@ function DlmmHeader({ poolAddress }: { poolAddress: Address }) {
   return (
     <div className="flex flex-col gap-4 xl:gap-0 xl:flex-row xl:items-center xl:justify-between w-full">
       <div className="flex flex-row items-center">
-        <PoolTokenIcons xIcon={tokenX.logoURI} size={44} yIcon={tokenY.logoURI} dex="Meteora" />
+        <PoolTokenIcons xIcon={tokenX.icon} size={44} yIcon={tokenY.icon} dex="Meteora" />
         <div className="flex flex-col ml-3 -space-y-1">
           <div className="text-text text-2xl">{pool.name}</div>
           <div className="flex flex-row items-center gap-2">

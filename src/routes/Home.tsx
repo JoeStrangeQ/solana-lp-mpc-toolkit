@@ -258,7 +258,7 @@ function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; txIndex: 
         <div className="flex flex-row items-center">
           {/* Input token */}
           <div className="flex flex-row items-center gap-1.5">
-            <TokenIcon className="w-7 h-7 rounded-full" logoURI={inputToken.logoURI} />
+            <TokenIcon className="w-7 h-7 rounded-full" icon={inputToken.icon} />
             <div className="text-text">
               {formatTokenAmount(inUiAmount, inputToken.symbol, {
                 minimumFractionDigits: 4,
@@ -270,7 +270,7 @@ function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; txIndex: 
 
           {/* Output token */}
           <div className="flex flex-row items-center gap-1.5">
-            <TokenIcon className="w-7 h-7 rounded-full" logoURI={outputToken.logoURI} />
+            <TokenIcon className="w-7 h-7 rounded-full" icon={outputToken.icon} />
             <div className="text-text">
               {formatTokenAmount(outUiAmount, outputToken.symbol, {
                 minimumFractionDigits: 4,

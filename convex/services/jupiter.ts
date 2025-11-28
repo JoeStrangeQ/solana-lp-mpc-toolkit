@@ -80,7 +80,6 @@ export const TokenMetadataZ = z
   .transform((data) => ({
     ...data,
     address: data.id,
-    logoURI: data.icon ?? "",
   }));
 const JupQuoteResponseZ = z.object({
   inputMint: z.string(),

@@ -4,20 +4,15 @@ import { MeteoraIcon } from "./icons/MeteoraIcon";
 import { Skeleton } from "./ui/Skeleton";
 
 interface TokenIconProps {
-  logoURI?: string | null;
+  icon?: string | null;
   className?: string;
   alt?: string;
   style?: React.CSSProperties;
 }
 
-export function TokenIcon({ logoURI, style, className = "h-7 w-7" }: TokenIconProps) {
-  return logoURI && logoURI !== "" ? (
-    <img
-      src={logoURI}
-      draggable={false}
-      className={`rounded-full select-none object-cover ${className}`}
-      style={style}
-    />
+export function TokenIcon({ icon, style, className = "h-7 w-7" }: TokenIconProps) {
+  return icon && icon !== "" ? (
+    <img src={icon} draggable={false} className={`rounded-full select-none object-cover ${className}`} style={style} />
   ) : (
     <div
       className={`flex items-center select-none justify-center rounded-full bg-backgroundSecondary border border-white/10 ${className} p-1.5`}
@@ -62,8 +57,8 @@ export function PoolTokenIcons({
         <Skeleton className="w-(--sLoad) h-(--s) rounded-full" />
       ) : (
         <div className="flex items-center">
-          <TokenIcon logoURI={xIcon} className="w-(--s) h-(--s) z-1" />
-          <TokenIcon logoURI={yIcon} className="w-(--s) h-(--s) z-0" style={{ marginLeft: "var(--space)" }} />
+          <TokenIcon icon={xIcon} className="w-(--s) h-(--s) z-1" />
+          <TokenIcon icon={yIcon} className="w-(--s) h-(--s) z-0" style={{ marginLeft: "var(--space)" }} />
         </div>
       )}
 

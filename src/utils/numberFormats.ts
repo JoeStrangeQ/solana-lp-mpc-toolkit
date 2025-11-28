@@ -145,3 +145,13 @@ export function formatTokenAmount(
     minimumFractionDigits: options?.minimumFractionDigits,
   }).format(roundedValue)}${symbol ? "\xa0" + symbol : ""}`;
 }
+
+export function formatAmountInputWithSeparators(input: string) {
+  if (input === "") return "";
+  const [integer, decimal] = input.split(".");
+  const formattedInteger = new Intl.NumberFormat("en", {
+    maximumFractionDigits: 0,
+  }).format(parseInt(integer || "0", 10));
+
+  return decimal !== undefined ? `${formattedInteger}.${decimal}` : formattedInteger;
+}

@@ -82,7 +82,7 @@ function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) 
   };
 
   return (
-    <Row justify="start" className="mb-8">
+    <Row fullWidth justify="start" className="mb-8">
       <div className="flex p-3 rounded-full bg-backgroundSecondary">
         <MnMIcon className="w-6 h-6 text-textSecondary" />
       </div>
@@ -148,17 +148,17 @@ function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: ()
   // const [withdrawModalVis, setWithdrawModalVis] = useState(false);
   return (
     <>
-      <Row>
+      <Row fullWidth>
         <div className="flex flex-col w-full">
           <Button variant="neutral" onClick={exportWallet}>
             Export
           </Button>
           <div className="text-textSecondary text-nowrap mb-0.5 ">Total balance</div>
 
-          <Row>
+          <Row fullWidth>
             <Ticker value={formattedUsdBalance} className={tickerSize} />
 
-            <Row className="gap-2 w-min">
+            <Row className="gap-2">
               <button
                 className="flex p-2.5 bg-white/10 inner-white hover-effect hover:bg-white/15 active:scale-95 rounded-full cursor-pointer self-end "
                 // onClick={() => setWithdrawModalVis(true)}
@@ -200,11 +200,11 @@ function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: ()
 
 function TotalBalanceSkeleton() {
   return (
-    <Row>
+    <Row fullWidth>
       <div className="flex flex-col w-full ">
         <div className="text-textSecondary text-nowrap mb-0.5">Total balance</div>
 
-        <Row>
+        <Row fullWidth>
           <Skeleton className="h-9 w-40 " />
 
           <Row className="gap-2 w-min">
@@ -240,7 +240,7 @@ function TokenList({ userAddress }: { userAddress: string }) {
         const priceChange = token.priceChange ?? 0;
         return (
           <Row key={token.mint} justify="start">
-            <TokenIcon logoURI={token.logoURI} className="h-8 w-8" />
+            <TokenIcon icon={token.icon} className="h-8 w-8" />
             <div className="flex flex-col ml-2.5">
               <div className="text-text text-sm">{token.name}</div>
               <div className="text-textSecondary text-xs text-left">{tokenAmount}</div>

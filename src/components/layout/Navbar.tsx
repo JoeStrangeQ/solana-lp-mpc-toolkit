@@ -6,6 +6,7 @@ import { DEFAULT_DLMM_POOL, PairSelector, PairSelectorSkeleton } from "./PairSel
 import { toAddress } from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { Protocol } from "~/providers/useLastVisitedPool";
+import { SlidingSelect } from "../ui/SlidingSelector";
 
 type Routes = "Trade" | "Lend" | "Docs";
 const routes: {
@@ -43,23 +44,30 @@ export function Navbar() {
         <button onClick={() => navigate({ to: "/" })} className="flex flex-row items-center cursor-pointer z-10">
           <MnMIcon className="h-9 w-9" />
         </button>
-        <div className="flex flex-row items-center gap-2">
-          {routes.map(({ route, redirect }) => {
-            return (
-              <div
+
+        <SlidingSelect
+          value={currentRoute}
+          onChange={(route) => {
+            const r = routes.find((o) => o.route === route);
+            if (!r) return;
+            onNavClick(route, r.redirect);
+          }}
+          containerPaddingInPixels={{ px: 14, py: 6 }}
+          className="cursor-pointer select-none bg-transparent"
+          options={routes.map(({ route }) => ({
+            id: route,
+            element: (
+              <span
                 className={cn(
-                  "flex px-3.5 py-1.5 rounded-full text-text text-base cursor-pointer active:scale-95 select-none hover-effect",
-                  route === currentRoute
-                    ? "bg-text/10 inner-white backdrop-blur-lg hover:bg-text/12"
-                    : "hover:bg-text/5"
+                  "text-base hover-effect",
+                  route === currentRoute ? "text-text" : "text-textSecondary hover:text-text"
                 )}
-                onClick={() => onNavClick(route, redirect)}
               >
                 {route}
-              </div>
-            );
-          })}
-        </div>
+              </span>
+            ),
+          }))}
+        />
       </div>
 
       {currentRoute === "Trade" && (

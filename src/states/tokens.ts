@@ -3,18 +3,21 @@ import { useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { TOKENS_METADATA } from "~/utils/solana";
 import { MS_1M } from "../../convex/utils/timeframe";
-import { TokenMetadata } from "../../convex/services/jupiter";
-import { Address } from "../../convex/utils/solana";
+import { Address, tokensMetadata } from "../../convex/utils/solana";
 
-export function useToken({ mint }: { mint: Address }): TokenMetadata {
+export function useToken({ mint, forceFetch = false }: { mint: Address; forceFetch?: boolean }) {
   const fetchTokenMetadata = useAction(api.actions.fetch.tokenMetadata.getTokenMetadataAction);
 
+  const staticMetadata = tokensMetadata[mint];
+  const shouldUseStatic = staticMetadata && !forceFetch;
+
   const { data: tokenMetadata } = useSuspenseQuery({
-    queryKey: ["tokensMetadata", mint],
+    queryKey: ["tokensMetadata", mint, forceFetch],
     queryFn: async () => {
+      if (shouldUseStatic) return staticMetadata;
       return await fetchTokenMetadata({ mint });
     },
-    refetchInterval: MS_1M * 1.1, // BACKEND CACHE FOR 1 MIN
+    refetchInterval: MS_1M * 1.1, // backend cache 1 min
   });
 
   return tokenMetadata;

@@ -140,7 +140,6 @@ export const tokensMetadata: Record<Address | string, BaseTokenMetadata> = {
   },
   [mints.usdc]: {
     address: mints.usdc,
-
     name: "USD Coin",
     symbol: "USDC",
     icon: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",

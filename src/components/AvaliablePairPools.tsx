@@ -20,7 +20,7 @@ export function AvailablePairPools({ currentPool }: { currentPool: MeteoraDlmmPo
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <DlmmPoolRowSkeleton key={i} />
         ))}
@@ -32,7 +32,7 @@ export function AvailablePairPools({ currentPool }: { currentPool: MeteoraDlmmPo
   }
 
   return (
-    <div className="flex flex-col gap-1 ">
+    <div className="relative flex flex-col gap-1 overflow-auto ">
       {pairPools.map((pool) => {
         if (pool.address === currentPool.address) return null;
         return (
@@ -57,7 +57,7 @@ export function DlmmPoolRow({ pool, onClick }: { pool: MeteoraDlmmPool; onClick:
 
   return (
     <Row className="items-center p-2 rounded-lg hover:bg-white/3 select-none cursor-pointer" onClick={onClick}>
-      <PoolTokenIcons xIcon={tokenX.logoURI} yIcon={tokenY.logoURI} size={28} dex="Meteora" />
+      <PoolTokenIcons xIcon={tokenX.icon} yIcon={tokenY.icon} size={28} dex="Meteora" />
       <div className="flex flex-col -space-y-0.5 ml-2">
         <div className="text-text text-xs">{pool.name}</div>
         <LabelValue label={"Bin Step"} value={pool.bin_step} valueClassName="text-xs" labelClassName="text-xs" />

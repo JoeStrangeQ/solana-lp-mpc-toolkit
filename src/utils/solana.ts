@@ -5,7 +5,7 @@ type LocalTokenMetadata = {
   symbol: string;
   decimals: number;
   address: Address;
-  logoURI: string | null;
+  icon: string | null;
 };
 
 export const TOKENS_METADATA: Record<string, LocalTokenMetadata> = {
@@ -14,16 +14,14 @@ export const TOKENS_METADATA: Record<string, LocalTokenMetadata> = {
     symbol: "SOL",
     decimals: 9,
     address: "So11111111111111111111111111111111111111112" as Address,
-    logoURI:
-      "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+    icon: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
   },
   USDC: {
     name: "USDC",
     symbol: "USDC",
     decimals: 6,
     address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" as Address,
-    logoURI:
-      "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+    icon: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
   },
 };
 

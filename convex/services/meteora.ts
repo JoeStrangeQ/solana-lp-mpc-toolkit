@@ -3,6 +3,7 @@ import { connection } from "../convexEnv";
 import { PublicKey } from "@solana/web3.js";
 import { serializeBinLiquidity } from "../utils/meteora";
 
+export const RENT_LAMPORTS_DLMM = 57_000_000;
 export interface SerializedBinLiquidity {
   binId: number;
   xAmount: string;

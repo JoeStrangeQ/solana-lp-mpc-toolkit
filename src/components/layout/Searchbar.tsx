@@ -1,16 +1,15 @@
-import { Search } from "lucide-react"
-import Backdrop from "../ui/Backdrop"
-import { useState } from "react"
-
+import { Search } from "lucide-react";
+import Backdrop from "../ui/Backdrop";
+import { useState } from "react";
 
 export function Searchbar() {
-  const [searchInput, setSearchInput] = useState('')
-  const [isOpen, setIsOpen] = useState(false)
+  const [searchInput, setSearchInput] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
   // const debouncedSearch = useDebounce(searchInput, 300)
 
   function reset() {
-    setIsOpen(false)
-    setSearchInput('')
+    setIsOpen(false);
+    setSearchInput("");
   }
   return (
     <div className="relative z-20 w-full hidden xl:block">
@@ -45,7 +44,7 @@ export function Searchbar() {
         )}
       </AnimatePresence> */}
     </div>
-  )
+  );
 }
 
 // function SearchResults({
@@ -156,8 +155,8 @@ export function Searchbar() {
 //       }}
 //     >
 //       <div className="flex items-center justify-center -space-x-2">
-//         <TokenIcon logoURI={tokenX.logoURI} className="h-7 w-7" />
-//         <TokenIcon logoURI={tokenY.logoURI} className="h-7 w-7" />
+//         <TokenIcon icon={tokenX.icon} className="h-7 w-7" />
+//         <TokenIcon icon={tokenY.icon} className="h-7 w-7" />
 //       </div>
 
 //       <div className="flex flex-col -space-x-0.5 ml-2">
@@ -255,7 +254,7 @@ export function Searchbar() {
 //   const tokenX = useToken({ mint: mintX })
 //   const tokenY = useToken({ mint: mintY })
 
-//   if (!tokenX || !tokenY || !tokenX.logoURI || !tokenY.logoURI) return null
+//   if (!tokenX || !tokenY || !tokenX.icon || !tokenY.icon) return null
 //   return (
 //     <motion.button
 //       onClick={() => {
@@ -267,8 +266,8 @@ export function Searchbar() {
 //       transition={{ duration: 0.4, ease: 'easeInOut' }}
 //     >
 //       <div className="flex items-center justify-center -space-x-1">
-//         <TokenIcon logoURI={tokenX.logoURI} className="h-5 w-5" />
-//         <TokenIcon logoURI={tokenY.logoURI} className="h-5 w-5" />
+//         <TokenIcon icon={tokenX.icon} className="h-5 w-5" />
+//         <TokenIcon icon={tokenY.icon} className="h-5 w-5" />
 //       </div>
 
 //       <div className="text-text font-medium text-sm ">
