@@ -113,9 +113,9 @@ async function fetchSolBalance({ address }: { address: Address; ctx: ActionCtx }
 
   const tokenMetadata = await fetchTokensMetadata({ mints: [mints.sol] });
 
-  const price = tokenMetadata[0].usdPrice ?? 0;
+  const price = tokenMetadata[mints.sol].usdPrice ?? 0;
   const solBalance = balance / LAMPORTS_PER_SOL;
-  const priceChange = tokenMetadata[0].stats24h?.priceChange ?? 0;
+  const priceChange = tokenMetadata[mints.sol].stats24h?.priceChange ?? 0;
   return {
     mint: "So11111111111111111111111111111111111111112",
     decimals: 9,
