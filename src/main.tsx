@@ -25,7 +25,7 @@ import { zAddress } from "../convex/utils/solana";
 const DEAFULT_POOL_ROUTE = `/dlmm/${DEFAULT_DLMM_POOL}`;
 const rootRoute = createRootRoute({
   component: () => (
-    <div className="min-h-screen flex flex-col bg-background px-7 xl:px-20 py-12">
+    <div className="min-h-screen flex flex-col bg-background px-7 xl:px-20 py-12 overflow-x-hidden">
       <Navbar />
       <main className="flex flex-1  justify-center ">
         <Outlet />

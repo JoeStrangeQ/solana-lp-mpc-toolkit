@@ -129,9 +129,9 @@ function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) 
   );
 }
 
-function TotalBalance({ userAddress, onCloseSideBar }: { userAddress: string; onCloseSideBar: () => void }) {
+function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: () => void }) {
   // const { resetWithdrawModalStates } = useWithdrawModalStates();
-  const { convexUser } = useConvexUser();
+  // const { convexUser } = useConvexUser();
   const { fundWallet } = useFundWallet();
   const { exportWallet } = useSolanaWallets();
 
@@ -247,7 +247,7 @@ function TokenList({ userAddress }: { userAddress: string }) {
             </div>
             <div
               className={cn(
-                ` px-1.5 py-0.5 rounded-2xl flex justify-center items-center text-center text-[8px] ml-1`,
+                ` px-1.5 py-0.5 rounded-2xl flex justify-center items-center text-center text-[10px] ml-3.5`,
                 priceChange > 0 ? "text-green bg-green/10" : "text-red bg-red/10"
               )}
             >
