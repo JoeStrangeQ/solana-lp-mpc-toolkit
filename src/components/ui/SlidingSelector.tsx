@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import { cn } from "~/utils/cn";
 
 type Option<T extends string> = {
   id: T;
@@ -48,7 +49,7 @@ export function SlidingSelect<T extends string>({
   };
 
   return (
-    <div ref={containerRef} className={`relative flex rounded-full gap-2 bg-backgroundQuaternary ${className}`}>
+    <div ref={containerRef} className={cn(`relative flex rounded-full bg-backgroundQuaternary `, className)}>
       {/* Highlight */}
 
       <motion.div
@@ -76,7 +77,7 @@ export function SlidingSelect<T extends string>({
           key={opt.id}
           ref={setRef(opt.id)}
           onClick={() => onChange(opt.id)}
-          className={`relative z-10 cursor-pointer flex items-center justify-center rounded-full`}
+          className={`relative z-10 cursor-pointer flex items-center justify-center rounded-full select-none`}
           style={{
             paddingRight: containerPaddingInPixels.px,
             paddingLeft: containerPaddingInPixels.px,

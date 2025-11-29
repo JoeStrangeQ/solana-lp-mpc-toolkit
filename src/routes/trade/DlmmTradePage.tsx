@@ -2,12 +2,14 @@ import { PoolDataHeader } from "~/components/PoolDataHeader";
 import { toAddress } from "../../../convex/utils/solana";
 import { useParams } from "@tanstack/react-router";
 import { CreatePositionPanel } from "~/components/trade/CreatePositionPanel";
+import { RangeSelectorPanel } from "~/components/trade/RangeSelectorPanel";
 
 export default function DlmmTradePage() {
   const { poolAddress } = useParams({ strict: false }) as {
     poolAddress: string;
   };
 
+  const parsedPoolAddress = toAddress(poolAddress);
   return (
     <div className="w-full px-8 py-16">
       <PoolDataHeader protocol="dlmm" poolAddress={toAddress(poolAddress)} />
@@ -22,14 +24,14 @@ export default function DlmmTradePage() {
         <div className="flex flex-col gap-2 lg:grid lg:grid-rows-[7fr_3fr]">
           <div className="rounded-2xl bg-backgroundSecondary p-4">{/* Panel 1 — charts, LP overview, etc. */}s</div>
 
-          <div className="rounded-2xl bg-backgroundSecondary p-4">
-            {/* Panel 2 — bin graph, liquidity distribution */}s
+          <div className="rounded-2xl bg-backgroundSecondary px-4 py-3.5  overflow-hidden">
+            <RangeSelectorPanel poolAddress={parsedPoolAddress} />
           </div>
         </div>
 
         {/* Create Position panel*/}
         <div className="rounded-2xl bg-backgroundSecondary px-4 py-6">
-          <CreatePositionPanel />
+          <CreatePositionPanel poolAddress={parsedPoolAddress} />
         </div>
       </div>
 

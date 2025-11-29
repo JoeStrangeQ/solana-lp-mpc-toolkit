@@ -8,6 +8,7 @@ import { abbreviateAmount } from "~/utils/numberFormats";
 import { Skeleton } from "./ui/Skeleton";
 import { MnMSuspense } from "./MnMSuspense";
 import { useNavigate } from "@tanstack/react-router";
+import { motion } from "motion/react";
 
 export function AvailablePairPools({ currentPool }: { currentPool: MeteoraDlmmPool }) {
   const navigate = useNavigate();
@@ -20,7 +21,7 @@ export function AvailablePairPools({ currentPool }: { currentPool: MeteoraDlmmPo
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div key={"loader"} className="flex flex-col gap-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <DlmmPoolRowSkeleton key={i} />
         ))}
@@ -28,22 +29,33 @@ export function AvailablePairPools({ currentPool }: { currentPool: MeteoraDlmmPo
     );
   }
   if (!isLoading && pairPools.length === 0) {
-    return <div className="text-textSecondary text-sm">Couldn't find other {currentPool.name} pools</div>;
+    return (
+      <div key={"no-pools"} className="text-textSecondary text-sm">
+        Couldn't find other {currentPool.name} pools
+      </div>
+    );
   }
 
   return (
-    <div className="relative flex flex-col gap-1 overflow-auto ">
+    <div key={"pools"} className="relative flex flex-col gap-1 overflow-auto ">
       {pairPools.map((pool) => {
         if (pool.address === currentPool.address) return null;
         return (
           <MnMSuspense fallback={<DlmmPoolRowSkeleton />}>
-            <DlmmPoolRow
-              key={pool.address}
-              pool={pool}
-              onClick={() => {
-                navigate({ to: `/dlmm/${pool.address}` });
-              }}
-            />
+            <motion.div
+              initial={{ opacity: 0, x: -15 }}
+              animate={{ opacity: 1, scale: 1, x: 0 }}
+              exit={{ opacity: 0, x: -15 }}
+              transition={{ duration: 0.3 }}
+            >
+              <DlmmPoolRow
+                key={pool.address}
+                pool={pool}
+                onClick={() => {
+                  navigate({ to: `/dlmm/${pool.address}` });
+                }}
+              />
+            </motion.div>
           </MnMSuspense>
         );
       })}

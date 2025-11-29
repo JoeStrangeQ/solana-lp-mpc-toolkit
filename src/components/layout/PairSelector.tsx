@@ -69,9 +69,10 @@ export function PairSelector({ currentPoolAddress, protocol }: { currentPoolAddr
 export function PairSelectorSkeleton() {
   return (
     <div className="flex flex-row items-center bg-backgroundTertiary rounded-full p-2">
-      {pairs.map(() => {
+      {pairs.map((p) => {
         return (
           <div
+          key={`${p.tokenX}-${p.tokenY}`}
             className={cn(
               "flex items-center gap-1 px-3 py-1 rounded-full cursor-pointer transition",
               "text-textSecondary hover:brightness-110"

@@ -1,0 +1,169 @@
+import { useBinsAroundActiveBin } from "~/states/dlmm";
+import { Row } from "../ui/Row";
+import { Address } from "../../../convex/utils/solana";
+import { create } from "zustand";
+import { SerializedBinLiquidity } from "../../../convex/services/meteora";
+import { useEffect, useMemo, useState } from "react";
+import BinRangeSelector from "../BinRangeSelector";
+import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import { cn } from "~/utils/cn";
+
+interface BinRangeState {
+  lowerBin: SerializedBinLiquidity | null;
+  upperBin: SerializedBinLiquidity | null;
+
+  updateUpperLowerBins: (p: { newLower?: SerializedBinLiquidity; newUpper?: SerializedBinLiquidity }) => void;
+}
+
+export const useCreatePositionRangeStore = create<BinRangeState>((set) => ({
+  lowerBin: null,
+  upperBin: null, // default 69 bins
+
+  updateUpperLowerBins: ({ newLower, newUpper }) =>
+    set((state) => ({
+      lowerBin: newLower !== undefined ? newLower : state.lowerBin,
+      upperBin: newUpper !== undefined ? newUpper : state.upperBin,
+    })),
+}));
+
+const MIN_TOTAL = 70;
+const MIN_SIDE = Math.floor(MIN_TOTAL / 2);
+const MAX_SIDE = 120;
+const BUFFER = 4;
+
+export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
+  const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
+
+  const { binRange, initialBins } = useBinsAroundActiveBin({
+    poolAddress,
+    numberOfBinsToTheLeft: MAX_SIDE + BUFFER,
+    numberOfBinsToTheRight: MAX_SIDE + BUFFER,
+  });
+
+  const [sideBins, setSideBins] = useState(MIN_SIDE);
+
+  const visibleBins = useMemo(() => {
+    if (!binRange?.bins || !binRange.activeBin) return [];
+
+    const centerBinId = binRange.activeBin;
+    const centerIndex = binRange.bins.findIndex((b) => b.binId === centerBinId);
+
+    const start = Math.max(0, centerIndex - sideBins - BUFFER);
+    const end = Math.min(binRange.bins.length - 1, centerIndex + sideBins + BUFFER);
+
+    // slice is non-inclusive for upper bound → use end + 1
+    return binRange.bins.slice(start, end + 1);
+  }, [binRange, sideBins]);
+
+  useEffect(() => {
+    if (!lowerBin || !upperBin) {
+      const first = visibleBins[BUFFER];
+      const last = visibleBins[visibleBins.length - 1 - BUFFER];
+      if (first && last) {
+        const { lower: clampedLower, upper: clampedUpper } = clampSelectedRange(first, last, visibleBins);
+        updateUpperLowerBins({ newLower: clampedLower, newUpper: clampedUpper });
+      }
+    }
+  }, [visibleBins]);
+
+  if (!lowerBin || !upperBin) return <div>Loading…</div>;
+
+  const canZoomOut = sideBins > MIN_SIDE;
+  const canZoomIn = sideBins < MAX_SIDE;
+  return (
+    <div className="flex flex-col items-center w-full gap-3 overflow-visible">
+      <Row fullWidth>
+        <Row justify="start" className="gap-1 items-baseline">
+          <div className="text-text text-sm">Select range</div>
+          <div className="text-textSecondary text-xs">{upperBin.binId - lowerBin.binId} Bins</div>
+        </Row>
+
+        <Row>
+          {/* RESET RANGE */}
+
+          <button
+            className={cn(
+              "flex rounded-full  inner-white px-2 py-1 mr-2 bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95"
+            )}
+            onClick={() => {
+              updateUpperLowerBins({
+                newLower: initialBins[0],
+                newUpper: initialBins[initialBins.length - 1],
+              });
+              setSideBins(MIN_SIDE);
+            }}
+          >
+            <RotateCcw className="w-3 h-3 text-text" />
+          </button>
+          {/* ZOOM OUT */}
+          <button
+            className={cn(
+              "flex rounded-full rounded-r-none inner-white px-2 py-1",
+              canZoomOut ? "bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95" : "bg-white/5 opacity-40"
+            )}
+            disabled={!canZoomOut}
+            onClick={() => setSideBins((v) => Math.max(MIN_SIDE, v - 10))}
+          >
+            <ZoomIn className="w-3 h-3 text-text" />
+          </button>
+
+          {/* ZOOM IN */}
+          <button
+            className={cn(
+              "flex rounded-full rounded-l-none inner-white px-2 py-1",
+              canZoomIn ? "bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95" : "bg-white/5 opacity-40"
+            )}
+            disabled={!canZoomIn}
+            onClick={() => setSideBins((v) => Math.min(MAX_SIDE, v + 10))}
+          >
+            <ZoomOut className="w-3 h-3 text-text" />
+          </button>
+        </Row>
+      </Row>
+
+      <BinRangeSelector
+        activeBinId={binRange.activeBin}
+        activeLowerBin={lowerBin}
+        activeUpperBin={upperBin}
+        bins={visibleBins}
+        maxBarHeight={64}
+        onRangeChange={(lower, upper) => {
+          const { lower: clampedLower, upper: clampedUpper } = clampSelectedRange(lower, upper, visibleBins);
+
+          updateUpperLowerBins({
+            newLower: clampedLower,
+            newUpper: clampedUpper,
+          });
+        }}
+        poolAddress={poolAddress}
+      />
+    </div>
+  );
+}
+
+function clampSelectedRange(
+  lower: SerializedBinLiquidity,
+  upper: SerializedBinLiquidity,
+  bins: SerializedBinLiquidity[]
+) {
+  const MAX = 70;
+
+  const lowerIndex = bins.findIndex((b) => b.binId === lower.binId);
+  const upperIndex = bins.findIndex((b) => b.binId === upper.binId);
+
+  if (lowerIndex === -1 || upperIndex === -1) return { lower, upper };
+
+  const size = upperIndex - lowerIndex + 1;
+
+  // already OK
+  if (size <= MAX) return { lower, upper };
+
+  // too large → clamp
+  const newLowerIndex = upperIndex - (MAX - 1);
+  const clampedLower = bins[newLowerIndex];
+
+  return {
+    lower: clampedLower ?? lower,
+    upper,
+  };
+}
