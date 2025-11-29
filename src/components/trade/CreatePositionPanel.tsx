@@ -5,6 +5,7 @@ import { useConvexUser } from "~/providers/UserStates";
 import { Address, mints } from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { Skeleton } from "../ui/Skeleton";
+import { BinDistribution } from "../BinDistribution";
 
 export type CreatePositionState = {
   collateralMint: Address;
@@ -29,11 +30,11 @@ export const useCreatePositionState = create<CreatePositionStore>((set) => ({
   resetCreatePositionState: () => set(() => ({ ...defaultCreatePositionState })),
 }));
 
-export function CreatePositionPanel() {
+export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
   const { convexUser } = useConvexUser();
   const { collateralMint, collateralUiAmount, setCreatePositionState } = useCreatePositionState();
   return (
-    <div className="flex flex-col items-center w-full">
+    <div className="flex flex-col w-full">
       <Row fullWidth className="mb-3">
         <div className="text-text text-sm">Collateral</div>
         {convexUser && (
@@ -55,6 +56,10 @@ export function CreatePositionPanel() {
         onCollateralAmountChange={(amount) => setCreatePositionState({ collateralUiAmount: amount })}
         onCollateralMintChange={(newMint) => setCreatePositionState({ collateralMint: newMint })}
       />
+
+      {/*Bin dis */}
+      <div className="text-text text-sm text-left mb-3 mt-5">Set Bin Distribution</div>
+      <BinDistribution poolAddress={poolAddress} onLiquidityShapeChange={() => {}} />
     </div>
   );
 }

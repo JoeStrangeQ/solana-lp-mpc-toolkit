@@ -53,7 +53,7 @@ export function Navbar() {
             onNavClick(route, r.redirect);
           }}
           containerPaddingInPixels={{ px: 14, py: 6 }}
-          className="cursor-pointer select-none bg-transparent"
+          className="cursor-pointer select-none bg-transparent gap-1"
           options={routes.map(({ route }) => ({
             id: route,
             element: (

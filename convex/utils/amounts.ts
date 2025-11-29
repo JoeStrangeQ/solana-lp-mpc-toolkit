@@ -8,6 +8,14 @@ export function rawAmountToAmount(rawAmount: number, decimals: number) {
   return rawAmount / 10 ** decimals;
 }
 
+export function amountToRawBN(amount: BN, decimals: number): BN {
+  return amount.mul(new BN(10).pow(new BN(decimals)));
+}
+
+export function rawToAmountBN(raw: BN, decimals: number): BN {
+  return raw.div(new BN(10).pow(new BN(decimals)));
+}
+
 export function safeBigIntToNumber(value: bigint | BN, label?: string): number {
   const big = typeof value === "bigint" ? value : BigInt(value.toString());
 
