@@ -11,10 +11,19 @@ import { Skeleton } from "./ui/Skeleton";
 import { MnMSuspense } from "./MnMSuspense";
 import { Dropdown } from "./ui/Dropdown";
 import { AvailablePairPools } from "./AvaliablePairPools";
+import { cn } from "~/utils/cn";
 
-export function PoolDataHeader({ poolAddress, protocol }: { poolAddress: Address; protocol: Protocol }) {
+export function PoolDataHeader({
+  poolAddress,
+  protocol,
+  classname,
+}: {
+  poolAddress: Address;
+  protocol: Protocol;
+  classname?: string;
+}) {
   return (
-    <div className="flex flex-col w-full items-start h-min">
+    <div className={cn("flex flex-col w-full items-start h-min", classname)}>
       {protocol === "dlmm" ? (
         <MnMSuspense fallback={<DlmmHeaderSkeleton />}>
           <DlmmHeader poolAddress={poolAddress} />
@@ -28,7 +37,7 @@ export function PoolDataHeader({ poolAddress, protocol }: { poolAddress: Address
 
 export function DlmmHeaderSkeleton() {
   return (
-    <div className="flex flex-col gap-4 xl:gap-0 xl:flex-row xl:items-center xl:justify-between w-full">
+    <div className="flex flex-col gap-4 lg:gap-0 lg:flex-row lg:items-center lg:justify-between w-full">
       <div className="flex flex-row items-center">
         <PoolTokenIcons isLoading size={44} dex="Meteora" />
         <div className="flex flex-col ml-3 space-y-0.5">
@@ -42,8 +51,8 @@ export function DlmmHeaderSkeleton() {
         <Skeleton className="ml-5 rounded-lg" style={{ width: 28, height: 28 }} />
       </div>
 
-      <div className="flex flex-col xl:items-end gap-1">
-        <div className="w-96 h-px bg-white/5 xl:hidden mb-2" />
+      <div className="flex flex-col lg:items-end gap-1">
+        <div className="w-96 h-px bg-white/5 lg:hidden mb-2" />
         <div className="flex flex-row items-center gap-4">
           <LabelValue label={"Price"} value={""} isLoading />
           <LabelValue label={"TVL"} value={""} isLoading />
@@ -65,7 +74,7 @@ function DlmmHeader({ poolAddress }: { poolAddress: Address }) {
   const tokenY = useToken({ mint: pool.mint_y });
 
   return (
-    <div className="flex flex-col gap-4 xl:gap-0 xl:flex-row xl:items-center xl:justify-between w-full">
+    <div className="flex flex-col gap-4 lg:gap-0 lg:flex-row lg:items-center lg:justify-between w-full">
       <div className="flex flex-row items-center">
         <PoolTokenIcons xIcon={tokenX.icon} size={44} yIcon={tokenY.icon} dex="Meteora" />
         <div className="flex flex-col ml-3 -space-y-1">
@@ -89,8 +98,8 @@ function DlmmHeader({ poolAddress }: { poolAddress: Address }) {
         />
       </div>
 
-      <div className="flex flex-col xl:items-end gap-1">
-        <div className="w-96 h-px bg-white/5 xl:hidden mb-2" />
+      <div className="flex flex-col lg:items-end gap-1">
+        <div className="w-96 h-px bg-white/5 lg:hidden mb-2" />
         <div className="flex flex-row items-center gap-4">
           <LabelValue
             label={"Price"}
