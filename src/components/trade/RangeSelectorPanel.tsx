@@ -3,7 +3,7 @@ import { Row } from "../ui/Row";
 import { Address } from "../../../convex/utils/solana";
 import { create } from "zustand";
 import { SerializedBinLiquidity } from "../../../convex/services/meteora";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BinRangeSelector from "../BinRangeSelector";
 import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "~/utils/cn";
@@ -11,18 +11,16 @@ import { cn } from "~/utils/cn";
 interface BinRangeState {
   lowerBin: SerializedBinLiquidity | null;
   upperBin: SerializedBinLiquidity | null;
-
   updateUpperLowerBins: (p: { newLower?: SerializedBinLiquidity; newUpper?: SerializedBinLiquidity }) => void;
 }
 
 export const useCreatePositionRangeStore = create<BinRangeState>((set) => ({
   lowerBin: null,
-  upperBin: null, // default 69 bins
-
+  upperBin: null,
   updateUpperLowerBins: ({ newLower, newUpper }) =>
     set((state) => ({
-      lowerBin: newLower !== undefined ? newLower : state.lowerBin,
-      upperBin: newUpper !== undefined ? newUpper : state.upperBin,
+      lowerBin: newLower ?? state.lowerBin,
+      upperBin: newUpper ?? state.upperBin,
     })),
 }));
 
@@ -33,7 +31,7 @@ const BUFFER = 4;
 
 export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
   const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
-
+  const initRef = useRef(false);
   const { binRange, initialBins } = useBinsAroundActiveBin({
     poolAddress,
     numberOfBinsToTheLeft: MAX_SIDE + BUFFER,
@@ -42,39 +40,41 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
 
   const [sideBins, setSideBins] = useState(MIN_SIDE);
 
-  const visibleBins = useMemo(() => {
-    if (!binRange?.bins || !binRange.activeBin) return [];
+  // Initial range setup – once
+  useEffect(() => {
+    if (initRef.current) return;
+    if (!binRange?.bins?.length) return;
+    if (upperBin && lowerBin) return;
 
     const centerBinId = binRange.activeBin;
     const centerIndex = binRange.bins.findIndex((b) => b.binId === centerBinId);
+    if (centerIndex === -1) return;
 
-    const start = Math.max(0, centerIndex - sideBins - BUFFER);
-    const end = Math.min(binRange.bins.length - 1, centerIndex + sideBins + BUFFER);
+    const start = Math.max(0, centerIndex - sideBins);
+    const end = Math.min(binRange.bins.length - 1, centerIndex + sideBins);
 
-    // slice is non-inclusive for upper bound → use end + 1
-    return binRange.bins.slice(start, end + 1);
-  }, [binRange, sideBins]);
+    const first = binRange.bins[start];
+    const last = binRange.bins[end];
 
-  useEffect(() => {
-    if (!lowerBin || !upperBin) {
-      const first = visibleBins[0 + BUFFER];
-      const last = visibleBins[visibleBins.length - 1 - BUFFER];
+    if (!first || !last) return;
 
-      if (first && last) {
-        const { lower: clampedLower, upper: clampedUpper } = clampSelectedRange(first, last, visibleBins);
+    const { lower, upper } = clampSelectedRange(first, last, binRange.bins);
 
-        updateUpperLowerBins({
-          newLower: clampedLower,
-          newUpper: clampedUpper,
-        });
-      }
-    }
-  }, [visibleBins]);
+    updateUpperLowerBins({
+      newLower: lower,
+      newUpper: upper,
+    });
 
-  if (!lowerBin || !upperBin) return <div>Loading…</div>;
+    initRef.current = true;
+  }, [binRange, sideBins, lowerBin, upperBin, updateUpperLowerBins]);
+
+  if (!binRange?.bins?.length || !lowerBin || !upperBin) {
+    return <div>Loading…</div>;
+  }
 
   const canZoomOut = sideBins > MIN_SIDE;
   const canZoomIn = sideBins < MAX_SIDE;
+
   return (
     <div className="flex flex-col items-center w-full gap-3 overflow-visible">
       <Row fullWidth>
@@ -85,10 +85,9 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
 
         <Row>
           {/* RESET RANGE */}
-
           <button
             className={cn(
-              "flex rounded-full  inner-white px-2 py-1 mr-2 bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95"
+              "flex rounded-full inner-white px-2 py-1 mr-2 bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95"
             )}
             onClick={() => {
               updateUpperLowerBins({
@@ -100,7 +99,8 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
           >
             <RotateCcw className="w-3 h-3 text-text" />
           </button>
-          {/* ZOOM OUT */}
+
+          {/* ZOOM OUT (narrower range) */}
           <button
             className={cn(
               "flex rounded-full rounded-r-none inner-white px-2 py-1",
@@ -112,7 +112,7 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
             <ZoomIn className="w-3 h-3 text-text" />
           </button>
 
-          {/* ZOOM IN */}
+          {/* ZOOM IN (wider range) */}
           <button
             className={cn(
               "flex rounded-full rounded-l-none inner-white px-2 py-1",
@@ -127,20 +127,22 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
       </Row>
 
       <BinRangeSelector
+        allBins={binRange.bins}
         activeBinId={binRange.activeBin}
         activeLowerBin={lowerBin}
         activeUpperBin={upperBin}
-        bins={visibleBins}
+        sideBins={sideBins}
+        buffer={BUFFER}
         maxBarHeight={64}
+        poolAddress={poolAddress}
         onRangeChange={(lower, upper) => {
-          const { lower: clampedLower, upper: clampedUpper } = clampSelectedRange(lower, upper, visibleBins);
+          const { lower: clampedLower, upper: clampedUpper } = clampSelectedRange(lower, upper, binRange.bins);
 
           updateUpperLowerBins({
             newLower: clampedLower,
             newUpper: clampedUpper,
           });
         }}
-        poolAddress={poolAddress}
       />
     </div>
   );
@@ -160,10 +162,8 @@ function clampSelectedRange(
 
   const size = upperIndex - lowerIndex + 1;
 
-  // already OK
   if (size <= MAX) return { lower, upper };
 
-  // too large → clamp
   const newLowerIndex = upperIndex - (MAX - 1);
   const clampedLower = bins[newLowerIndex];
 

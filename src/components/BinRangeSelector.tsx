@@ -9,31 +9,37 @@ import { FormattedBinPrice } from "./FormattedBinPrice";
 import BN from "bn.js";
 
 interface Props {
-  bins: SerializedBinLiquidity[];
+  allBins: SerializedBinLiquidity[];
   activeLowerBin: SerializedBinLiquidity;
   activeUpperBin: SerializedBinLiquidity;
   activeBinId: number;
   poolAddress: Address;
   maxBarHeight: number;
+  sideBins: number;
+  buffer: number;
   onRangeChange: (lower: SerializedBinLiquidity, upper: SerializedBinLiquidity) => void;
 }
 
 type DragMode = "none" | "lower" | "upper" | "track";
 
+const MAX_RANGE = 70;
+
 export default function BinRangeSelector({
-  bins,
+  allBins,
   activeLowerBin,
   activeUpperBin,
   activeBinId,
   poolAddress,
   maxBarHeight,
+  sideBins,
+  buffer,
   onRangeChange,
 }: Props) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
-  // --- TOKEN + PRICE HOOKS ---
+  // TOKEN + PRICE
   const tokenX = useToken({ mint: toAddress(pool.mint_x) });
   const tokenY = useToken({ mint: toAddress(pool.mint_y) });
 
@@ -43,29 +49,75 @@ export default function BinRangeSelector({
   const decimalsX = tokenX?.decimals ?? 0;
   const decimalsY = tokenY?.decimals ?? 0;
 
-  // --- INTERNAL STATE: indices, not objects ---
-  const [lowerIndex, setLowerIndex] = useState<number>(() =>
-    Math.max(
-      0,
-      bins.findIndex((b) => b.binId === activeLowerBin.binId)
-    )
-  );
-  const [upperIndex, setUpperIndex] = useState<number>(() =>
-    Math.min(
-      bins.length - 1,
-      bins.findIndex((b) => b.binId === activeUpperBin.binId)
-    )
-  );
+  // 1) Map current selection to GLOBAL indices in allBins
+  const baseLowerIndex = useMemo(() => {
+    const idx = allBins.findIndex((b) => b.binId === activeLowerBin.binId);
+    if (idx === -1) return 0;
+    return idx;
+  }, [allBins, activeLowerBin.binId]);
 
-  // Sync with external activeLowerBin/activeUpperBin when they change
-  useEffect(() => {
-    const li = bins.findIndex((b) => b.binId === activeLowerBin.binId);
-    const ui = bins.findIndex((b) => b.binId === activeUpperBin.binId);
-    if (li !== -1) setLowerIndex(li);
-    if (ui !== -1) setUpperIndex(ui);
-  }, [activeLowerBin.binId, activeUpperBin.binId, bins]);
+  const baseUpperIndex = useMemo(() => {
+    const idx = allBins.findIndex((b) => b.binId === activeUpperBin.binId);
+    if (idx === -1) return Math.max(0, allBins.length - 1);
+    return idx;
+  }, [allBins, activeUpperBin.binId]);
 
-  // --- OBSERVE WIDTH (no scroll, stretch to w-full) ---
+  // Ensure base selection is valid
+  const [pendingSelection, setPendingSelection] = useState<{
+    lowerIndex: number;
+    upperIndex: number;
+  } | null>(null);
+
+  // Effective selection (global indices)
+  const { lowerIndex, upperIndex } = useMemo(() => {
+    let lower = pendingSelection?.lowerIndex ?? baseLowerIndex;
+    let upper = pendingSelection?.upperIndex ?? baseUpperIndex;
+
+    if (upper <= lower) {
+      upper = Math.min(lower + 1, allBins.length - 1);
+    }
+
+    if (upper - lower + 1 > MAX_RANGE) {
+      lower = upper - (MAX_RANGE - 1);
+    }
+
+    lower = Math.max(0, lower);
+    upper = Math.min(allBins.length - 1, upper);
+
+    return { lowerIndex: lower, upperIndex: upper };
+  }, [pendingSelection, baseLowerIndex, baseUpperIndex, allBins.length]);
+
+  // 2) Active bin global index
+  const activeIndex = useMemo(() => {
+    const idx = allBins.findIndex((b) => b.binId === activeBinId);
+    if (idx === -1) return Math.floor((lowerIndex + upperIndex) / 2);
+    return idx;
+  }, [allBins, activeBinId, lowerIndex, upperIndex]);
+
+  // 3) Compute visible window indices from activeIndex + zoom
+  const { visibleStart, visibleEnd } = useMemo(() => {
+    if (!allBins.length) return { visibleStart: 0, visibleEnd: 0 };
+
+    let start = activeIndex - sideBins - buffer;
+    let end = activeIndex + sideBins + buffer;
+
+    start = Math.max(0, start);
+    end = Math.min(allBins.length - 1, end);
+
+    if (end < start) end = start;
+
+    return { visibleStart: start, visibleEnd: end };
+  }, [allBins.length, activeIndex, sideBins, buffer]);
+
+  const visibleBins = useMemo(() => allBins.slice(visibleStart, visibleEnd + 1), [allBins, visibleStart, visibleEnd]);
+
+  const totalVisible = visibleBins.length;
+
+  // 4) Visible selection indices (relative to visible window)
+  const visibleLowerIndex = Math.min(Math.max(lowerIndex - visibleStart, 0), Math.max(totalVisible - 1, 0));
+  const visibleUpperIndex = Math.min(Math.max(upperIndex - visibleStart, 0), Math.max(totalVisible - 1, 0));
+
+  // 5) OBSERVE WIDTH
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -78,18 +130,19 @@ export default function BinRangeSelector({
     return () => ro.disconnect();
   }, []);
 
-  const totalBins = bins.length;
-  const unitWidth = useMemo(() => (totalBins > 0 ? containerWidth / totalBins : 0), [containerWidth, totalBins]);
-  const trackHeight = maxBarHeight + 32; // bars + some headroom
+  const unitWidth = useMemo(
+    () => (totalVisible > 0 ? containerWidth / totalVisible : 0),
+    [containerWidth, totalVisible]
+  );
+  const trackHeight = maxBarHeight + 32;
 
-  // --- USD AMOUNTS → HEIGHTS ---
+  // 6) USD heights based on GLOBAL bins (so zoom doesn’t change scale)
   const usdPerBin = useMemo(() => {
     if (!tokenX || !tokenY || !tokenXPrice || !tokenYPrice) {
-      // fallback: equal heights if we don't have token data yet
-      return bins.map(() => 1);
+      return allBins.map(() => 1);
     }
 
-    return bins.map((bin) => {
+    return allBins.map((bin) => {
       const xRaw = new BN(bin.xAmount);
       const yRaw = new BN(bin.yAmount);
 
@@ -101,101 +154,86 @@ export default function BinRangeSelector({
 
       return x * tokenXPrice + y * tokenYPrice;
     });
-  }, [bins, tokenX, tokenY, tokenXPrice, tokenYPrice, decimalsX, decimalsY]);
+  }, [allBins, tokenX, tokenY, tokenXPrice, tokenYPrice, decimalsX, decimalsY]);
 
   const maxUsd = useMemo(() => Math.max(1, ...usdPerBin), [usdPerBin]);
 
-  const getBinHeight = (idx: number) => {
-    const v = usdPerBin[idx] ?? 0;
+  const getBinHeight = (globalIndex: number) => {
+    const v = usdPerBin[globalIndex] ?? 0;
     if (maxUsd <= 0) return maxBarHeight * 0.3;
     const ratio = v / maxUsd;
     return Math.max(4, ratio * maxBarHeight);
   };
 
-  // --- DRAG LOGIC (pointer-based, no external state) ---
+  // 7) DRAG LOGIC (global indices)
   const [dragMode, setDragMode] = useState<DragMode>("none");
   const dragStart = useRef<{
     mode: DragMode;
-    lower: number;
-    upper: number;
+    lowerIndex: number;
+    upperIndex: number;
     x: number;
   } | null>(null);
 
   const startDrag = (e: ReactPointerEvent<HTMLDivElement>, mode: DragMode) => {
-    if (!containerRef.current || unitWidth === 0) return;
+    if (!containerRef.current || unitWidth === 0 || !totalVisible) return;
     e.currentTarget.setPointerCapture(e.pointerId);
 
     dragStart.current = {
       mode,
-      lower: lowerIndex,
-      upper: upperIndex,
+      lowerIndex,
+      upperIndex,
       x: e.clientX,
     };
     setDragMode(mode);
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!dragStart.current || unitWidth === 0) return;
+    if (!dragStart.current || unitWidth === 0 || !totalVisible) return;
 
-    const { mode, lower, upper, x: startX } = dragStart.current;
+    const { mode, lowerIndex: startLower, upperIndex: startUpper, x: startX } = dragStart.current;
     const dx = e.clientX - startX;
     const deltaBins = Math.round(dx / unitWidth);
 
-    const MAX_RANGE = 70;
+    let nextLower = startLower;
+    let nextUpper = startUpper;
+
     if (mode === "lower") {
-      let nextLower = lower + deltaBins;
-
-      // cannot pass outside
+      nextLower = startLower + deltaBins;
       nextLower = Math.max(0, nextLower);
+      nextLower = Math.min(nextLower, nextUpper - 1);
 
-      // cannot cross upper - 1
-      nextLower = Math.min(nextLower, upperIndex - 1);
-
-      // enforce max range
-      if (upperIndex - nextLower + 1 > MAX_RANGE) {
-        nextLower = upperIndex - MAX_RANGE + 1;
+      if (nextUpper - nextLower + 1 > MAX_RANGE) {
+        nextLower = nextUpper - MAX_RANGE + 1;
       }
-
-      setLowerIndex(nextLower);
     } else if (mode === "upper") {
-      let nextUpper = upper + deltaBins;
+      nextUpper = startUpper + deltaBins;
+      nextUpper = Math.min(allBins.length - 1, nextUpper);
+      nextUpper = Math.max(nextUpper, nextLower + 1);
 
-      // cannot pass outside
-      nextUpper = Math.min(totalBins - 1, nextUpper);
-
-      // cannot cross lower + 1
-      nextUpper = Math.max(nextUpper, lowerIndex + 1);
-
-      // enforce max range
-      if (nextUpper - lowerIndex + 1 > MAX_RANGE) {
-        nextUpper = lowerIndex + MAX_RANGE - 1;
+      if (nextUpper - nextLower + 1 > MAX_RANGE) {
+        nextUpper = nextLower + MAX_RANGE - 1;
       }
-
-      setUpperIndex(nextUpper);
     } else if (mode === "track") {
-      const size = Math.min(upper - lower + 1, MAX_RANGE);
+      const size = Math.min(startUpper - startLower + 1, MAX_RANGE);
 
-      let nextLower = lower + deltaBins;
-      let nextUpper = nextLower + size - 1;
+      nextLower = startLower + deltaBins;
+      nextUpper = nextLower + size - 1;
 
-      // clamp inside container
       if (nextLower < 0) {
         nextLower = 0;
         nextUpper = size - 1;
       }
-      if (nextUpper > totalBins - 1) {
-        nextUpper = totalBins - 1;
+      if (nextUpper > allBins.length - 1) {
+        nextUpper = allBins.length - 1;
         nextLower = nextUpper - size + 1;
       }
 
-      //  ensure at least 1 bin range
       if (nextUpper <= nextLower) {
         nextUpper = nextLower + 1;
       }
-
-      setLowerIndex(nextLower);
-      setUpperIndex(nextUpper);
     }
+
+    setPendingSelection({ lowerIndex: nextLower, upperIndex: nextUpper });
   };
 
   const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -204,23 +242,28 @@ export default function BinRangeSelector({
     dragStart.current = null;
     setDragMode("none");
 
-    const lowerBin = bins[lowerIndex];
-    const upperBin = bins[upperIndex];
+    const finalLower = lowerIndex;
+    const finalUpper = upperIndex;
+
+    const lowerBin = allBins[finalLower];
+    const upperBin = allBins[finalUpper];
 
     if (lowerBin && upperBin) {
       onRangeChange(lowerBin, upperBin);
     }
+
+    setPendingSelection(null);
   };
 
-  const selectedWidth = (upperIndex - lowerIndex + 1) * unitWidth;
+  const selectedWidth = (visibleUpperIndex - visibleLowerIndex + 1) * unitWidth;
+
   const PRICE_LABELS_COUNT = 8;
   const labelsCount = Math.max(2, PRICE_LABELS_COUNT);
 
-  // compute target indices evenly spaced across the bins
   const labelIndices = useMemo(() => {
-    if (bins.length === 0) return [];
+    if (visibleBins.length === 0) return [];
 
-    const step = (bins.length - 1) / (labelsCount - 1); // e.g. 100 bins + 6 labels = step ~ 20
+    const step = (visibleBins.length - 1) / (labelsCount - 1);
     const arr: number[] = [];
 
     for (let i = 0; i < labelsCount; i++) {
@@ -228,7 +271,13 @@ export default function BinRangeSelector({
     }
 
     return arr;
-  }, [bins.length, labelsCount]);
+  }, [visibleBins.length, labelsCount]);
+
+  const visibleLower = lowerIndex - visibleStart;
+  const visibleUpper = upperIndex - visibleStart;
+
+  const safeVisibleLower = Math.min(Math.max(visibleLower, 0), visibleBins.length - 1);
+  const safeVisibleUpper = Math.min(Math.max(visibleUpper, 0), visibleBins.length - 1);
 
   return (
     <div className="relative w-full select-none">
@@ -242,11 +291,13 @@ export default function BinRangeSelector({
       >
         {/* BARS */}
         <div className="absolute bottom-0 left-0 right-0 flex items-end">
-          {bins.map((bin, idx) => {
-            const h = getBinHeight(idx);
-            const isSelected = idx >= lowerIndex && idx <= upperIndex;
+          {visibleBins.map((bin, idx) => {
+            const globalIndex = visibleStart + idx;
+            const h = getBinHeight(globalIndex);
+
+            const isSelected = globalIndex >= lowerIndex && globalIndex <= upperIndex;
             const isActive = bin.binId === activeBinId;
-            const isTokenX = bin.binId < activeBinId;
+            const isTokenX = bin.binId > activeBinId; // adjust if you consider X on which side
 
             const left = idx * unitWidth;
             const barWidth = Math.max(2, unitWidth * 0.7);
@@ -255,8 +306,8 @@ export default function BinRangeSelector({
               ? isActive
                 ? "bg-text/50"
                 : isTokenX
-                  ? "bg-purple/40"
-                  : "bg-primary/40"
+                  ? "bg-primary/40"
+                  : "bg-purple/40"
               : "bg-text/10";
 
             return (
@@ -265,7 +316,7 @@ export default function BinRangeSelector({
                 className={cn(
                   "absolute bottom-0 rounded-xs hover-effect",
                   bgColor,
-                  isActive ? "opacity-100  " : "opacity-40"
+                  isActive ? "opacity-100" : "opacity-40"
                 )}
                 style={{ left, width: barWidth, height: h }}
               />
@@ -273,45 +324,48 @@ export default function BinRangeSelector({
           })}
         </div>
 
-        {/* TRACK (dragging entire selection) */}
-        <div
-          className="absolute top-6 bottom-0 bg-white/2 cursor-grab active:cursor-grabbing"
-          style={{
-            left: lowerIndex * unitWidth,
-            width: selectedWidth,
-          }}
-          onPointerDown={(e) => startDrag(e, "track")}
-        />
+        {/* TRACK (drag selection) */}
+        {totalVisible > 0 && (
+          <div
+            className="absolute top-6 bottom-0 bg-white/2 cursor-grab active:cursor-grabbing"
+            style={{
+              left: visibleLowerIndex * unitWidth,
+              width: selectedWidth,
+            }}
+            onPointerDown={(e) => startDrag(e, "track")}
+          />
+        )}
+
         {/* LOWER HANDLE */}
-        <RangeHandle
-          x={lowerIndex * unitWidth}
-          bin={bins[lowerIndex]}
-          isDragging={dragMode === "lower"}
-          onPointerDown={(e) => startDrag(e, "lower")}
-        />
+        {visibleBins[safeVisibleLower] && (
+          <RangeHandle
+            x={safeVisibleLower * unitWidth}
+            bin={allBins[lowerIndex]} // Global bin (correct)
+            isDragging={dragMode === "lower"}
+            onPointerDown={(e) => startDrag(e, "lower")}
+          />
+        )}
 
         {/* UPPER HANDLE */}
-        <RangeHandle
-          x={(upperIndex + 1) * unitWidth}
-          bin={bins[upperIndex]}
-          isDragging={dragMode === "upper"}
-          onPointerDown={(e) => startDrag(e, "upper")}
-        />
-
-        {/* PRICE LABELS */}
+        {visibleBins[safeVisibleUpper] && (
+          <RangeHandle
+            x={(safeVisibleUpper + 1) * unitWidth}
+            bin={allBins[upperIndex]} // Global bin (correct)
+            isDragging={dragMode === "upper"}
+            onPointerDown={(e) => startDrag(e, "upper")}
+          />
+        )}
       </div>
-      <div className="relative w-full h-5 ">
+
+      {/* PRICE LABELS */}
+      <div className="relative w-full h-5">
         {labelIndices.map((idx, i) => {
-          const bin = bins[idx];
+          const bin = visibleBins[idx];
           if (!bin) return null;
 
-          // barWidth must match bars above!
           const barWidth = Math.max(2, unitWidth * 0.7);
-
-          // align label to bar center
           const barCenter = idx * unitWidth + barWidth / 2;
 
-          // clamp translate
           let translate = "-50%";
           if (i === 0) translate = "0";
           else if (i === labelIndices.length - 1) translate = "-100%";
@@ -326,7 +380,7 @@ export default function BinRangeSelector({
               }}
             >
               <FormattedBinPrice
-                classname=" text-[10px] text-textSecondary whitespace-nowrap"
+                classname="text-[10px] text-textSecondary whitespace-nowrap"
                 value={Number(bin.pricePerToken)}
                 significantDigits={6}
               />
@@ -369,17 +423,12 @@ function RangeHandle({
               isDragging && "scale-110"
             )}
           >
-            {label ? <>{label}</> : <FormattedBinPrice value={Number(bin.pricePerToken)} significantDigits={6} />}
+            {label ? label : <FormattedBinPrice value={Number(bin.pricePerToken)} significantDigits={6} />}
           </div>
         ))}
 
       {/* VERTICAL LINE */}
-      <div
-        className="
-          flex-1 w-px opacity-80 
-          relative
-        "
-      >
+      <div className="flex-1 w-px opacity-80 relative">
         <div
           className={cn(
             "absolute inset-0 bg-[linear-gradient(to_bottom,var(--color-text)_50%,transparent_50%)] transition-transform",
