@@ -13,6 +13,7 @@ import { motion } from "motion/react";
 import { FormattedBinPrice } from "./FormattedBinPrice";
 import { cn } from "~/utils/cn";
 import * as Slider from "@radix-ui/react-slider";
+import { Skeleton } from "./ui/Skeleton";
 
 export type LiquidityShape = "Spot" | "Curve" | "Bid-Ask";
 
@@ -168,7 +169,7 @@ type BinDistributionAdjusterProps = {
   onRangeChange: (p: { lower: SerializedBinLiquidity; upper: SerializedBinLiquidity }) => void;
 };
 
-export function BinDistributionAdjuster({
+function BinDistributionAdjuster({
   poolAddress,
   shape,
   lowerBin,
@@ -410,14 +411,30 @@ export function BinDistributionAdjuster({
 }
 
 // helpers
-export function getLinearCurveHeights(binCount: number, tokenAmount: number, reverse = false): number[] {
+function getLinearCurveHeights(binCount: number, tokenAmount: number, reverse = false): number[] {
   if (binCount <= 0) return [];
   const step = (2 * tokenAmount) / (binCount * (binCount + 1));
   const arr = Array.from({ length: binCount }, (_, i) => step * (i + 1));
   return reverse ? arr.reverse() : arr;
 }
 
-export function BinDistributionAdjusterSkeleton({
+export function BinDistributionSkeleton() {
+  return (
+    <div className="flex flex-col">
+      <Row>
+        <Skeleton className="w-40 h-7 rounded-full" />
+
+        <div className="flex flex-row items-center gap-2.5">
+          <Skeleton className="w-16 h-3.5" />
+          <Skeleton className="w-16 h-3.5" />
+        </div>
+      </Row>
+
+      <BinDistributionAdjusterSkeleton label="Loading Bins" maxBarHeight={80} shape={"Spot"} />
+    </div>
+  );
+}
+function BinDistributionAdjusterSkeleton({
   label = "Loading",
   maxBarHeight,
   shape,

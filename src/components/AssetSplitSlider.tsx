@@ -9,6 +9,8 @@ import { abbreviateAmount, formatTokenAmount, formatUsdValue } from "~/utils/num
 import { usePool } from "~/states/pools";
 import { useBinsAroundActiveBin } from "~/states/dlmm";
 import { SerializedBinLiquidity } from "../../convex/services/meteora";
+import { Skeleton } from "./ui/Skeleton";
+import { MnMSuspense } from "./MnMSuspense";
 
 export function AssetSplit({
   poolAddress,
@@ -49,12 +51,10 @@ export function AssetSplit({
     }
   }, [lowerBin, upperBin, activeBin]);
 
-
-  useEffect(()=>{
-    if(tokenXSplit===0){
-      
+  useEffect(() => {
+    if (tokenXSplit === 0) {
     }
-  },[tokenXSplit])
+  }, [tokenXSplit]);
   return (
     <div className="flex flex-col ">
       <div className="flex bg-backgroundTertiary inner-white rounded-full px-2 py-3 mb-1.5">
@@ -69,19 +69,45 @@ export function AssetSplit({
       </div>
 
       <Row fullWidth>
-        <AssetAmount
-          mint={pool.mint_x}
-          split={tokenXSplit}
-          collateralMint={collateralMint}
-          collateralAmount={collateralAmount}
+        <MnMSuspense fallback={<AssetAmountSkeleton />}>
+          <AssetAmount
+            mint={pool.mint_x}
+            split={tokenXSplit}
+            collateralMint={collateralMint}
+            collateralAmount={collateralAmount}
+          />
+        </MnMSuspense>
+        <MnMSuspense fallback={<AssetAmountSkeleton align="end" />}>
+          <AssetAmount
+            align="end"
+            mint={pool.mint_y}
+            split={1 - tokenXSplit}
+            collateralMint={collateralMint}
+            collateralAmount={collateralAmount}
+          />
+        </MnMSuspense>
+      </Row>
+    </div>
+  );
+}
+
+export function AssetSplitSkelton() {
+  return (
+    <div className="flex flex-col ">
+      <div className="flex bg-backgroundTertiary inner-white rounded-full px-2 py-3 mb-1.5">
+        <AssetSplitSlider
+          leftTrackColor="#B6D162"
+          rightTrackColor="#A866DD"
+          leftTrackSplit={0.5}
+          onChange={() => {}}
+          height={8}
+          disabled={true}
         />
-        <AssetAmount
-          align="end"
-          mint={pool.mint_y}
-          split={1 - tokenXSplit}
-          collateralMint={collateralMint}
-          collateralAmount={collateralAmount}
-        />
+      </div>
+
+      <Row fullWidth>
+        <AssetAmountSkeleton />
+        <AssetAmountSkeleton align="end" />
       </Row>
     </div>
   );
@@ -92,13 +118,13 @@ function AssetAmount({
   split,
   collateralAmount,
   collateralMint,
-  align = "start", // <— NEW PROP
+  align = "start",
 }: {
   mint: Address;
   split: number;
   collateralMint: Address;
   collateralAmount: number;
-  align?: "start" | "center" | "end"; // <— NEW PROP TYPE
+  align?: "start" | "center" | "end";
 }) {
   const token = useToken({ mint });
   const { tokenUsdAmount, tokenAmount } = useCollateralToTokenAmount({
@@ -132,6 +158,28 @@ function AssetAmount({
   );
 }
 
+function AssetAmountSkeleton({ align = "start" }: { align?: "start" | "center" | "end" }) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col gap-px",
+        align === "start" && "items-start",
+        align === "center" && "items-center",
+        align === "end" && "items-end"
+      )}
+    >
+      <Row className="gap-0.5" justify={align}>
+        <Skeleton className="w-3.5 h-3.5 rounded-full" />
+        <Skeleton className="w-16 h-3" />
+      </Row>
+
+      <Row className="gap-1" justify={align}>
+        <Skeleton className="w-8 h-3" />
+        <Skeleton className="w-5 h-3" />
+      </Row>
+    </div>
+  );
+}
 type AssetSplitSliderProps = {
   showToolTip?: boolean;
   leftTrackColor: string;

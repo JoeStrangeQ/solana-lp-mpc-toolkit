@@ -4,9 +4,11 @@ import { Address } from "../../../convex/utils/solana";
 import { create } from "zustand";
 import { SerializedBinLiquidity } from "../../../convex/services/meteora";
 import { useEffect, useRef, useState } from "react";
-import BinRangeSelector from "../BinRangeSelector";
+import BinRangeSelector, { BinRangeSelectorSkeleton } from "../BinRangeSelector";
 import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "~/utils/cn";
+import { Skeleton } from "../ui/Skeleton";
+import { MnMSuspense } from "../MnMSuspense";
 
 interface BinRangeState {
   lowerBin: SerializedBinLiquidity | null;
@@ -69,7 +71,7 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
   }, [binRange, sideBins, lowerBin, upperBin, updateUpperLowerBins]);
 
   if (!binRange?.bins?.length || !lowerBin || !upperBin) {
-    return <div>Loading…</div>;
+    return <RangeSelectorPanelSkeleton />;
   }
 
   const canZoomOut = sideBins > MIN_SIDE;
@@ -126,28 +128,65 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
         </Row>
       </Row>
 
-      <BinRangeSelector
-        allBins={binRange.bins}
-        activeBinId={binRange.activeBin}
-        activeLowerBin={lowerBin}
-        activeUpperBin={upperBin}
-        sideBins={sideBins}
-        buffer={BUFFER}
-        maxBarHeight={64}
-        poolAddress={poolAddress}
-        onRangeChange={(lower, upper) => {
-          const { lower: clampedLower, upper: clampedUpper } = clampSelectedRange(lower, upper, binRange.bins);
+      <MnMSuspense fallback={<BinRangeSelectorSkeleton />}>
+        <BinRangeSelector
+          allBins={binRange.bins}
+          activeBinId={binRange.activeBin}
+          activeLowerBin={lowerBin}
+          activeUpperBin={upperBin}
+          sideBins={sideBins}
+          buffer={BUFFER}
+          maxBarHeight={64}
+          poolAddress={poolAddress}
+          onRangeChange={(lower, upper) => {
+            const { lower: clampedLower, upper: clampedUpper } = clampSelectedRange(lower, upper, binRange.bins);
 
-          updateUpperLowerBins({
-            newLower: clampedLower,
-            newUpper: clampedUpper,
-          });
-        }}
-      />
+            updateUpperLowerBins({
+              newLower: clampedLower,
+              newUpper: clampedUpper,
+            });
+          }}
+        />
+      </MnMSuspense>
     </div>
   );
 }
 
+export function RangeSelectorPanelSkeleton() {
+  return (
+    <div className="flex flex-col items-center w-full gap-3 overflow-visible">
+      <Row fullWidth>
+        <Row justify="start" className="gap-1 items-center">
+          <div className="text-text text-sm">Select range</div>
+          <Skeleton className="w-16 h-3.5" />
+        </Row>
+
+        <Row>
+          {/* RESET RANGE */}
+          <button className={cn("flex rounded-full inner-white px-2 py-1 mr-2 bg-white/2 opacity-20")} disabled>
+            <RotateCcw className="w-3 h-3 text-text" />
+          </button>
+
+          <button
+            className={cn("flex rounded-full rounded-r-none inner-white px-2 py-1 bg-white/2 opacity-20")}
+            disabled={true}
+          >
+            <ZoomIn className="w-3 h-3 text-text" />
+          </button>
+
+          <button
+            className={cn("flex rounded-full rounded-l-none inner-white px-2 py-1 bg-white/2 opacity-20")}
+            disabled={true}
+          >
+            <ZoomOut className="w-3 h-3 text-text" />
+          </button>
+        </Row>
+      </Row>
+
+      <BinRangeSelectorSkeleton />
+    </div>
+  );
+}
 function clampSelectedRange(
   lower: SerializedBinLiquidity,
   upper: SerializedBinLiquidity,

@@ -7,6 +7,7 @@ import { usePool } from "~/states/pools";
 import { cn } from "~/utils/cn";
 import { FormattedBinPrice } from "./FormattedBinPrice";
 import BN from "bn.js";
+import { Skeleton } from "./ui/Skeleton";
 
 interface Props {
   allBins: SerializedBinLiquidity[];
@@ -451,6 +452,28 @@ function RangeHandle({
       >
         <div className="w-0.5 h-2.5 bg-black/80 rounded-full" />
         <div className="w-0.5 h-2.5 bg-black/80 rounded-full" />
+      </div>
+    </div>
+  );
+}
+
+export function BinRangeSelectorSkeleton() {
+  return (
+    <div className="flex flex-col w-full">
+      <div className="flex flex-row items-end justify-between gap-1 w-full">
+        {Array.from({ length: 54 }).map((_, i) => (
+          <Skeleton key={i} className={cn(" rounded-xs hover-effect bg-text/10 h-16 w-full")} />
+        ))}
+      </div>
+
+      <div className="mt-2 flex flex-row justify-between w-full select-none">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Skeleton
+            key={i}
+            className="h-3 bg-text/10 rounded-sm"
+            style={{ width: `${100 / 10}%` }} // auto-scales, nicer on all screens
+          />
+        ))}
       </div>
     </div>
   );

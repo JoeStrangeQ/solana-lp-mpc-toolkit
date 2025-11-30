@@ -5,11 +5,12 @@ import { useConvexUser } from "~/providers/UserStates";
 import { Address, mints } from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { Skeleton } from "../ui/Skeleton";
-import { BinDistribution, LiquidityShape } from "../BinDistribution";
-import { AssetSplit } from "../AssetSplitSlider";
+import { BinDistribution, BinDistributionSkeleton, LiquidityShape } from "../BinDistribution";
+import { AssetSplit, AssetSplitSkelton } from "../AssetSplitSlider";
 import { useCreatePositionRangeStore } from "./RangeSelectorPanel";
 import { useEffect } from "react";
 import { useBinsAroundActiveBin } from "~/states/dlmm";
+import { useRouterState } from "@tanstack/react-router";
 
 export type CreatePositionState = {
   collateralMint: Address;
@@ -41,9 +42,19 @@ export const useCreatePositionState = create<CreatePositionStore>((set) => ({
 
 export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
   const { convexUser } = useConvexUser();
-  const { collateralMint, collateralUiAmount, tokenXSplit, liquidityShape, setCreatePositionState } =
-    useCreatePositionState();
+  const {
+    collateralMint,
+    collateralUiAmount,
+    tokenXSplit,
+    liquidityShape,
+    setCreatePositionState,
+    resetCreatePositionState,
+  } = useCreatePositionState();
   const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
+
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
 
   const {
     binRange: { bins, activeBin },
@@ -81,6 +92,14 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
     }
   }, [tokenXSplit]);
 
+  useEffect(() => {
+    resetCreatePositionState();
+    updateUpperLowerBins({
+      newLower: undefined,
+      newUpper: undefined,
+    });
+  }, [pathname, poolAddress]);
+
   return (
     <div className="flex flex-col w-full">
       <Row fullWidth className="mb-3">
@@ -107,28 +126,56 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
 
       {/*Bin dis */}
       <div className="text-text text-sm text-left mb-3 mt-5">Set Bin Distribution</div>
-      <BinDistribution
-        poolAddress={poolAddress}
-        collateralMint={collateralMint}
-        collateralUiAmount={collateralUiAmount}
-        lowerBin={lowerBin}
-        upperBin={upperBin}
-        tokenXSplit={tokenXSplit}
-        liquidityShape={liquidityShape}
-        onRangeChange={updateUpperLowerBins}
-        onLiquidityShapeChange={(s) => setCreatePositionState({ liquidityShape: s })}
-      />
+      <MnMSuspense fallback={<BinDistributionSkeleton />}>
+        <BinDistribution
+          poolAddress={poolAddress}
+          collateralMint={collateralMint}
+          collateralUiAmount={collateralUiAmount}
+          lowerBin={lowerBin}
+          upperBin={upperBin}
+          tokenXSplit={tokenXSplit}
+          liquidityShape={liquidityShape}
+          onRangeChange={updateUpperLowerBins}
+          onLiquidityShapeChange={(s) => setCreatePositionState({ liquidityShape: s })}
+        />
+      </MnMSuspense>
 
       <div className="text-text text-sm text-left mb-3 mt-5">Set Asset Split</div>
-      <AssetSplit
-        poolAddress={poolAddress}
-        collateralAmount={collateralUiAmount}
-        collateralMint={collateralMint}
-        tokenXSplit={tokenXSplit}
-        lowerBin={lowerBin}
-        upperBin={upperBin}
-        onSplitChange={(newSplitX) => setCreatePositionState({ tokenXSplit: newSplitX })}
+      <MnMSuspense fallback={<AssetSplitSkelton />}>
+        <AssetSplit
+          poolAddress={poolAddress}
+          collateralAmount={collateralUiAmount}
+          collateralMint={collateralMint}
+          tokenXSplit={tokenXSplit}
+          lowerBin={lowerBin}
+          upperBin={upperBin}
+          onSplitChange={(newSplitX) => setCreatePositionState({ tokenXSplit: newSplitX })}
+        />
+      </MnMSuspense>
+    </div>
+  );
+}
+
+export function CreatePositionPanelSkeleton() {
+  return (
+    <div className="flex flex-col w-full">
+      <Row fullWidth className="mb-3">
+        <div className="text-text text-sm">Collateral</div>
+        <Skeleton className="w-12 h-3" />
+      </Row>
+      <CollateralDepositInput
+        initialCollateralMint={defaultCreatePositionState.collateralMint}
+        value={0}
+        onCollateralAmountChange={() => {}}
+        onCollateralMintChange={() => {}}
       />
+
+      {/*Bin dis */}
+      <div className="text-text text-sm text-left mb-3 mt-5">Set Bin Distribution</div>
+      <BinDistributionSkeleton />
+
+      <div className="text-text text-sm text-left mb-3 mt-5">Set Asset Split</div>
+      <AssetSplitSkelton />
     </div>
   );
 }
