@@ -1,5 +1,5 @@
 import * as Slider from "@radix-ui/react-slider";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "~/utils/cn";
 import { Address } from "../../convex/utils/solana";
 import { useCollateralToTokenAmount, useToken } from "~/states/tokens";
@@ -7,21 +7,54 @@ import { Row } from "./ui/Row";
 import { TokenIcon } from "./TokenIcon";
 import { abbreviateAmount, formatTokenAmount, formatUsdValue } from "~/utils/numberFormats";
 import { usePool } from "~/states/pools";
+import { useBinsAroundActiveBin } from "~/states/dlmm";
+import { SerializedBinLiquidity } from "../../convex/services/meteora";
 
 export function AssetSplit({
   poolAddress,
   collateralAmount,
   collateralMint,
   tokenXSplit,
+  lowerBin,
+  upperBin,
+  disabled = false,
   onSplitChange,
 }: {
   poolAddress: Address;
   collateralMint: Address;
   collateralAmount: number;
   tokenXSplit: number;
+  lowerBin: SerializedBinLiquidity | null;
+  upperBin: SerializedBinLiquidity | null;
+  disabled?: boolean;
   onSplitChange: (newSplitX: number) => void;
 }) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
+  const {
+    binRange: { activeBin },
+  } = useBinsAroundActiveBin({
+    poolAddress,
+    numberOfBinsToTheLeft: 124,
+    numberOfBinsToTheRight: 124,
+  });
+
+  useEffect(() => {
+    if (!lowerBin || !upperBin) return;
+    if (lowerBin.binId >= activeBin) {
+      onSplitChange(1);
+    }
+
+    if (upperBin.binId <= activeBin) {
+      onSplitChange(0);
+    }
+  }, [lowerBin, upperBin, activeBin]);
+
+
+  useEffect(()=>{
+    if(tokenXSplit===0){
+      
+    }
+  },[tokenXSplit])
   return (
     <div className="flex flex-col ">
       <div className="flex bg-backgroundTertiary inner-white rounded-full px-2 py-3 mb-1.5">
@@ -31,6 +64,7 @@ export function AssetSplit({
           leftTrackSplit={tokenXSplit}
           onChange={onSplitChange}
           height={8}
+          disabled={disabled}
         />
       </div>
 
@@ -85,11 +119,11 @@ function AssetAmount({
     >
       <Row className="gap-0.5" justify={align}>
         <TokenIcon className="w-3.5 h-3.5" icon={token.icon} />
-        <div className="text-text text-xs">{formatTokenAmount(tokenAmount, token.symbol)}</div>
+        <div className="text-text font-normal text-xs">{formatTokenAmount(tokenAmount, token.symbol)}</div>
       </Row>
 
       <Row className="gap-1" justify={align}>
-        <div className="text-textSecondary text-xs">{formatUsdValue(tokenUsdAmount)}</div>
+        <div className="text-textSecondary font-normal text-xs">{formatUsdValue(tokenUsdAmount)}</div>
         <div className="text-textSecondary/70 font-normal text-xs">
           {abbreviateAmount(split * 100, { type: "percentage", decimals: 0 })}%
         </div>

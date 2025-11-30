@@ -13,21 +13,31 @@ import { motion } from "motion/react";
 import { FormattedBinPrice } from "./FormattedBinPrice";
 import { cn } from "~/utils/cn";
 import * as Slider from "@radix-ui/react-slider";
-import { useCreatePositionRangeStore } from "./trade/RangeSelectorPanel";
-import { useCreatePositionState } from "./trade/CreatePositionPanel";
 
-type LiquidityShape = "Spot" | "Curve" | "Bid-Ask";
+export type LiquidityShape = "Spot" | "Curve" | "Bid-Ask";
 
 export function BinDistribution({
   poolAddress,
+  liquidityShape,
+  lowerBin,
+  upperBin,
+  collateralMint,
+  collateralUiAmount,
+  tokenXSplit,
   onLiquidityShapeChange,
+  onRangeChange,
 }: {
   poolAddress: Address;
+  collateralMint: Address;
+  collateralUiAmount: number;
+  tokenXSplit: number;
+  liquidityShape: LiquidityShape;
+  lowerBin: SerializedBinLiquidity | null;
+  upperBin: SerializedBinLiquidity | null;
+
   onLiquidityShapeChange: (shape: LiquidityShape) => void;
+  onRangeChange: (p: { newLower?: SerializedBinLiquidity | undefined; newUpper?: SerializedBinLiquidity }) => void;
 }) {
-  const { tokenXSplit, collateralMint, collateralUiAmount } = useCreatePositionState();
-  const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
-  const [liquidityShape, setLiqudityShape] = useState<LiquidityShape>("Spot");
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const tokenX = useToken({ mint: pool.mint_x });
   const tokenY = useToken({ mint: pool.mint_y });
@@ -56,9 +66,16 @@ export function BinDistribution({
   const upperBinId = upperBin?.binId ?? 0;
   const lowerBinId = lowerBin?.binId ?? 0;
 
-  const totalBins = upperBinId - lowerBinId;
-  const yBinCount = Math.max(0, activeBinId - (lowerBin?.binId ?? 0) + 1);
-  const xBinCount = totalBins - yBinCount;
+  const totalBins = Math.max(0, upperBinId - lowerBinId + 1);
+
+  let yBinCount = 0;
+  if (lowerBin) {
+    yBinCount = activeBinId - lowerBinId + 1;
+    yBinCount = Math.max(0, Math.min(yBinCount, totalBins));
+  }
+
+  const xBinCount = Math.max(0, totalBins - yBinCount);
+
   const liquidityShapes: { id: LiquidityShape; element: ReactNode }[] = [
     {
       id: "Spot",
@@ -97,7 +114,6 @@ export function BinDistribution({
           value={liquidityShape}
           containerPaddingInPixels={{ px: 8, py: 8 }}
           onChange={(shape) => {
-            setLiqudityShape(shape);
             onLiquidityShapeChange(shape);
           }}
         />
@@ -107,7 +123,7 @@ export function BinDistribution({
             <div className="w-1 h-1 bg-primary rounded-full" />
             <div className="text-text text-xs">{tokenX.symbol}</div>
             <div className="text-textSecondary text-xs">
-              {xBinCount} / {totalBins}
+              {xBinCount}/{totalBins}
             </div>
           </div>
 
@@ -115,7 +131,7 @@ export function BinDistribution({
             <div className="w-1 h-1 bg-purple rounded-full " />
             <div className="text-text text-xs">{tokenY.symbol}</div>
             <div className="text-textSecondary text-xs">
-              {yBinCount} / {totalBins}
+              {yBinCount}/{totalBins}
             </div>
           </div>
         </div>
@@ -133,7 +149,7 @@ export function BinDistribution({
           lowerBin={lowerBin}
           upperBin={upperBin}
           onRangeChange={({ lower, upper }) => {
-            updateUpperLowerBins({ newLower: lower, newUpper: upper });
+            onRangeChange({ newLower: lower, newUpper: upper });
           }}
         />
       )}
@@ -245,23 +261,44 @@ export function BinDistributionAdjuster({
   // 4️⃣ Memoized bottom price labels
   // -----------------------------------------------------
   const priceLabels = useMemo(() => {
-    if (currentBinRange.length === 0) return null;
-    const step = Math.floor((currentBinRange.length - 1) / 4);
+    const bins = currentBinRange;
+    const n = bins.length;
 
-    return [
-      currentBinRange[0],
-      currentBinRange[step],
-      currentBinRange[step * 2],
-      currentBinRange[step * 3],
-      currentBinRange[currentBinRange.length - 1],
-    ].map((bin) => (
-      <FormattedBinPrice
-        key={bin.binId}
-        classname="text-textSecondary text-[10px]"
-        value={parseFloat(bin.pricePerToken)}
-        significantDigits={5}
-      />
-    ));
+    if (n === 0) return null;
+
+    // Max 5 labels, or fewer if bins < 5
+    const labelCount = Math.min(5, n);
+
+    // Pre-generate indices safely
+    const indices = [];
+    for (let i = 0; i < labelCount; i++) {
+      const pos = Math.round((i / (labelCount - 1)) * (n - 1));
+      indices.push(pos);
+    }
+
+    return indices.map((idx, i) => {
+      const bin = bins[idx];
+      if (!bin) return null;
+
+      let value = Number(bin.pricePerToken);
+
+      // Avoid e-notation, avoid huge strings
+      if (!isFinite(value)) value = 0;
+      const safeValue = value.toLocaleString(undefined, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 6,
+        notation: "standard",
+      });
+
+      return (
+        <div
+          key={bin.binId + "-" + i}
+          className="max-w-16 truncate overflow-hidden text-ellipsis text-[10px] text-textSecondary"
+        >
+          {safeValue}
+        </div>
+      );
+    });
   }, [currentBinRange]);
 
   // -----------------------------------------------------

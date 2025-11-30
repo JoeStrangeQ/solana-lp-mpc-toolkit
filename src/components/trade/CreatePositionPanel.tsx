@@ -5,13 +5,17 @@ import { useConvexUser } from "~/providers/UserStates";
 import { Address, mints } from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { Skeleton } from "../ui/Skeleton";
-import { BinDistribution } from "../BinDistribution";
-import { AssetSplit, AssetSplitSlider } from "../AssetSplitSlider";
+import { BinDistribution, LiquidityShape } from "../BinDistribution";
+import { AssetSplit } from "../AssetSplitSlider";
+import { useCreatePositionRangeStore } from "./RangeSelectorPanel";
+import { useEffect } from "react";
+import { useBinsAroundActiveBin } from "~/states/dlmm";
 
 export type CreatePositionState = {
   collateralMint: Address;
   collateralUiAmount: number;
 
+  liquidityShape: LiquidityShape;
   tokenXSplit: number;
 };
 
@@ -24,6 +28,7 @@ const defaultCreatePositionState: CreatePositionState = {
   collateralMint: mints.usdc,
   collateralUiAmount: 0,
   tokenXSplit: 0.5,
+  liquidityShape: "Spot",
 };
 
 export const useCreatePositionState = create<CreatePositionStore>((set) => ({
@@ -36,7 +41,46 @@ export const useCreatePositionState = create<CreatePositionStore>((set) => ({
 
 export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
   const { convexUser } = useConvexUser();
-  const { collateralMint, collateralUiAmount, tokenXSplit, setCreatePositionState } = useCreatePositionState();
+  const { collateralMint, collateralUiAmount, tokenXSplit, liquidityShape, setCreatePositionState } =
+    useCreatePositionState();
+  const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
+
+  const {
+    binRange: { bins, activeBin },
+  } = useBinsAroundActiveBin({
+    poolAddress,
+    numberOfBinsToTheLeft: 124,
+    numberOfBinsToTheRight: 124,
+  });
+
+  useEffect(() => {
+    if (!lowerBin || !upperBin) return;
+    if (lowerBin.binId >= activeBin) {
+      setCreatePositionState({ tokenXSplit: 1 });
+    }
+
+    if (upperBin.binId <= activeBin) {
+      setCreatePositionState({ tokenXSplit: 0 });
+    }
+  }, [lowerBin, upperBin, activeBin]);
+
+  useEffect(() => {
+    if (bins.length === 0) return;
+    if (!lowerBin || !upperBin) return;
+    const totalBins = Math.max(0, upperBin.binId - lowerBin.binId + 1);
+
+    const activeBinIndex = bins.findIndex((b) => b.binId === activeBin);
+    if (activeBinIndex === -1) return;
+
+    const activeBinObj = bins[activeBinIndex];
+    if (tokenXSplit === 0) {
+      updateUpperLowerBins({ newUpper: activeBinObj, newLower: bins[activeBinIndex - totalBins + 1] });
+    }
+    if (tokenXSplit === 1) {
+      updateUpperLowerBins({ newLower: activeBinObj, newUpper: bins[activeBinIndex + totalBins - 1] });
+    }
+  }, [tokenXSplit]);
+
   return (
     <div className="flex flex-col w-full">
       <Row fullWidth className="mb-3">
@@ -63,7 +107,17 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
 
       {/*Bin dis */}
       <div className="text-text text-sm text-left mb-3 mt-5">Set Bin Distribution</div>
-      <BinDistribution poolAddress={poolAddress} onLiquidityShapeChange={() => {}} />
+      <BinDistribution
+        poolAddress={poolAddress}
+        collateralMint={collateralMint}
+        collateralUiAmount={collateralUiAmount}
+        lowerBin={lowerBin}
+        upperBin={upperBin}
+        tokenXSplit={tokenXSplit}
+        liquidityShape={liquidityShape}
+        onRangeChange={updateUpperLowerBins}
+        onLiquidityShapeChange={(s) => setCreatePositionState({ liquidityShape: s })}
+      />
 
       <div className="text-text text-sm text-left mb-3 mt-5">Set Asset Split</div>
       <AssetSplit
@@ -71,6 +125,8 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
         collateralAmount={collateralUiAmount}
         collateralMint={collateralMint}
         tokenXSplit={tokenXSplit}
+        lowerBin={lowerBin}
+        upperBin={upperBin}
         onSplitChange={(newSplitX) => setCreatePositionState({ tokenXSplit: newSplitX })}
       />
     </div>
