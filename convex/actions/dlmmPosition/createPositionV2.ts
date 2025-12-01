@@ -44,6 +44,7 @@ export const createPosition = action({
     quoteDetails: v.array(vQuoteDetails),
     poolAddress: v.string(),
     autoCompoundSplit: v.number(),
+    poolEntryPrice: v.number(),
     lowerBin: vBinIdAndPrice,
     upperBin: vBinIdAndPrice,
     collateral: vCollateralToken,
@@ -203,6 +204,7 @@ export const createPosition = action({
             type: "DLMM",
             poolAddress,
             positionPubkey,
+            poolEntryPrice: args.poolEntryPrice,
             details: {
               autoCompoundSplit: args.autoCompoundSplit,
               lowerBin: lowerBin,

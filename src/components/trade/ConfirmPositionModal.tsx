@@ -78,6 +78,7 @@ export function ConfirmPositionContent({
         quoteDetails,
         liquidityShape: liquidityShape === "Bid-Ask" ? "BidAsk" : liquidityShape,
         autoCompoundSplit: 0,
+        poolEntryPrice: pool.current_price,
 
         lowerBin: { id: lowerBin.binId, price: Number(lowerBin.pricePerToken) },
         upperBin: { id: upperBin.binId, price: Number(upperBin.pricePerToken) },

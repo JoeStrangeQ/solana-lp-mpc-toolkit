@@ -25,6 +25,7 @@ export const insertPosition = internalMutation({
       type: input.type,
       positionPubkey: input.positionPubkey,
       poolAddress: input.poolAddress,
+      poolEntryPrice: input.poolEntryPrice,
 
       collateral: input.collateral,
       tokenX: input.tokenX,

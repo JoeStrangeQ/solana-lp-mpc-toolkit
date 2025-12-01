@@ -27,6 +27,7 @@ export const vPosition = v.object({
   type: vPositionType,
   positionPubkey: v.string(),
   poolAddress: v.string(),
+  poolEntryPrice: v.number(),
 
   collateral: vTokenAmount,
   tokenX: vTokenAmount,
