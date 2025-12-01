@@ -56,7 +56,7 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
 
       <TableCell>
         <MnMSuspense fallback={<TwoLinesSkeleton />}>
-          <PoolPrice poolAddress={poolAddress} />
+          <PoolPrice poolAddress={poolAddress} poolEntryPrice={dbPosition.poolEntryPrice} />
         </MnMSuspense>
       </TableCell>
 
@@ -310,7 +310,7 @@ function Range({
   );
 }
 
-function PoolPrice({ poolAddress }: { poolAddress: Address }) {
+function PoolPrice({ poolAddress, poolEntryPrice }: { poolAddress: Address; poolEntryPrice: number }) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
 
   const symbols = pool.name.split("-");
@@ -320,7 +320,7 @@ function PoolPrice({ poolAddress }: { poolAddress: Address }) {
       <Row justify="start" className="gap-px">
         <FormattedBinPrice value={currentPrice} classname="text-sm text-text font-normal" significantDigits={4} />
         <div className="text-sm text-text font-normal">/</div>
-        <FormattedBinPrice value={0} classname="text-sm text-text font-normal" significantDigits={4} />
+        <FormattedBinPrice value={poolEntryPrice} classname="text-sm text-text font-normal" significantDigits={4} />
       </Row>
       <div className="text-xs text-textSecondary">
         {symbols[0]}/{symbols[1]}
