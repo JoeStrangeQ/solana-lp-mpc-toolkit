@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { AMOUNTS_TO_OPEN_DLMM_POSITION, CollateralDepositInput, MaxBalance } from "../CollateralDepositInput";
 import { Row } from "../ui/Row";
 import { useConvexUser } from "~/providers/UserStates";
-import { Address, mints, toAddress, tokensMetadata } from "../../../convex/utils/solana";
+import { Address, mints, tokensMetadata } from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { Skeleton } from "../ui/Skeleton";
 import { BinDistribution, BinDistributionSkeleton, LiquidityShape } from "../BinDistribution";
@@ -16,9 +16,7 @@ import { Button } from "../ui/Button";
 import { ConfirmPositionContent, ConfirmPositionContentSkeleton } from "./ConfirmPositionModal";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { Modal } from "../ui/Modal";
-import { useAction } from "convex/react";
-import { api } from "../../../convex/_generated/api";
-import { startTrackingAction } from "../ActionTracker";
+import { LeverageSlider, LeverageSliderCreatePosition, LeverageSliderSkeleton } from "../LeverageSlider";
 
 export type CreatePositionState = {
   collateralMint: Address;
@@ -26,6 +24,8 @@ export type CreatePositionState = {
 
   liquidityShape: LiquidityShape;
   tokenXSplit: number;
+
+  leverage: number;
 };
 
 export type CreatePositionStore = CreatePositionState & {
@@ -38,6 +38,7 @@ const defaultCreatePositionState: CreatePositionState = {
   collateralUiAmount: 0,
   tokenXSplit: 0.5,
   liquidityShape: "Spot",
+  leverage: 1,
 };
 
 export const useCreatePositionState = create<CreatePositionStore>((set) => ({
@@ -101,6 +102,9 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
   }, [tokenXSplit]);
 
   useEffect(() => {
+    setCreatePositionState({ leverage: 1 });
+  }, [collateralMint]);
+  useEffect(() => {
     resetCreatePositionState();
     updateUpperLowerBins({
       newLower: undefined,
@@ -108,25 +112,9 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
     });
   }, [pathname, poolAddress]);
 
-  const r = useAction(api.actions.dlmmPosition.removeLiquidity.removeLiquidity);
   return (
     <div className="flex flex-col w-full h-full">
       <Row fullWidth className="mb-3">
-        <Button
-          onClick={() => {
-            const re = r({
-              positionPubkey: toAddress("ApT27omnUH6RhjK6N5xKLZJpvUpMFe5F6fjTt7BiBP16"),
-              percentageToWithdraw: 100,
-              trigger: "manual",
-            });
-            startTrackingAction({
-              type: "close_position",
-              action: re,
-            });
-          }}
-        >
-          Click me
-        </Button>
         <div className="text-text text-sm">Collateral</div>
         {convexUser && (
           <MnMSuspense fallback={<Skeleton className="w-12 h-3" />}>
@@ -141,12 +129,21 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
           </MnMSuspense>
         )}
       </Row>
-      <CollateralDepositInput
-        initialCollateralMint={defaultCreatePositionState.collateralMint}
-        value={collateralUiAmount}
-        onCollateralAmountChange={(amount) => setCreatePositionState({ collateralUiAmount: amount })}
-        onCollateralMintChange={(newMint) => setCreatePositionState({ collateralMint: newMint })}
-      />
+      <div className="flex flex-col gap-1">
+        <CollateralDepositInput
+          initialCollateralMint={defaultCreatePositionState.collateralMint}
+          value={collateralUiAmount}
+          onCollateralAmountChange={(amount) => setCreatePositionState({ collateralUiAmount: amount })}
+          onCollateralMintChange={(newMint) => setCreatePositionState({ collateralMint: newMint })}
+        />
+        {convexUser && collateralUiAmount > 0 ? (
+          <MnMSuspense fallback={<LeverageSliderSkeleton />}>
+            <LeverageSliderCreatePosition userAddress={convexUser.address} poolAddress={poolAddress} />
+          </MnMSuspense>
+        ) : (
+          <LeverageSlider leverage={1} maxLeverage={0} disabled />
+        )}
+      </div>
 
       {/*Bin dis */}
       <div className="text-text text-sm text-left mb-3 mt-5">Set Bin Distribution</div>
@@ -267,13 +264,16 @@ export function CreatePositionPanelSkeleton() {
         <div className="text-text text-sm">Collateral</div>
         <Skeleton className="w-12 h-3" />
       </Row>
-      <CollateralDepositInput
-        initialCollateralMint={defaultCreatePositionState.collateralMint}
-        value={0}
-        onCollateralAmountChange={() => {}}
-        onCollateralMintChange={() => {}}
-      />
 
+      <div className="flex flex-col gap-1">
+        <CollateralDepositInput
+          initialCollateralMint={defaultCreatePositionState.collateralMint}
+          value={0}
+          onCollateralAmountChange={() => {}}
+          onCollateralMintChange={() => {}}
+        />
+        <LeverageSliderSkeleton />
+      </div>
       {/*Bin dis */}
       <div className="text-text text-sm text-left mb-3 mt-5">Set Bin Distribution</div>
       <BinDistributionSkeleton />
