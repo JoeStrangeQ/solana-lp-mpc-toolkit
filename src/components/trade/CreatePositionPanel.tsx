@@ -113,7 +113,7 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
   }, [pathname, poolAddress]);
 
   return (
-    <div className="flex flex-col w-full h-full">
+    <div className="flex flex-col w-full h-full min-h-0">
       <Row fullWidth className="mb-3">
         <div className="text-text text-sm">Collateral</div>
         {convexUser && (
@@ -229,7 +229,7 @@ function CreatePositionButton({
     <>
       <Button
         variant="liquidPrimary"
-        className="mb-0 mt-auto"
+        className="mb-0 mt-5"
         onClick={() => setConfirmationModal(true)}
         disabled={disableButton}
       >
@@ -281,7 +281,7 @@ export function CreatePositionPanelSkeleton() {
       <div className="text-text text-sm text-left mb-3 mt-5">Set Asset Split</div>
       <AssetSplitSkelton />
 
-      <Button variant="liquidPrimary" className="mb-0 mt-auto" disabled>
+      <Button variant="liquidPrimary" className="mb-0 mt-5" disabled>
         Create Position
       </Button>
     </div>
