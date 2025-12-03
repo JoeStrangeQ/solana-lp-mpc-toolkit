@@ -56,6 +56,7 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
     collateralUiAmount,
     tokenXSplit,
     liquidityShape,
+    leverage,
     setCreatePositionState,
     resetCreatePositionState,
   } = useCreatePositionState();
@@ -106,10 +107,6 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
   }, [collateralMint]);
   useEffect(() => {
     resetCreatePositionState();
-    updateUpperLowerBins({
-      newLower: undefined,
-      newUpper: undefined,
-    });
   }, [pathname, poolAddress]);
 
   return (
@@ -165,7 +162,7 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
       <MnMSuspense fallback={<AssetSplitSkelton />}>
         <AssetSplit
           poolAddress={poolAddress}
-          collateralAmount={collateralUiAmount}
+          collateralAmount={collateralUiAmount * leverage}
           collateralMint={collateralMint}
           tokenXSplit={tokenXSplit}
           lowerBin={lowerBin}

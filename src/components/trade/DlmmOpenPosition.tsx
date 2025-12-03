@@ -1,20 +1,25 @@
 import { usePool } from "~/states/pools";
-import { useToken, useTokenPrice } from "~/states/tokens";
 import { cn } from "~/utils/cn";
-import { abbreviateAmount, formatTokenAmount, formatUsdValue } from "~/utils/numberFormats";
+import { abbreviateAmount, formatUsdValue } from "~/utils/numberFormats";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { Address, toAddress } from "../../../convex/utils/solana";
-import { PoolTokenIcons, TokenIcon } from "../TokenIcon";
+import { MnMSuspense } from "../MnMSuspense";
+import { PoolTokenIcons } from "../TokenIcon";
 import { LabelValue } from "../ui/labelValueRow";
 import { Row } from "../ui/Row";
+import { TableCell, TableRow } from "../ui/Table";
+import { useToken, useTokenPrice } from "~/states/tokens";
+import { Skeleton } from "../ui/Skeleton";
 import { BinIdAndPrice, PositionTokenAmount } from "../../../convex/schema/positions";
+import { FormattedBinPrice } from "../FormattedBinPrice";
+import { Ellipsis, PenLine, TriangleAlert, XCircle } from "lucide-react";
 import { rawAmountToAmount } from "../../../convex/utils/amounts";
 import { useDlmmOnChainPosition } from "~/states/positions";
-import { FormattedBinPrice } from "../FormattedBinPrice";
-import { PenLine } from "lucide-react";
-import { TableRow, TableCell } from "../ui/Table";
-import { Skeleton } from "../ui/Skeleton";
-import { MnMSuspense } from "../MnMSuspense";
+import { api } from "../../../convex/_generated/api";
+import { useAction } from "convex/react";
+import { startTrackingAction } from "../ActionTracker";
+import { useMutation as useTanstackMut } from "@tanstack/react-query";
+import { Button } from "../ui/Button";
 
 export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions"> }) {
   const poolAddress = toAddress(dbPosition.poolAddress);
@@ -22,30 +27,22 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
 
   return (
     <TableRow>
+      {/*Pool */}
       <TableCell>
         <MnMSuspense fallback={<PoolSkeleton />}>
           <Pool poolAddress={poolAddress} />
         </MnMSuspense>
       </TableCell>
+      {/*Size */}
 
       <TableCell>
-        <Collateral collateral={dbPosition.collateral} />
-      </TableCell>
-
-      <TableCell>
-        <MnMSuspense fallback={<SizeSkeleton />}>
-          <Size
-            poolAddress={poolAddress}
-            positionPubkey={positionPubkey}
-            xDb={dbPosition.tokenX}
-            yDb={dbPosition.tokenY}
-            state="current"
-          />
+        <MnMSuspense fallback={<Skeleton className="h-4 w-20" />}>
+          <Size poolAddress={poolAddress} positionPubkey={positionPubkey} />
         </MnMSuspense>
       </TableCell>
-
+      {/*range */}
       <TableCell>
-        <MnMSuspense fallback={<TwoLinesSkeleton />}>
+        <MnMSuspense fallback={<Skeleton className="h-4 w-20" />}>
           <Range
             poolAddress={poolAddress}
             lowerBin={dbPosition.details.lowerBin}
@@ -54,28 +51,30 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
         </MnMSuspense>
       </TableCell>
 
+      {/*Price/entry */}
       <TableCell>
-        <MnMSuspense fallback={<TwoLinesSkeleton />}>
+        <MnMSuspense fallback={<Skeleton className="h-4 w-20" />}>
           <PoolPrice poolAddress={poolAddress} poolEntryPrice={dbPosition.poolEntryPrice} />
         </MnMSuspense>
       </TableCell>
 
-      {/* <TableCell>
-        <Liquidation poolAddress={poolAddress} />
-      </TableCell>
-
+      {/*Liquidation */}
       <TableCell>
-        <LimitOrders poolAddress={poolAddress} />
-      </TableCell> */}
-
-      <TableCell>
-        <MnMSuspense fallback={<TwoLinesSkeleton />}>
-          <ClaimableFees poolAddress={poolAddress} positionPubkey={positionPubkey} />
+        <MnMSuspense fallback={<Skeleton className="h-4 w-20" />}>
+          <Liquidation />
         </MnMSuspense>
       </TableCell>
 
+      {/*SL/TP */}
       <TableCell>
-        <MnMSuspense fallback={<TwoLinesSkeleton />}>
+        <MnMSuspense fallback={<Skeleton className="h-4 w-20" />}>
+          <ListOrders />
+        </MnMSuspense>
+      </TableCell>
+
+      {/*PNL*/}
+      <TableCell>
+        <MnMSuspense fallback={<Skeleton className="h-4 w-20" />}>
           <PnL
             poolAddress={poolAddress}
             positionPubkey={positionPubkey}
@@ -84,11 +83,57 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
           />
         </MnMSuspense>
       </TableCell>
+      <TableCell className="w-0 whitespace-nowrap pl-2">
+        <Row justify="end" className="gap-2">
+          <ViewMoreButton />
+          <ClosePositionButton positionPubkey={positionPubkey} />
+        </Row>
+      </TableCell>
     </TableRow>
   );
 }
 
-function Pool({ poolAddress, leverage = 1 }: { poolAddress: Address; leverage?: number }) {
+function ClosePositionButton({ positionPubkey }: { positionPubkey: Address }) {
+  const closePosition = useAction(api.actions.dlmmPosition.removeLiquidity.removeLiquidity);
+
+  const closePositionMut = useTanstackMut({
+    mutationFn: async () => {
+      const closePositionPromise = closePosition({
+        percentageToWithdraw: 100,
+        trigger: "manual",
+        positionPubkey,
+      });
+
+      startTrackingAction({
+        type: "close_position",
+        action: closePositionPromise,
+        onSuccess: async () => {},
+      });
+    },
+  });
+
+  return (
+    <Button
+      variant="danger"
+      className="px-2 py-1.5 text-xs"
+      onClick={closePositionMut.mutate}
+      loading={closePositionMut.isPending}
+    >
+      <XCircle className="w-4 h-4 text-red" />
+      Close
+    </Button>
+  );
+}
+
+function ViewMoreButton() {
+  return (
+    <Button variant="neutral" className="px-2 py-1.5 border border-white/20 text-xs">
+      <Ellipsis className="w-2.5 h-2.5" />
+      View More
+    </Button>
+  );
+}
+function Pool({ poolAddress, leverage = 5 }: { poolAddress: Address; leverage?: number }) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const tokenX = useToken({ mint: pool.mint_x });
   const tokenY = useToken({ mint: pool.mint_y });
@@ -97,10 +142,10 @@ function Pool({ poolAddress, leverage = 1 }: { poolAddress: Address; leverage?: 
       <PoolTokenIcons size={28} xIcon={tokenX.icon} yIcon={tokenY.icon} dex="Meteora" />
       <div className="flex flex-col">
         <Row justify="start" className="gap-1">
-          <div className="text-text text-sm">{pool.name}</div>
+          <div className="text-text text-sm font-normal">{pool.name}</div>
           <div
             className={cn(
-              "flex px-2 py-px rounded-full text-xs ",
+              "flex px-2 py-px rounded-full text-xs font-normal ",
               leverage > 1 ? "bg-primary/10 text-primary" : "bg-white/10 text-text"
             )}
           >
@@ -111,15 +156,15 @@ function Pool({ poolAddress, leverage = 1 }: { poolAddress: Address; leverage?: 
           <LabelValue
             label={"Bin Step"}
             value={pool.bin_step}
-            className="text-xs"
-            valueClassName="text-xs"
-            labelClassName="text-xs"
+            className="text-xs font-normal"
+            valueClassName="text-xs font-normal"
+            labelClassName="text-xs font-normal"
           />
           <LabelValue
             label={"B. Fee"}
             value={`${abbreviateAmount(pool.base_fee_percentage, { type: "percentage" })}%`}
-            valueClassName="text-xs"
-            labelClassName="text-xs"
+            valueClassName="text-xs font-normal"
+            labelClassName="text-xs font-normal"
           />
         </Row>
       </div>
@@ -127,162 +172,33 @@ function Pool({ poolAddress, leverage = 1 }: { poolAddress: Address; leverage?: 
   );
 }
 
-function PoolSkeleton() {
-  return (
-    <Row justify="start" className="gap-1.5">
-      <PoolTokenIcons size={28} isLoading />
-      <div className="flex flex-col">
-        <Skeleton className="w-14 h-3.5" />
-        <Row justify="start" className="gap-1">
-          <LabelValue
-            label={"Bin Step"}
-            value={0}
-            className="text-xs"
-            valueClassName="text-xs"
-            labelClassName="text-xs"
-            isLoading
-          />
-          <LabelValue
-            label={"B. Fee"}
-            value={0}
-            className="text-xs"
-            valueClassName="text-xs"
-            labelClassName="text-xs"
-            isLoading
-          />
-        </Row>
-      </div>
-    </Row>
-  );
-}
+function Size({ poolAddress, positionPubkey }: { poolAddress: Address; positionPubkey: Address }) {
+  const pool = usePool({ poolAddress, protocol: "dlmm" });
+  const tokenX = useToken({ mint: pool.mint_x });
+  const tokenY = useToken({ mint: pool.mint_y });
 
-function TwoLinesSkeleton() {
-  return (
-    <div className="flex flex-col">
-      <Skeleton className="h-4 w-16" />
-      <Skeleton className="h-3 w-10" />
-    </div>
-  );
-}
-function Collateral({ collateral }: { collateral: PositionTokenAmount }) {
-  return (
-    <MnMSuspense fallback={<TokenAmountDisplaySkeleton />}>
-      <TokenAmountDisplay mint={toAddress(collateral.mint)} rawAmount={collateral.rawAmount} />
-    </MnMSuspense>
-  );
-}
-
-function SizeSkeleton() {
-  return (
-    <Row justify="start" className="gap-3.5">
-      <TokenAmountDisplaySkeleton />
-      <TokenAmountDisplaySkeleton />
-    </Row>
-  );
-}
-function Size({
-  poolAddress,
-  positionPubkey,
-  xDb,
-  yDb,
-  state,
-}: {
-  poolAddress: Address;
-  positionPubkey: Address;
-  xDb: PositionTokenAmount;
-  yDb: PositionTokenAmount;
-  state: "initial" | "current";
-}) {
-  const xMint = toAddress(xDb.mint);
-  const yMint = toAddress(yDb.mint);
-
-  const tokenX = useToken({ mint: xMint });
-  const tokenY = useToken({ mint: yMint });
-
-  const xPrice = useTokenPrice({ mint: xMint });
-  const yPrice = useTokenPrice({ mint: yMint });
+  const xPrice = useTokenPrice({ mint: pool.mint_x });
+  const yPrice = useTokenPrice({ mint: pool.mint_y });
 
   const onChainPosition = useDlmmOnChainPosition({
     poolAddress,
     positionPubkey,
   });
-  if (!onChainPosition) return <SizeSkeleton />; // should return placeholder or skeleton here as this will happen when we loading the on chain position
+
+  if (!onChainPosition) return <Skeleton className="w-20 h-3.5" />;
   const { totalXAmount, totalYAmount } = onChainPosition;
-  // Initial
-  const initialX = rawAmountToAmount(xDb.rawAmount, tokenX.decimals);
-  const initialY = rawAmountToAmount(yDb.rawAmount, tokenY.decimals);
 
   // Current
   const currentX = rawAmountToAmount(Number(totalXAmount), tokenX.decimals);
   const currentY = rawAmountToAmount(Number(totalYAmount), tokenY.decimals);
 
-  const amountX = state === "current" ? currentX : initialX;
-  const amountY = state === "current" ? currentY : initialY;
-
-  const usdX = amountX * xPrice;
-  const usdY = amountY * yPrice;
+  const usdX = currentX * xPrice;
+  const usdY = currentY * yPrice;
 
   const totalUsd = usdX + usdY;
 
-  const pctX = (usdX / totalUsd) * 100;
-  const pctY = (usdY / totalUsd) * 100;
-
-  return (
-    <Row justify="start" className="gap-3.5">
-      <TokenAmountDisplay
-        mint={xMint}
-        rawAmount={state === "current" ? Number(totalXAmount) : xDb.rawAmount}
-        pct={pctX}
-      />
-
-      <TokenAmountDisplay
-        mint={yMint}
-        rawAmount={state === "current" ? Number(totalYAmount) : yDb.rawAmount}
-        pct={pctY}
-      />
-    </Row>
-  );
+  return <div className="text-text text-xs font-normal">{formatUsdValue(totalUsd * 5)}</div>;
 }
-
-function TokenAmountDisplay({ mint, rawAmount, pct }: { mint: Address; rawAmount: number; pct?: number }) {
-  const token = useToken({ mint });
-  const price = useTokenPrice({ mint });
-
-  const amount = rawAmountToAmount(rawAmount, token.decimals);
-  const usdValue = amount * price;
-
-  return (
-    <div className="flex flex-col">
-      <Row justify="start" className="gap-0.5 text-text text-sm">
-        <TokenIcon className="h-4 w-4" icon={token.icon} />
-        {formatTokenAmount(amount, token.symbol)}
-      </Row>
-
-      <Row justify="start" className="gap-0.5">
-        <div className="text-textSecondary text-xs">{formatUsdValue(usdValue)}</div>
-        {pct !== undefined && (
-          <div className="text-textSecondary/60 text-xs">
-            {abbreviateAmount(pct, { type: "percentage", decimals: 0 })}%
-          </div>
-        )}
-      </Row>
-    </div>
-  );
-}
-
-function TokenAmountDisplaySkeleton() {
-  return (
-    <div className="flex flex-col">
-      <Row justify="start" className="gap-0.5 text-text text-sm">
-        <Skeleton className="h-4 w-4 rounded-full" />
-        <Skeleton className="h-4 w-10 rounded-full" />
-      </Row>
-
-      <Skeleton className="h-3 w-16 rounded-full" />
-    </div>
-  );
-}
-
 function Range({
   poolAddress,
   lowerBin,
@@ -297,142 +213,115 @@ function Range({
   const currentPrice = Number(pool.current_price);
   const isInRange = lowerBin.price <= currentPrice && upperBin.price >= currentPrice;
   return (
-    <div className="flex flex-col">
-      <Row justify="start" className="gap-0.5">
-        <FormattedBinPrice value={lowerBin.price} classname="text-sm text-text font-normal" significantDigits={4} />
-        <div className="text-sm text-text font-normal">-</div>
-        <FormattedBinPrice value={upperBin.price} classname="text-sm text-text font-normal" significantDigits={4} />
-      </Row>
-      <div className={cn("text-xs", isInRange ? "text-green" : "text-red")}>
-        {isInRange ? "In Range" : "Out Of Range"}
+    <Row justify="start" className="gap-1">
+      {isInRange ? (
+        <div className={"w-1.5 h-1.5 bg-green rounded-full"} />
+      ) : (
+        <TriangleAlert className="w-3 h-3 text-yellow" />
+      )}
+      <FormattedBinPrice value={lowerBin.price} classname="text-sm text-text font-normal" significantDigits={4} />
+      <div className="text-sm text-text font-normal mx-px">-</div>
+      <FormattedBinPrice value={upperBin.price} classname="text-sm text-text font-normal" significantDigits={4} />
+    </Row>
+  );
+}
+
+function PoolSkeleton() {
+  return (
+    <Row justify="start" className="gap-1.5">
+      <PoolTokenIcons size={28} isLoading />
+      <div className="flex flex-col">
+        <Skeleton className="w-14 h-3.5" />
+        <Row justify="start" className="gap-1">
+          <LabelValue
+            label={"Bin Step"}
+            value={0}
+            className="text-xs font-normal"
+            valueClassName="text-xs font-normal"
+            labelClassName="text-xs font-normal"
+            isLoading
+          />
+          <LabelValue
+            label={"B. Fee"}
+            value={0}
+            className="text-xs font-normal"
+            valueClassName="text-xs font-normal"
+            labelClassName="text-xs font-normal"
+            isLoading
+          />
+        </Row>
       </div>
-    </div>
+    </Row>
   );
 }
 
 function PoolPrice({ poolAddress, poolEntryPrice }: { poolAddress: Address; poolEntryPrice: number }) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
-
-  const symbols = pool.name.split("-");
   const currentPrice = Number(pool.current_price);
   return (
-    <div className="flex flex-col">
-      <Row justify="start" className="gap-px">
-        <FormattedBinPrice value={currentPrice} classname="text-sm text-text font-normal" significantDigits={4} />
-        <div className="text-sm text-text font-normal">/</div>
-        <FormattedBinPrice value={poolEntryPrice} classname="text-sm text-text font-normal" significantDigits={4} />
-      </Row>
-      <div className="text-xs text-textSecondary">
-        {symbols[0]}/{symbols[1]}
-      </div>
-    </div>
+    <Row justify="start" className="gap-px">
+      <FormattedBinPrice value={currentPrice} classname="text-sm text-text font-normal" significantDigits={4} />
+      <div className="text-sm text-textSecondary font-normal">/</div>
+      <FormattedBinPrice
+        value={poolEntryPrice}
+        classname="text-sm text-textSecondary font-normal"
+        significantDigits={4}
+      />
+    </Row>
   );
 }
 
-function Liquidation({ poolAddress }: { poolAddress: Address }) {
-  const pool = usePool({ poolAddress, protocol: "dlmm" });
-
-  const symbols = pool.name.split("-");
-
+function Liquidation() {
   const upperLiqPriceUp = 0;
   const lowerLiqPrice = 0;
 
   return (
-    <div className="flex flex-col">
-      <Row justify="start" className="gap-px">
-        {lowerLiqPrice === 0 ? (
-          <div className="text-sm text-textSecondary font-normal">--</div>
-        ) : (
-          <FormattedBinPrice value={lowerLiqPrice} classname="text-sm text-red font-normal" significantDigits={4} />
-        )}
-        <div className="text-sm text-text font-normal">/</div>
-        {upperLiqPriceUp === 0 ? (
-          <div className="text-sm text-textSecondary font-normal">--</div>
-        ) : (
-          <FormattedBinPrice value={upperLiqPriceUp} classname="text-sm text-red font-normal" significantDigits={4} />
-        )}
-      </Row>
-      <div className="text-xs text-textSecondary">
-        {symbols[0]}/{symbols[1]}
-      </div>
-    </div>
+    <Row justify="start" className="gap-px">
+      {lowerLiqPrice === 0 ? (
+        <div className="text-sm text-textSecondary font-normal">--</div>
+      ) : (
+        <FormattedBinPrice value={lowerLiqPrice} classname="text-sm text-yellow font-normal" significantDigits={4} />
+      )}
+      <div className="text-sm text-text font-normal">/</div>
+      {upperLiqPriceUp === 0 ? (
+        <div className="text-sm text-textSecondary font-normal">--</div>
+      ) : (
+        <FormattedBinPrice value={upperLiqPriceUp} classname="text-sm text-yellow font-normal" significantDigits={4} />
+      )}
+    </Row>
   );
 }
 
-function LimitOrders({ poolAddress }: { poolAddress: Address }) {
-  const pool = usePool({ poolAddress, protocol: "dlmm" });
-
-  const symbols = pool.name.split("-");
-
+function ListOrders() {
   const upperLimit = 0;
   const lowerLimit = 0;
 
   return (
-    <div className="flex flex-col">
-      <Row justify="start" className="group gap-px cursor-pointer ">
-        {lowerLimit === 0 ? (
-          <div className="text-sm text-textSecondary group-hover:text-text font-normal hover-effect">--</div>
-        ) : (
-          <FormattedBinPrice
-            value={lowerLimit}
-            classname="text-sm text-text group-hover:text-text font-normal hover-effect"
-            significantDigits={4}
-          />
-        )}
+    <Row justify="start" className="group gap-px cursor-pointer ">
+      {lowerLimit === 0 ? (
+        <div className="text-sm text-textSecondary group-hover:text-text font-normal hover-effect">--</div>
+      ) : (
+        <FormattedBinPrice
+          value={lowerLimit}
+          classname="text-sm text-text group-hover:text-text font-normal hover-effect"
+          significantDigits={4}
+        />
+      )}
 
-        <div className="text-sm text-text group-hover:text-text font-normal hover-effect">/</div>
+      <div className="text-sm text-text group-hover:text-text font-normal hover-effect">/</div>
 
-        {upperLimit === 0 ? (
-          <div className="text-sm text-textSecondary group-hover:text-text font-normal hover-effect">--</div>
-        ) : (
-          <FormattedBinPrice
-            value={upperLimit}
-            classname="text-sm text-text group-hover:text-text font-normal hover-effect"
-            significantDigits={4}
-          />
-        )}
+      {upperLimit === 0 ? (
+        <div className="text-sm text-textSecondary group-hover:text-text font-normal hover-effect">--</div>
+      ) : (
+        <FormattedBinPrice
+          value={upperLimit}
+          classname="text-sm text-text group-hover:text-text font-normal hover-effect"
+          significantDigits={4}
+        />
+      )}
 
-        <PenLine className="w-2.5 h-2.5 ml-1 text-textSecondary group-hover:text-text hover-effect" />
-      </Row>
-      <div className="text-xs text-textSecondary hover-effect">
-        {symbols[0]}/{symbols[1]}
-      </div>
-    </div>
-  );
-}
-
-function ClaimableFees({ poolAddress, positionPubkey }: { poolAddress: Address; positionPubkey: Address }) {
-  const pool = usePool({ poolAddress, protocol: "dlmm" });
-
-  const tokenX = useToken({ mint: pool.mint_x });
-  const tokenY = useToken({ mint: pool.mint_y });
-
-  const xPrice = useTokenPrice({ mint: pool.mint_x });
-  const yPrice = useTokenPrice({ mint: pool.mint_y });
-  const onChainPosition = useDlmmOnChainPosition({
-    poolAddress,
-    positionPubkey,
-  });
-  if (!onChainPosition) return <TwoLinesSkeleton />; // should return placeholder or skeleton here as this will happen when we loading the on chain position
-  const { feeX, feeY } = onChainPosition;
-
-  const xFee = rawAmountToAmount(Number(feeX), tokenX.decimals);
-  const yFee = rawAmountToAmount(Number(feeY), tokenY.decimals);
-
-  return (
-    <div className="flex flex-col">
-      <Row justify="start" className="gap-0.5 text-text text-sm">
-        <TokenIcon className="h-4 w-4" icon={tokenX.icon} />
-        {formatTokenAmount(xFee, tokenX.symbol)}
-        <div className="text-textSecondary text-xs">{formatUsdValue(xFee * xPrice)}</div>
-      </Row>
-
-      <Row justify="start" className="gap-0.5 text-text text-sm">
-        <TokenIcon className="h-4 w-4" icon={tokenY.icon} />
-        {formatTokenAmount(yFee, tokenX.symbol)}
-        <div className="text-textSecondary text-xs">{formatUsdValue(yFee * yPrice)}</div>
-      </Row>
-    </div>
+      <PenLine className="w-2.5 h-2.5 ml-1 text-textSecondary group-hover:text-text hover-effect" />
+    </Row>
   );
 }
 
@@ -460,7 +349,13 @@ function PnL({
     poolAddress,
     positionPubkey,
   });
-  if (!onChainPosition) return <TwoLinesSkeleton />; // should return placeholder or skeleton here as this will happen when we loading the on chain position
+  if (!onChainPosition)
+    return (
+      <div className="flex flex-col space-y-px">
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-3 w-10" />
+      </div>
+    ); // should return placeholder or skeleton here as this will happen when we loading the on chain position
   const { feeX, feeY, totalXAmount, totalYAmount } = onChainPosition;
 
   // -----------------------------
@@ -519,12 +414,14 @@ function PnL({
     <div className="flex flex-col">
       <Row justify="start" className="gap-1">
         {/* PnL in USD */}
-        <div className={cn("text-sm", isProfit ? "text-green" : "text-red")}>{formatUsdValue(pnlUsd)}</div>
+        <div className={cn("text-sm font-normal", isProfit ? "text-green" : "text-red")}>
+          {formatUsdValue(pnlUsd, { maximumFractionDigits: 5 })}
+        </div>
 
         {/* PnL percentage */}
         <div
           className={cn(
-            "flex px-2 py-px rounded-full text-xs",
+            "flex px-2 py-px rounded-full text-xs font-normal",
             isProfit ? "text-green bg-green/10" : "text-red bg-red/10"
           )}
         >
@@ -533,7 +430,9 @@ function PnL({
       </Row>
 
       {/* Fees */}
-      <div className="text-textSecondary text-xs">{formatUsdValue(unrealizedFeesUsd)} in fees</div>
+      <div className="text-textSecondary text-xs font-normal">
+        {formatUsdValue(unrealizedFeesUsd, { maximumFractionDigits: 5 })} in fees
+      </div>
     </div>
   );
 }

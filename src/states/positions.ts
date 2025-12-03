@@ -16,15 +16,8 @@ export function useDlmmOnChainPosition({
 
   const { data } = useSuspenseQuery({
     queryKey: [`dlmmOnChainPosition-${positionPubkey}-${poolAddress}`],
-    queryFn: async () => {
-      //in the future use protocol
-      try {
-        return getPosition({ poolAddress, positionPubkey });
-      } catch (error) {
-        return null;
-      }
-    },
-    refetchInterval: MS_1S * 7,
+    queryFn: async () => await getPosition({ poolAddress, positionPubkey }),
+    refetchInterval: MS_1S * 2,
     staleTime: MS_1S * 30,
   });
 

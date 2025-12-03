@@ -23,7 +23,7 @@ import {
 } from "../../utils/solana";
 import { rawAmountToAmount, safeBigIntToNumber } from "../../utils/amounts";
 import { connection } from "../../convexEnv";
-import { buildTipTx, confirmInflightBundle, signAndSendJitoBundle } from "../../helpers/jito";
+import { buildTipTx, signAndSendJitoBundle } from "../../helpers/jito";
 import DLMM, { PositionData } from "@meteora-ag/dlmm";
 import { Doc, Id } from "../../_generated/dataModel";
 import { vTriggerType } from "../../schema/activities";

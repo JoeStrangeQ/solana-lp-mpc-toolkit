@@ -107,6 +107,8 @@ export function ActionTracker() {
         {trackers.map((t) => {
           if (t.type === "create_position") {
             return <CreatePositionTracker key={t.id} tracker={t} onClose={() => removeTracker(t.id)} />;
+          }else if (t.type==='close_position'){
+            return <ClosePositionTracker key={t.id} tracker={t} onClose={()=>removeTracker(t.id)}/>
           }
           return null;
         })}
@@ -199,6 +201,54 @@ export function CreatePositionTracker({
     <TrackerToast status="loading" onClose={onClose}>
       <div className="flex flex-col items-start justify-start gap-1 max-w-[340px]">
         <div className="text-text text-sm leading-none">Creating Position</div>
+        <div className="text-textSecondary text-xs">{loadingDescription}</div>
+      </div>
+    </TrackerToast>
+  );
+}
+
+export function ClosePositionTracker({
+  tracker,
+  onClose,
+}: {
+  tracker: Extract<Tracker, { type: "close_position" }>;
+  onClose: () => void;
+}) {
+  const { status, loadingDescription, errorMsg } = tracker;
+
+  if (status === "success") {
+    const { closedPositionId } = tracker.result;
+    return (
+      <TrackerToast status="success" onClose={onClose}>
+        <div className="flex flex-col items-start justify-start gap-2 max-w-[340px] ">
+          <div className="text-text text-sm leading-none">Position Closed!</div>
+          <div
+            className="flex flex-row items-center gap-0.5 group cursor-pointer active:scale-95"
+            onClick={() => window.open(`https://solscan.io/tx/${closedPositionId}`, "_blank")}
+          >
+            <ArrowUpRight className="w-3 h-3 text-primary" />
+            <div className="text-primary text-xs group-hover:underline">View transaction</div>
+          </div>
+        </div>
+      </TrackerToast>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <TrackerToast status="failed" onClose={onClose}>
+        <div className="flex flex-col items-start justify-start gap-1 max-w-[340px]">
+          <div className="text-text text-sm leading-none">Failed To Close Position</div>
+          <div className="text-textSecondary text-xs wrap-break-word">{errorMsg}</div>
+        </div>
+      </TrackerToast>
+    );
+  }
+
+  return (
+    <TrackerToast status="loading" onClose={onClose}>
+      <div className="flex flex-col items-start justify-start gap-1 max-w-[340px]">
+        <div className="text-text text-sm leading-none">Closing Position</div>
         <div className="text-textSecondary text-xs">{loadingDescription}</div>
       </div>
     </TrackerToast>

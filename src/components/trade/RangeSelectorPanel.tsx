@@ -9,6 +9,7 @@ import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "~/utils/cn";
 import { Skeleton } from "../ui/Skeleton";
 import { MnMSuspense } from "../MnMSuspense";
+import { useRouterState } from "@tanstack/react-router";
 
 interface BinRangeState {
   lowerBin: SerializedBinLiquidity | null;
@@ -40,6 +41,9 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
     numberOfBinsToTheRight: MAX_SIDE + BUFFER,
   });
 
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const [sideBins, setSideBins] = useState(MIN_SIDE);
 
   // Initial range setup – once
@@ -68,7 +72,7 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
     });
 
     initRef.current = true;
-  }, [binRange, sideBins, lowerBin, upperBin, poolAddress]);
+  }, [binRange, sideBins, lowerBin, upperBin, pathname, poolAddress]);
 
   if (!binRange?.bins?.length || !lowerBin || !upperBin) {
     return <RangeSelectorPanelSkeleton />;

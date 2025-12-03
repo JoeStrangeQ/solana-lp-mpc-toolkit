@@ -59,9 +59,13 @@ export const getActiveBinInternalAction = internalAction({
 export const getOpenPosition = action({
   args: { poolAddress: v.string(), positionPubkey: v.string() },
   handler: async (_, args) => {
-    const dlmmPoolConn = await getDlmmPoolConn(args.poolAddress);
-    const { positionData: onChainPosition } = await dlmmPoolConn.getPosition(new PublicKey(args.positionPubkey));
-
-    return serializePositionData(onChainPosition);
+    try {
+      const dlmmPoolConn = await getDlmmPoolConn(args.poolAddress);
+      const res = await dlmmPoolConn.getPosition(new PublicKey(args.positionPubkey));
+      return serializePositionData(res.positionData);
+    } catch (err: any) {
+      console.log(err);
+      return null;
+    }
   },
 });
