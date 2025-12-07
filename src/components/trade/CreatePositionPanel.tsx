@@ -17,6 +17,9 @@ import { ConfirmPositionContent, ConfirmPositionContentSkeleton } from "./Confir
 import { Doc } from "../../../convex/_generated/dataModel";
 import { Modal } from "../ui/Modal";
 import { LeverageSlider, LeverageSliderCreatePosition, LeverageSliderSkeleton } from "../LeverageSlider";
+import { LimitOrderValues } from "../LimitOrdersModal";
+import { LabelValue } from "../ui/labelValueRow";
+import { LimitOrderInput } from "../../../convex/schema/limitOrders";
 
 export type CreatePositionState = {
   collateralMint: Address;
@@ -26,6 +29,9 @@ export type CreatePositionState = {
   tokenXSplit: number;
 
   leverage: number;
+
+  sl?: LimitOrderInput;
+  tp?: LimitOrderInput;
 };
 
 export type CreatePositionStore = CreatePositionState & {
@@ -39,6 +45,8 @@ const defaultCreatePositionState: CreatePositionState = {
   tokenXSplit: 0.5,
   liquidityShape: "Spot",
   leverage: 1,
+  sl: undefined,
+  tp: undefined,
 };
 
 export const useCreatePositionState = create<CreatePositionStore>((set) => ({
@@ -57,6 +65,8 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
     tokenXSplit,
     liquidityShape,
     leverage,
+    sl,
+    tp,
     setCreatePositionState,
     resetCreatePositionState,
   } = useCreatePositionState();
@@ -111,7 +121,7 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
 
   return (
     <div className="flex flex-col w-full h-full min-h-0">
-      <Row fullWidth className="mb-3">
+      <Row fullWidth className="mb-2.5">
         <div className="text-text text-sm">Collateral</div>
         {convexUser && (
           <MnMSuspense fallback={<Skeleton className="w-12 h-3" />}>
@@ -143,7 +153,7 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
       </div>
 
       {/*Bin dis */}
-      <div className="text-text text-sm text-left mb-3 mt-5">Set Bin Distribution</div>
+      <div className="text-text text-sm text-left mb-2.5 mt-4">Set Bin Distribution</div>
       <MnMSuspense fallback={<BinDistributionSkeleton />}>
         <BinDistribution
           poolAddress={poolAddress}
@@ -158,7 +168,7 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
         />
       </MnMSuspense>
 
-      <div className="text-text text-sm text-left mb-3 mt-5">Set Asset Split</div>
+      <div className="text-text text-sm text-left mb-2.5 mt-4">Set Asset Split</div>
       <MnMSuspense fallback={<AssetSplitSkelton />}>
         <AssetSplit
           poolAddress={poolAddress}
@@ -171,6 +181,21 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
         />
       </MnMSuspense>
 
+      <div className="flex w-full bg-white/5 h-px my-2.5" />
+      <LabelValue
+        variant="row"
+        labelClassName="text-text text-sm"
+        label={"Stop Loss/Take Profit"}
+        value={
+          <LimitOrderValues
+            poolAddress={poolAddress}
+            sl={sl}
+            tp={tp}
+            onSaveOrders={(sl, tp) => setCreatePositionState({ sl, tp })}
+          />
+        }
+      />
+
       {convexUser ? (
         <CreatePositionButton
           poolAddress={poolAddress}
@@ -179,7 +204,7 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
           collateralUiAmount={collateralUiAmount}
         />
       ) : (
-        <Button variant="liquidPrimary" className="mb-0 mt-auto" disabled={true}>
+        <Button variant="liquidPrimary" className="mb-0 mt-4" disabled={true}>
           Wallet Not Connected
         </Button>
       )}
@@ -226,7 +251,7 @@ function CreatePositionButton({
     <>
       <Button
         variant="liquidPrimary"
-        className="mb-0 mt-5"
+        className="mb-0 mt-4"
         onClick={() => setConfirmationModal(true)}
         disabled={disableButton}
       >
@@ -257,7 +282,7 @@ function CreatePositionButton({
 export function CreatePositionPanelSkeleton() {
   return (
     <div className="flex flex-col w-full h-full ">
-      <Row fullWidth className="mb-3">
+      <Row fullWidth className="mb-2.5">
         <div className="text-text text-sm">Collateral</div>
         <Skeleton className="w-12 h-3" />
       </Row>
@@ -272,13 +297,13 @@ export function CreatePositionPanelSkeleton() {
         <LeverageSliderSkeleton />
       </div>
       {/*Bin dis */}
-      <div className="text-text text-sm text-left mb-3 mt-5">Set Bin Distribution</div>
+      <div className="text-text text-sm text-left mb-2.5 mt-4">Set Bin Distribution</div>
       <BinDistributionSkeleton />
 
-      <div className="text-text text-sm text-left mb-3 mt-5">Set Asset Split</div>
+      <div className="text-text text-sm text-left mb-2.5 mt-4">Set Asset Split</div>
       <AssetSplitSkelton />
 
-      <Button variant="liquidPrimary" className="mb-0 mt-5" disabled>
+      <Button variant="liquidPrimary" className="mb-0 mt-4" disabled>
         Create Position
       </Button>
     </div>

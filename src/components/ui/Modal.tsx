@@ -37,7 +37,7 @@ export function Modal({
           <MnMSuspense fallback={<></>}>
             <motion.div
               layout
-              className={cn("relative py-6 px-5 z-40 bg-white/5 backdrop-blur-xl inner-white rounded-4xl", className)}
+              className={cn("relative py-6 px-5 z-40 bg-white/3 backdrop-blur-xl inner-white rounded-4xl", className)}
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.5 }}

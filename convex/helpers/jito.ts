@@ -25,8 +25,8 @@ const JITO_TIP_ACCOUNTS = [
 ];
 export type TipSpeed = "low" | "medium" | "fast" | "extraFast";
 export const TIP_SPEED_TO_LAMPORTS: Record<TipSpeed, number> = {
-  low: Math.round(0.001 * LAMPORTS_PER_SOL), // 0.001 SOL
-  medium: Math.round(0.0025 * LAMPORTS_PER_SOL), // 0.0025 SOL
+  low: Math.round(0.0007 * LAMPORTS_PER_SOL), // 0.001 SOL
+  medium: Math.round(0.001 * LAMPORTS_PER_SOL), // 0.0025 SOL
   fast: Math.round(0.005 * LAMPORTS_PER_SOL), // 0.005 SOL
   extraFast: Math.round(0.01 * LAMPORTS_PER_SOL), // 0.01 SOL
 };

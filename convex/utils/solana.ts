@@ -3,6 +3,7 @@ import { ComputeBudgetProgram, Transaction, TransactionInstruction, VersionedTra
 import bs58 from "bs58";
 import z from "zod";
 import { connection } from "../convexEnv";
+import { SupportedMarket } from "../schema/limitOrders";
 
 export const Base58Z = ({
   invalid_type_error,
@@ -76,15 +77,14 @@ export async function fastTransactionConfirm(signatures: string[], timeoutMs = 1
   let latestStatuses = new Array(signatures.length).fill(null);
 
   // Linear delay parameters
-  const startDelay = Math.min(50, Math.max(15, timeoutMs * 0.02)); // 2% of timeout
-  const increment = Math.min(25, Math.max(5, timeoutMs * 0.01)); // 1% of timeout
+  const startDelay = Math.min(50, Math.max(30, timeoutMs * 0.02));
+  const increment = Math.min(25, Math.max(15, timeoutMs * 0.01));
   const maxDelay = 200;
 
   let delay = startDelay;
   let attempt = 0;
 
   while (Date.now() - start < timeoutMs) {
-    console.log("Calling getSignatures");
     const { value } = await connection.getSignatureStatuses(signatures);
     latestStatuses = value;
 
@@ -102,21 +102,31 @@ export async function fastTransactionConfirm(signatures: string[], timeoutMs = 1
 
     if (!anyPending) break;
 
-    // Linear increase
     await new Promise((r) => setTimeout(r, delay));
-
     attempt++;
     delay = Math.min(startDelay + attempt * increment, maxDelay);
   }
 
+  const timedOut = Date.now() - start >= timeoutMs;
+
   return signatures.map((sig, i) => {
     const status = latestStatuses[i];
+
+    // TIMEOUT: no result + no error → treat as timeout
+    if (
+      timedOut &&
+      (!status ||
+        (!status.err && status.confirmationStatus !== "confirmed" && status.confirmationStatus !== "finalized"))
+    ) {
+      return { signature: sig, status: "failed" as const, err: status.err ?? "Timeout reached" };
+    }
 
     if (!status) return { signature: sig, status: "pending" as const };
     if (status.err) return { signature: sig, status: "failed" as const, err: status.err };
     if (status.confirmationStatus === "confirmed" || status.confirmationStatus === "finalized") {
       return { signature: sig, status: "confirmed" as const };
     }
+
     return { signature: sig, status: "pending" as const };
   });
 }
@@ -151,3 +161,24 @@ export const tokensMetadata: Record<Address | string, BaseTokenMetadata> = {
     decimals: 6,
   },
 };
+
+export function getMarketFromMints(mintX: string, mintY: string): SupportedMarket {
+  const symX = tokensMetadata[mintX]?.symbol?.toUpperCase();
+  const symY = tokensMetadata[mintY]?.symbol?.toUpperCase();
+
+  if (!symX || !symY) throw new Error(`There is no avaliable market for ${mintX} and ${mintY}`);
+
+  // Normalize order (SOL-USDC should match USDC-SOL)
+  const pair = [symX, symY].sort().join("/");
+
+  switch (pair) {
+    case "SOL/USDC":
+      return "SOL/USDC";
+    case "MET/USDC":
+      return "MET/USDC";
+    case "MET/SOL":
+      return "MET/SOL";
+    default:
+      throw new Error(`There is no avaliable market for ${mintX} and ${mintY}`);
+  }
+}

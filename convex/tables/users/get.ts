@@ -2,6 +2,13 @@ import { v } from "convex/values";
 import { query } from "../../_generated/server";
 import { Doc } from "../../_generated/dataModel";
 
+export const getUserById = query({
+  args: { id: v.id("users") },
+  handler: async (ctx, { id }) => {
+    return await ctx.db.get(id);
+  },
+});
+
 export const getUserByAddress = query({
   args: {
     address: v.string(),

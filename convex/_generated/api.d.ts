@@ -14,6 +14,7 @@ import type * as actions_fetch_dlmm from "../actions/fetch/dlmm.js";
 import type * as actions_fetch_tokenMetadata from "../actions/fetch/tokenMetadata.js";
 import type * as actions_fetch_tokenPrices from "../actions/fetch/tokenPrices.js";
 import type * as actions_fetch_walletBalances from "../actions/fetch/walletBalances.js";
+import type * as actions_limitOrders from "../actions/limitOrders.js";
 import type * as convexEnv from "../convexEnv.js";
 import type * as helpers_buildJupiterSwapTransaction from "../helpers/buildJupiterSwapTransaction.js";
 import type * as helpers_buildTitanSwapTransaction from "../helpers/buildTitanSwapTransaction.js";
@@ -27,6 +28,7 @@ import type * as helpers_simulateAndGetTokensBalance from "../helpers/simulateAn
 import type * as helpers_transferMnMFees from "../helpers/transferMnMFees.js";
 import type * as privy from "../privy.js";
 import type * as schema_activities from "../schema/activities.js";
+import type * as schema_limitOrders from "../schema/limitOrders.js";
 import type * as schema_positions from "../schema/positions.js";
 import type * as services_jito from "../services/jito.js";
 import type * as services_jupiter from "../services/jupiter.js";
@@ -35,6 +37,8 @@ import type * as services_mnmServer from "../services/mnmServer.js";
 import type * as services_solana from "../services/solana.js";
 import type * as tables_activities_get from "../tables/activities/get.js";
 import type * as tables_activities_mutations from "../tables/activities/mutations.js";
+import type * as tables_orders_get from "../tables/orders/get.js";
+import type * as tables_orders_mutations from "../tables/orders/mutations.js";
 import type * as tables_positions_get from "../tables/positions/get.js";
 import type * as tables_positions_mutations from "../tables/positions/mutations.js";
 import type * as tables_users_get from "../tables/users/get.js";
@@ -48,6 +52,7 @@ import type * as utils_retry from "../utils/retry.js";
 import type * as utils_solana from "../utils/solana.js";
 import type * as utils_timeframe from "../utils/timeframe.js";
 import type * as utils_tryCatch from "../utils/tryCatch.js";
+import type * as workPools from "../workPools.js";
 
 import type {
   ApiFromModules,
@@ -62,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   "actions/fetch/tokenMetadata": typeof actions_fetch_tokenMetadata;
   "actions/fetch/tokenPrices": typeof actions_fetch_tokenPrices;
   "actions/fetch/walletBalances": typeof actions_fetch_walletBalances;
+  "actions/limitOrders": typeof actions_limitOrders;
   convexEnv: typeof convexEnv;
   "helpers/buildJupiterSwapTransaction": typeof helpers_buildJupiterSwapTransaction;
   "helpers/buildTitanSwapTransaction": typeof helpers_buildTitanSwapTransaction;
@@ -75,6 +81,7 @@ declare const fullApi: ApiFromModules<{
   "helpers/transferMnMFees": typeof helpers_transferMnMFees;
   privy: typeof privy;
   "schema/activities": typeof schema_activities;
+  "schema/limitOrders": typeof schema_limitOrders;
   "schema/positions": typeof schema_positions;
   "services/jito": typeof services_jito;
   "services/jupiter": typeof services_jupiter;
@@ -83,6 +90,8 @@ declare const fullApi: ApiFromModules<{
   "services/solana": typeof services_solana;
   "tables/activities/get": typeof tables_activities_get;
   "tables/activities/mutations": typeof tables_activities_mutations;
+  "tables/orders/get": typeof tables_orders_get;
+  "tables/orders/mutations": typeof tables_orders_mutations;
   "tables/positions/get": typeof tables_positions_get;
   "tables/positions/mutations": typeof tables_positions_mutations;
   "tables/users/get": typeof tables_users_get;
@@ -96,6 +105,7 @@ declare const fullApi: ApiFromModules<{
   "utils/solana": typeof utils_solana;
   "utils/timeframe": typeof utils_timeframe;
   "utils/tryCatch": typeof utils_tryCatch;
+  workPools: typeof workPools;
 }>;
 
 /**
@@ -164,6 +174,93 @@ export declare const components: {
         "internal",
         { batchSize?: number; before?: number; name?: string },
         null
+      >;
+    };
+  };
+  limitOrdersExecutionPool: {
+    lib: {
+      cancel: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          id: string;
+          logLevel: "DEBUG" | "TRACE" | "INFO" | "REPORT" | "WARN" | "ERROR";
+        },
+        any
+      >;
+      cancelAll: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          before?: number;
+          limit?: number;
+          logLevel: "DEBUG" | "TRACE" | "INFO" | "REPORT" | "WARN" | "ERROR";
+        },
+        any
+      >;
+      enqueue: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          config: {
+            logLevel: "DEBUG" | "TRACE" | "INFO" | "REPORT" | "WARN" | "ERROR";
+            maxParallelism: number;
+          };
+          fnArgs: any;
+          fnHandle: string;
+          fnName: string;
+          fnType: "action" | "mutation" | "query";
+          onComplete?: { context?: any; fnHandle: string };
+          retryBehavior?: {
+            base: number;
+            initialBackoffMs: number;
+            maxAttempts: number;
+          };
+          runAt: number;
+        },
+        string
+      >;
+      enqueueBatch: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          config: {
+            logLevel: "DEBUG" | "TRACE" | "INFO" | "REPORT" | "WARN" | "ERROR";
+            maxParallelism: number;
+          };
+          items: Array<{
+            fnArgs: any;
+            fnHandle: string;
+            fnName: string;
+            fnType: "action" | "mutation" | "query";
+            onComplete?: { context?: any; fnHandle: string };
+            retryBehavior?: {
+              base: number;
+              initialBackoffMs: number;
+              maxAttempts: number;
+            };
+            runAt: number;
+          }>;
+        },
+        Array<string>
+      >;
+      status: FunctionReference<
+        "query",
+        "internal",
+        { id: string },
+        | { previousAttempts: number; state: "pending" }
+        | { previousAttempts: number; state: "running" }
+        | { state: "finished" }
+      >;
+      statusBatch: FunctionReference<
+        "query",
+        "internal",
+        { ids: Array<string> },
+        Array<
+          | { previousAttempts: number; state: "pending" }
+          | { previousAttempts: number; state: "running" }
+          | { state: "finished" }
+        >
       >;
     };
   };

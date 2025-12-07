@@ -12,18 +12,33 @@ import { useToken, useTokenPrice } from "~/states/tokens";
 import { Skeleton } from "../ui/Skeleton";
 import { BinIdAndPrice, PositionTokenAmount } from "../../../convex/schema/positions";
 import { FormattedBinPrice } from "../FormattedBinPrice";
-import { Ellipsis, PenLine, TriangleAlert, XCircle } from "lucide-react";
+import { Ellipsis, TriangleAlert, XCircle } from "lucide-react";
 import { rawAmountToAmount } from "../../../convex/utils/amounts";
 import { useDlmmOnChainPosition } from "~/states/positions";
 import { api } from "../../../convex/_generated/api";
-import { useAction } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { startTrackingAction } from "../ActionTracker";
 import { useMutation as useTanstackMut } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
+import { LimitOrderValues } from "../LimitOrdersModal";
 
 export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions"> }) {
   const poolAddress = toAddress(dbPosition.poolAddress);
   const positionPubkey = toAddress(dbPosition.positionPubkey);
+
+  const orders =
+    useQuery(api.tables.orders.get.getOrdersByPosition, {
+      positionPubkey,
+    }) ?? [];
+
+  const updateOrder = useMutation(api.tables.orders.mutations.updateOrder);
+  const cancel = useMutation(api.tables.orders.mutations.cancelOrder);
+
+  const sl = orders.find((o) => o.direction === "sl");
+  const tp = orders.find((o) => o.direction === "tp");
+
+  const isSlActivated = sl?.status === "executing" || sl?.status === "executed" || sl?.status === "triggered";
+  const isTpActivated = tp?.status === "executing" || tp?.status === "executed" || tp?.status === "triggered";
 
   return (
     <TableRow>
@@ -65,10 +80,36 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
         </MnMSuspense>
       </TableCell>
 
-      {/*SL/TP */}
+      {/*SL/TP , query open orders by position pubkey,use our modular componenet */}
       <TableCell>
         <MnMSuspense fallback={<Skeleton className="h-4 w-20" />}>
-          <ListOrders />
+          <LimitOrderValues
+            poolAddress={poolAddress}
+            sl={sl ? { price: sl.triggerPrice, swapTo: sl.swapTo } : undefined}
+            tp={tp ? { price: tp.triggerPrice, swapTo: tp.swapTo } : undefined}
+            onSaveOrders={async (newSl, newTp) => {
+              console.log("New", newSl, sl);
+              console.log("New", newTp, tp);
+
+              if (sl && newSl && newSl.price !== 0) {
+                await updateOrder({
+                  orderId: sl._id,
+                  orderInput: newSl,
+                });
+              }
+
+              // Update TP
+              if (tp && newTp && newTp.price !== 0) {
+                await updateOrder({
+                  orderId: tp._id,
+                  orderInput: newTp,
+                });
+              }
+
+              if (sl && newSl.price === 0) await cancel({ orderId: sl._id, reason: "User canaled order from the ui" });
+              if (tp && newTp.price === 0) await cancel({ orderId: tp._id, reason: "User canaled order from the ui" });
+            }}
+          />
         </MnMSuspense>
       </TableCell>
 
@@ -86,14 +127,14 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
       <TableCell className="w-0 whitespace-nowrap pl-2">
         <Row justify="end" className="gap-2">
           <ViewMoreButton />
-          <ClosePositionButton positionPubkey={positionPubkey} />
+          <ClosePositionButton positionPubkey={positionPubkey} disable={isSlActivated || isTpActivated} />
         </Row>
       </TableCell>
     </TableRow>
   );
 }
 
-function ClosePositionButton({ positionPubkey }: { positionPubkey: Address }) {
+function ClosePositionButton({ positionPubkey, disable }: { positionPubkey: Address; disable: boolean }) {
   const closePosition = useAction(api.actions.dlmmPosition.removeLiquidity.removeLiquidity);
 
   const closePositionMut = useTanstackMut({
@@ -118,6 +159,7 @@ function ClosePositionButton({ positionPubkey }: { positionPubkey: Address }) {
       className="px-2 py-1.5 text-xs"
       onClick={closePositionMut.mutate}
       loading={closePositionMut.isPending}
+      disabled={disable}
     >
       <XCircle className="w-4 h-4 text-red" />
       Close
@@ -288,39 +330,6 @@ function Liquidation() {
       ) : (
         <FormattedBinPrice value={upperLiqPriceUp} classname="text-sm text-yellow font-normal" significantDigits={4} />
       )}
-    </Row>
-  );
-}
-
-function ListOrders() {
-  const upperLimit = 0;
-  const lowerLimit = 0;
-
-  return (
-    <Row justify="start" className="group gap-px cursor-pointer ">
-      {lowerLimit === 0 ? (
-        <div className="text-sm text-textSecondary group-hover:text-text font-normal hover-effect">--</div>
-      ) : (
-        <FormattedBinPrice
-          value={lowerLimit}
-          classname="text-sm text-text group-hover:text-text font-normal hover-effect"
-          significantDigits={4}
-        />
-      )}
-
-      <div className="text-sm text-text group-hover:text-text font-normal hover-effect">/</div>
-
-      {upperLimit === 0 ? (
-        <div className="text-sm text-textSecondary group-hover:text-text font-normal hover-effect">--</div>
-      ) : (
-        <FormattedBinPrice
-          value={upperLimit}
-          classname="text-sm text-text group-hover:text-text font-normal hover-effect"
-          significantDigits={4}
-        />
-      )}
-
-      <PenLine className="w-2.5 h-2.5 ml-1 text-textSecondary group-hover:text-text hover-effect" />
     </Row>
   );
 }

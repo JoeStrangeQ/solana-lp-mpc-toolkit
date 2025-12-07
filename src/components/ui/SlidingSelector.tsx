@@ -30,6 +30,7 @@ export function SlidingSelect<T extends string>({
   const containerRef = useRef<HTMLDivElement>(null);
   const refs = useRef<Record<string, HTMLDivElement | null>>({});
   const [pos, setPos] = useState({ left: 0, width: 0 });
+  const hasMeasuredOnce = useRef(false);
 
   // Measure highlight position
   useEffect(() => {
@@ -37,13 +38,28 @@ export function SlidingSelect<T extends string>({
     const parent = containerRef.current;
     if (!el || !parent) return;
 
-    const rect = el.getBoundingClientRect();
-    const parentRect = parent.getBoundingClientRect();
+    // Measurement function
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const parentRect = parent.getBoundingClientRect();
+      setPos({
+        left: rect.left - parentRect.left,
+        width: rect.width,
+      });
+    };
 
-    setPos({
-      left: rect.left - parentRect.left,
-      width: rect.width,
-    });
+    // First render → wait 300ms
+    if (!hasMeasuredOnce.current) {
+      const t = setTimeout(() => {
+        measure();
+        hasMeasuredOnce.current = true; // mark as done
+      }, 600);
+
+      return () => clearTimeout(t);
+    }
+
+    // Subsequent renders → measure instantly
+    measure();
   }, [value, options.length]);
 
   const setRef = (key: string) => (el: HTMLDivElement | null) => {

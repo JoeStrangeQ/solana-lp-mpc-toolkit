@@ -57,6 +57,7 @@ function createActivityInputVariant<D extends ReturnType<typeof v.object>>(detai
     details,
     relatedPositionPubkey: v.optional(v.string()),
     transactionIds: v.optional(v.array(vTransactionId)),
+    bundleId: v.optional(v.string()),
   });
 }
 
@@ -83,6 +84,7 @@ function createActivityVariant<T extends ActivityType, D extends ReturnType<type
     type: v.literal(type),
     userId: v.id("users"),
     transactionIds: v.optional(v.array(vTransactionId)),
+    bundleId: v.optional(v.string()),
     relatedPositionPubkey: v.optional(v.string()),
     details,
   });
