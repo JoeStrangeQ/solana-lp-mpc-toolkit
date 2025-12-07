@@ -3,31 +3,57 @@
 import { Buffer } from "buffer";
 globalThis.Buffer = Buffer;
 
-import { ConvexError, v } from "convex/values";
+import { ConvexError, Infer, v } from "convex/values";
 import { AuthorizationContext, PrivyClient, User } from "@privy-io/node";
 import { action, ActionCtx, MutationCtx } from "./_generated/server";
 import { PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_SIGNER_PRIVATE_KEY } from "./convexEnv";
 import { api, internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 
-export interface PrivyWallet {
-  id: string | null;
-  address: string;
-  chain_id: string;
-  chain_type: "solana";
-  connector_type: "embedded";
-  delegated: boolean;
-  first_verified_at: number | null;
-  imported: boolean;
-  latest_verified_at: number | null;
-  public_key: string;
-  recovery_method: "privy" | "user-passcode" | "google-drive" | "icloud" | "recovery-encryption-key" | "privy-v2";
-  type: "wallet";
-  verified_at: number;
-  wallet_client: "privy";
-  wallet_client_type: "privy";
-  wallet_index: number;
-}
+export const vPrivyWallet = v.object({
+  id: v.union(v.string(), v.null()),
+  address: v.string(),
+
+  chain_id: v.string(),
+  chain_type: v.literal("solana"),
+
+  connector_type: v.literal("embedded"),
+
+  delegated: v.boolean(),
+
+  first_verified_at: v.union(v.number(), v.null()),
+  imported: v.boolean(),
+  latest_verified_at: v.union(v.number(), v.null()),
+
+  public_key: v.union(v.string(), v.null()), // null when user didn't signed anything yet
+
+  recovery_method: v.union(
+    v.literal("privy"),
+    v.literal("user-passcode"),
+    v.literal("google-drive"),
+    v.literal("icloud"),
+    v.literal("recovery-encryption-key"),
+    v.literal("privy-v2")
+  ),
+
+  type: v.literal("wallet"),
+
+  verified_at: v.number(),
+
+  wallet_client: v.literal("privy"),
+  wallet_client_type: v.literal("privy"),
+
+  wallet_index: v.number(),
+});
+
+//typed like privy
+export const vPrivyWalletRaw = v.object({
+  ...vPrivyWallet.fields,
+  public_key: v.string(),
+});
+
+export type PrivyWallet = Infer<typeof vPrivyWallet>;
+
 export const CHAIN_ID_MAINNET = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 
 export const privy = new PrivyClient({
@@ -86,11 +112,29 @@ export async function authenticateUser({ ctx }: { ctx: ActionCtx | MutationCtx }
   return {
     user,
     privyUser,
-    userWallet: embeddedWallet,
+    userWallet: { ...embeddedWallet, public_key: embeddedWallet.public_key ?? "" },
   };
 }
 
-function isSolanaEmbeddedWallet(acc: User["linked_accounts"][number]): acc is PrivyWallet {
+export async function authenticateWithUserId({ ctx, userId }: { ctx: ActionCtx; userId: Id<"users"> }) {
+  //IMPORTANT : call only from internal actions/mutations
+  const user = await ctx.runQuery(api.tables.users.get.getUserById, {
+    id: userId,
+  });
+
+  if (!user?.privyUserId) throw new Error(`Couldn't find privy id for user ${userId}`);
+  const privyUser = await privy.users()._get(user.privyUserId);
+  const embeddedWallet = privyUser.linked_accounts.find(isSolanaEmbeddedWallet);
+  if (!embeddedWallet) throw new ConvexError("User does not have a Privy embedded wallet");
+
+  return {
+    user,
+    privyUser,
+    userWallet: { ...embeddedWallet, public_key: embeddedWallet.public_key ?? "" },
+  };
+}
+
+function isSolanaEmbeddedWallet(acc: User["linked_accounts"][number]): acc is Infer<typeof vPrivyWalletRaw> {
   return (
     acc.type === "wallet" &&
     acc.chain_type === "solana" &&

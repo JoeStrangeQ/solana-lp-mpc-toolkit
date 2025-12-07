@@ -16,7 +16,7 @@ export default function DlmmTradePage() {
   const parsedPoolAddress = toAddress(poolAddress);
 
   return (
-    <div className="w-full px-8 py-11">
+    <div className="w-full px-5 py-9">
       <PoolDataHeader classname="mb-3.5" protocol="dlmm" poolAddress={parsedPoolAddress} />
 
       <div

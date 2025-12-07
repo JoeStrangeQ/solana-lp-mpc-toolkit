@@ -1,7 +1,7 @@
 "use node";
 import { v } from "convex/values";
-import { action } from "../../_generated/server";
-import { authenticateUser } from "../../privy";
+import { action, internalAction } from "../../_generated/server";
+import { authenticateUser, authenticateWithUserId, vPrivyWallet } from "../../privy";
 import { api, internal } from "../../_generated/api";
 import { getDlmmPoolConn } from "../../services/meteora";
 import {
@@ -41,13 +41,44 @@ export const removeLiquidity = action({
     positionPubkey: v.string(),
     percentageToWithdraw: v.number(),
     fromBinId: v.optional(v.number()),
+    outputMint: v.optional(v.string()),
     toBinId: v.optional(v.number()),
     //TODO: add optional fee amounts and swap quotes (when preforming from the front-end)
   },
   handler: async (ctx, args): Promise<ActionRes<"close_position">> => {
+    const { user, userWallet } = await authenticateUser({ ctx });
+    if (!user || !userWallet) throw new Error("Couldn't find user");
+
+    return await ctx.runAction(internal.actions.dlmmPosition.removeLiquidity.internalRemoveLiquidity, {
+      trigger: args.trigger,
+      positionPubkey: args.positionPubkey,
+      percentageToWithdraw: args.percentageToWithdraw,
+      outputMint: args.outputMint,
+      userWallet,
+      userId: user._id,
+    });
+  },
+});
+
+export const internalRemoveLiquidity = internalAction({
+  args: {
+    trigger: vTriggerType,
+    positionPubkey: v.string(),
+    percentageToWithdraw: v.number(),
+    fromBinId: v.optional(v.number()),
+    toBinId: v.optional(v.number()),
+    userWallet: v.optional(vPrivyWallet),
+    outputMint: v.optional(v.string()),
+    userId: v.id("users"),
+    //TODO: add optional fee amounts and swap quotes (when preforming from the front-end)
+  },
+  handler: async (ctx, args): Promise<ActionRes<"close_position">> => {
     try {
-      const { user, userWallet } = await authenticateUser({ ctx });
-      if (!user) throw new Error("Couldn't find user");
+      let userWallet = args.userWallet;
+      if (!userWallet) {
+        userWallet = (await authenticateWithUserId({ ctx, userId: args.userId })).userWallet;
+      }
+      if (!userWallet) throw new Error("Couldn't find user wallet");
       const { positionPubkey, percentageToWithdraw, trigger } = args;
 
       // //TODO: fetch user settings to know what slippage he is willing to take .
@@ -60,14 +91,14 @@ export const removeLiquidity = action({
       const userAddress = toAddress(userWallet.address);
       const xMint = toAddress(position.tokenX.mint);
       const yMint = toAddress(position.tokenY.mint);
-      const outputMint = toAddress(position.collateral.mint);
+      const outputMint = toAddress(args.outputMint ?? position.collateral.mint);
 
       const claimableFeeX = onChainPosition.feeX;
       const claimableFeeY = onChainPosition.feeY;
 
       const { blockhash } = await connection.getLatestBlockhash();
       const { tipTx, cuPriceMicroLamports, cuLimit } = await buildTipTx({
-        speed: "fast",
+        speed: "low",
         payerAddress: userWallet.address,
         recentBlockhash: blockhash,
       });
@@ -192,7 +223,7 @@ export const removeLiquidity = action({
         const pnl = calculatePnl({ position, onChainPosition, tokensData });
         const [id] = await Promise.all([
           ctx.runMutation(internal.tables.activities.mutations.createActivity, {
-            userId: user._id,
+            userId: args.userId,
             input: {
               type: "close_position",
               relatedPositionPubkey: positionPubkey,
@@ -207,6 +238,8 @@ export const removeLiquidity = action({
             },
           }),
           ctx.runMutation(internal.tables.positions.mutations.closePositionByPubkey, { positionPubkey }),
+          trigger === "manual" &&
+            ctx.runMutation(internal.tables.orders.mutations.cancelOrdersForPosition, { positionPubkey }),
         ]);
 
         activityId = id;

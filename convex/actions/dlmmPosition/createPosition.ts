@@ -21,9 +21,10 @@ import { SwapQuotes } from "../../helpers/normalizeServerSwapQuote";
 import BN from "bn.js";
 import { amountToRawAmount, safeBigIntToNumber } from "../../utils/amounts";
 import { getJupiterTokenPrices } from "../../services/jupiter";
-import { fastTransactionConfirm, toAddress } from "../../utils/solana";
-import { internal } from "../../_generated/api";
+import { fastTransactionConfirm, getMarketFromMints, toAddress } from "../../utils/solana";
+import { api, internal } from "../../_generated/api";
 import { getDlmmPoolConn } from "../../services/meteora";
+import { vLimitOrderInput } from "../../schema/limitOrders";
 
 export const vCollateralToken = v.object({
   mint: v.string(),
@@ -49,6 +50,7 @@ export const createPosition = action({
     tokenX: vPairToken,
     tokenY: vPairToken,
     liquidityShape: vLiquidityShape,
+    limits: v.optional(v.object({ sl: v.optional(vLimitOrderInput), tp: v.optional(vLimitOrderInput) })),
   },
   handler: async (ctx, args): Promise<ActionRes<"create_position">> => {
     try {
@@ -70,7 +72,7 @@ export const createPosition = action({
 
       const { blockhash } = await connection.getLatestBlockhash();
       const { tipTx, cuPriceMicroLamports, cuLimit } = await buildTipTx({
-        speed: "fast",
+        speed: "low",
         payerAddress: userWallet.address,
         recentBlockhash: blockhash,
       });
@@ -122,7 +124,7 @@ export const createPosition = action({
         transactions: [...swapsTxs, createPositionTx, tipTx],
       });
 
-      const [{ txIds }, tokenPrices] = await Promise.all([sendBundle, getTokenPrices]);
+      const [{ txIds, bundleId }, tokenPrices] = await Promise.all([sendBundle, getTokenPrices]);
       const createPositionTxId = txIds[txIds.length - 2];
       const txsConfirmRes = await fastTransactionConfirm([createPositionTxId], 7_000);
 
@@ -160,6 +162,32 @@ export const createPosition = action({
         { id: txIds[swapsTxs.length + 1], description: "Jito Tip" },
       ];
 
+      const ordersToCreate = [];
+      if (args.limits?.sl) {
+        ordersToCreate.push(
+          ctx.runMutation(api.tables.orders.mutations.createOrder, {
+            userId: user._id,
+            direction: "sl",
+            market: getMarketFromMints(tokenX.mint, tokenY.mint),
+            orderInput: args.limits.sl,
+            percentageToWithdraw: 100,
+            positionPubkey,
+          })
+        );
+      }
+
+      if (args.limits?.tp) {
+        ordersToCreate.push(
+          ctx.runMutation(api.tables.orders.mutations.createOrder, {
+            userId: user._id,
+            direction: "tp",
+            market: getMarketFromMints(tokenX.mint, tokenY.mint),
+            orderInput: args.limits.tp,
+            percentageToWithdraw: 100,
+            positionPubkey,
+          })
+        );
+      }
       const [activityId] = await Promise.all([
         ctx.runMutation(internal.tables.activities.mutations.createActivity, {
           userId: user._id,
@@ -167,6 +195,7 @@ export const createPosition = action({
             type: "create_position",
             relatedPositionPubkey: positionPubkey,
             transactionIds,
+            bundleId,
             details: {
               poolAddress,
               positionType: "DLMM",
@@ -175,7 +204,6 @@ export const createPosition = action({
             },
           },
         }),
-
         ctx.runMutation(internal.tables.positions.mutations.insertPosition, {
           userId: user._id,
           input: {
@@ -192,6 +220,7 @@ export const createPosition = action({
             ...tokenDetails,
           },
         }),
+        ...ordersToCreate,
       ]);
       console.timeEnd("db");
 

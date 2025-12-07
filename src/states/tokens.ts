@@ -1,9 +1,8 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { TOKENS_METADATA } from "~/utils/solana";
 import { MS_1M } from "../../convex/utils/timeframe";
-import { Address, tokensMetadata } from "../../convex/utils/solana";
+import { Address, mints, tokensMetadata } from "../../convex/utils/solana";
 
 export function useToken({ mint, forceFetch = false }: { mint: Address; forceFetch?: boolean }) {
   const fetchTokenMetadata = useAction(api.actions.fetch.tokenMetadata.getTokenMetadataAction);
@@ -45,7 +44,7 @@ export function useTokenPrice({ mint }: { mint: Address }): number {
 }
 
 export function useUsdToSolEquivalent(usdAmount: number): number {
-  const solPrice = useTokenPrice({ mint: TOKENS_METADATA.SOL.address });
+  const solPrice = useTokenPrice({ mint: tokensMetadata[mints.sol].address });
   return usdAmount / solPrice;
 }
 

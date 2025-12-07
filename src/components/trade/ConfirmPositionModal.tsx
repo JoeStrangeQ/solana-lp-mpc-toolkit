@@ -22,6 +22,8 @@ import { useMutation as useTanstackMut } from "@tanstack/react-query";
 import { startTrackingAction } from "../ActionTracker";
 import { useBalances } from "~/states/balances";
 import { Doc } from "../../../convex/_generated/dataModel";
+import { LimitOrderValues } from "../LimitOrdersModal";
+import { LimitOrderInput } from "../../../convex/schema/limitOrders";
 
 export function ConfirmPositionContent({
   poolAddress,
@@ -32,7 +34,7 @@ export function ConfirmPositionContent({
   convexUser: Doc<"users">;
   onClose: () => void;
 }) {
-  const { collateralMint, collateralUiAmount, tokenXSplit, liquidityShape, resetCreatePositionState } =
+  const { collateralMint, collateralUiAmount, sl, tp, tokenXSplit, liquidityShape, resetCreatePositionState } =
     useCreatePositionState();
   const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
   const createPosition = useAction(api.actions.dlmmPosition.createPosition.createPosition);
@@ -98,6 +100,7 @@ export function ConfirmPositionContent({
           decimals: tokenY.decimals,
           split: 1 - tokenXSplit,
         },
+        limits: { sl, tp },
       });
 
       onClose();
@@ -143,6 +146,8 @@ export function ConfirmPositionContent({
           liquidityShape={liquidityShape}
           lowerBin={lowerBin}
           upperBin={upperBin}
+          sl={sl}
+          tp={tp}
           txIndex={needSwapX && needSwapY ? 3 : 2}
         />
       )}
@@ -165,11 +170,15 @@ function CratePositionDetails({
   lowerBin,
   upperBin,
   txIndex,
+  sl,
+  tp,
 }: {
   pool: MeteoraDlmmPool;
   liquidityShape: LiquidityShape;
   lowerBin: SerializedBinLiquidity;
   upperBin: SerializedBinLiquidity;
+  sl?: LimitOrderInput;
+  tp?: LimitOrderInput;
   txIndex: number;
 }) {
   const tokenX = useToken({ mint: pool.mint_x });
@@ -222,6 +231,12 @@ function CratePositionDetails({
               <div className="text-text text-xs">{`(${binCount} Bins)`}</div>
             </Row>
           }
+        />
+
+        <LabelValue
+          variant="row"
+          label={"Stop Loss/Take Profit"}
+          value={<LimitOrderValues poolAddress={pool.address} sl={sl} tp={tp} disableEdit />}
         />
       </div>
     </div>

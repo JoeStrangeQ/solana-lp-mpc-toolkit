@@ -2,6 +2,7 @@ import { defineSchema, defineTable } from "convex/server";
 import { Infer, v } from "convex/values";
 import { vPosition } from "./schema/positions";
 import { vActivity } from "./schema/activities";
+import { vOrder } from "./schema/limitOrders";
 
 export const vLinkedAccountType = v.union(
   v.literal("email"),
@@ -28,4 +29,9 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_position_pk", ["positionPubkey"])
     .index("by_active", ["userId", "isActive"]),
+  orders: defineTable(vOrder)
+    .index("by_market_direction_price", ["market", "direction", "triggerPrice"])
+    .index("by_position_pk", ["positionPubkey"])
+    .index("by_user", ["userId"])
+
 });
