@@ -1,14 +1,8 @@
 import { ArrowDownToLine, Check, Copy, LogOut, Minus } from "lucide-react";
 import SolanaFmIcon from "~/assets/solana-fm.png";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useConvexUser } from "~/providers/UserStates";
 import { usePrivy, useSolanaWallets } from "@privy-io/react-auth";
-// import { useBalances, useTotalUsdBalance } from '~/states/balances'
-// import {
-//   abbreviateAmount,
-//   formatUsdValue,
-//   tokenAmountFormatter,
-// } from '~/utils/numberFormats'
 import { useFundWallet } from "@privy-io/react-auth/solana";
 import { Skeleton } from "../ui/Skeleton";
 import { convex } from "~/providers/ConvexClientProvider";
@@ -26,6 +20,7 @@ import { MnMIcon } from "../icons/MnMIcon";
 import { useBalances, useTotalUsdBalance } from "~/states/balances";
 import { toAddress } from "../../../convex/utils/solana";
 import { Button } from "../ui/Button";
+import { useMfaReminderStore } from "~/states/mfa";
 
 export function WalletSidebar({ user, onClose }: { user: Doc<"users">; onClose: () => void }) {
   const [tab, setTab] = useState<"Portfolio" | "Activities">("Portfolio");
@@ -133,7 +128,7 @@ function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: ()
   // const { resetWithdrawModalStates } = useWithdrawModalStates();
   // const { convexUser } = useConvexUser();
   const { fundWallet } = useFundWallet();
-  const { exportWallet } = useSolanaWallets();
+  const { exportWalletWithMfa } = useMfaProtectedExportWallet();
 
   const totalUsdBalance = useTotalUsdBalance({ address: userAddress });
   const formattedUsdBalance = formatUsdValue(totalUsdBalance);
@@ -150,7 +145,7 @@ function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: ()
     <>
       <Row fullWidth>
         <div className="flex flex-col w-full">
-          <Button variant="neutral" onClick={exportWallet}>
+          <Button variant="neutral" onClick={exportWalletWithMfa}>
             Export
           </Button>
           <div className="text-textSecondary text-nowrap mb-0.5 ">Total balance</div>
@@ -326,3 +321,49 @@ function TokenListSkeleton() {
 //     </div>
 //   );
 // }
+
+export function useMfaProtectedExportWallet() {
+  const { user, ready, authenticated } = usePrivy();
+  const { convexUser } = useConvexUser();
+  const { exportWallet } = useSolanaWallets();
+
+  const openMfaModal = useMfaReminderStore((s) => s.open);
+
+  const pendingExportRef = useRef<null | (() => Promise<void>)>(null);
+
+  const hasMfa = Boolean(user?.mfaMethods?.length);
+
+  useEffect(() => {
+    if (!hasMfa || !pendingExportRef.current) return;
+
+    const resume = pendingExportRef.current;
+    pendingExportRef.current = null;
+
+    void resume();
+  }, [hasMfa]);
+
+  const exportWithMfaGuard = useCallback(async () => {
+    if (!ready || !authenticated || !user || !convexUser) {
+      throw new Error("User not authenticated");
+    }
+
+    const hasMfaNow = Boolean(user.mfaMethods?.length);
+
+    if (!hasMfaNow) {
+      openMfaModal();
+
+      pendingExportRef.current = async () => {
+        await exportWallet();
+      };
+
+      return;
+    }
+
+    await exportWallet({ address: convexUser.address });
+  }, [ready, authenticated, user, exportWallet, openMfaModal]);
+
+  return {
+    exportWalletWithMfa: exportWithMfaGuard,
+    hasMfa,
+  };
+}

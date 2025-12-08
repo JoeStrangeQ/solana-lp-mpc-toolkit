@@ -22,18 +22,24 @@ import Lend from "./routes/Lend";
 import { DEFAULT_DLMM_POOL } from "./components/layout/PairSelector";
 import { zAddress } from "../convex/utils/solana";
 import { ActionTracker } from "./components/ActionTracker";
+import { useMfaReminderGuard } from "./states/mfa";
+import { MfaReminderModal } from "./components/Mfa";
 
 const DEAFULT_POOL_ROUTE = `/dlmm/${DEFAULT_DLMM_POOL}`;
 const rootRoute = createRootRoute({
-  component: () => (
-    <div className="min-h-screen flex flex-col bg-background px-7 xl:px-16 py-10 overflow-x-hidden">
-      <Navbar />
-      <main className="flex flex-1  justify-center ">
-        <Outlet />
-      </main>
-      <ActionTracker />
-    </div>
-  ),
+  component: () => {
+    useMfaReminderGuard();
+    return (
+      <div className="min-h-screen flex flex-col bg-background px-7 xl:px-16 py-10 overflow-x-hidden">
+        <Navbar />
+        <main className="flex flex-1  justify-center ">
+          <Outlet />
+        </main>
+        <ActionTracker />
+        <MfaReminderModal />
+      </div>
+    );
+  },
 });
 
 const indexRoute = createRoute({
