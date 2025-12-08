@@ -14,7 +14,6 @@ export function PrivyProviderWrapper({ children }: PrivyProviderWrapperProps) {
       appId={PRIVY_APP_ID!}
       config={{
         embeddedWallets: {
-          // requireUserPasswordOnCreate: true,
           solana: {
             createOnLogin: "all-users",
           },
