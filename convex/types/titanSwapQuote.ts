@@ -30,7 +30,7 @@ const SwapRouteV = v.object({
   addressLookupTables: v.array(v.string()),
 });
 
-const SwapQuotesV = v.object({
+export const SwapQuotesV = v.object({
   id: v.string(),
   inputMint: v.string(),
   outputMint: v.string(),
@@ -70,7 +70,7 @@ const SwapRouteZ = z.object({
   addressLookupTables: z.array(z.string()),
 });
 
-const SwapQuotesZ = z.object({
+export const SwapQuotesZ = z.object({
   id: z.string(),
   inputMint: z.string(),
   outputMint: z.string(),
