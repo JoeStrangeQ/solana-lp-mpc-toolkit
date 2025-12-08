@@ -45,7 +45,6 @@ export function useLoopscaleQuote({
       }
 
       const priceOverride = xAmount * xOracle.twapPrice + yAmount * yOracle.twapPrice;
-      console.log("Price ovveride", priceOverride);
       const quotes = await getLoopscaleMaxQuote({
         userAddress,
         collateralMint,
@@ -66,6 +65,7 @@ export function useLoopscaleQuote({
         collateralIdentifier: best.collateralIdentifier,
         strategyAddress: best.strategy,
         apyPercent: best.apy / 10000,
+        lqtCBps: best.lqt,
       };
     },
     refetchInterval: MS_1S * 30,

@@ -129,7 +129,8 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
               mint={collateralMint}
               userAddress={convexUser.address}
               onClick={(b) => {
-                const maxAmount = b.symbol === "SOL" ? b.balance - AMOUNTS_TO_OPEN_DLMM_POSITION : b.balance;
+                const maxAmount =
+                  b.symbol === "SOL" ? Math.max(0.000001, b.balance - AMOUNTS_TO_OPEN_DLMM_POSITION) : b.balance;
                 setCreatePositionState({ collateralUiAmount: maxAmount });
               }}
             />

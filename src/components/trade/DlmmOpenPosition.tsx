@@ -45,7 +45,7 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
       {/*Pool */}
       <TableCell>
         <MnMSuspense fallback={<PoolSkeleton />}>
-          <Pool poolAddress={poolAddress} />
+          <Pool poolAddress={poolAddress} leverage={dbPosition?.leverage ?? 1} />
         </MnMSuspense>
       </TableCell>
       {/*Size */}
