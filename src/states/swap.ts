@@ -16,22 +16,45 @@ export function useSwapQuote({
 }) {
   const { convexUser } = useConvexUser();
   const mnmServer = useMnMServerClient();
+
   const [streamId] = useState(`${convexUser?._id}:${randomUUID()}`);
   const [swapQuote, setSwapQuote] = useState<SwapQuotes | null>(null);
-  const [isStreaming, setIsStreaming] = useState(false);
+
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (inputMint === outputMint) return;
+    if (!inputMint || !outputMint || inputMint === outputMint || inputRawAmount <= 0) return;
+    if (mnmServer.isError) {
+      setStatus("error");
+      setError("Unknown error");
+    }
+  }, [mnmServer.isError]);
+  useEffect(() => {
+    if (!inputMint || !outputMint || inputMint === outputMint || inputRawAmount <= 0) return;
+
     let active = true;
+    setStatus("loading");
+    setError(null);
+    setSwapQuote(null);
 
     const startQuoteStreaming = async () => {
       try {
         await mnmServer.connect();
-        setIsStreaming(true);
+
+        // ✅ listen for server errors
+        mnmServer.onError((msg) => {
+          console.log("Error found");
+          if (!active) return;
+          setStatus("error");
+          setError(msg);
+        });
 
         mnmServer.onQuoteUpdate(streamId, (update) => {
           if (!active) return;
           setSwapQuote(update.payload);
+          setStatus("success");
         });
 
         mnmServer.subscribeQuotes({
@@ -42,6 +65,8 @@ export function useSwapQuote({
         });
       } catch (err) {
         console.error("Failed to start quote streaming:", err);
+        setStatus("error");
+        setError("Failed to connect to quote server");
       }
     };
 
@@ -49,7 +74,6 @@ export function useSwapQuote({
 
     return () => {
       active = false;
-      setIsStreaming(false);
       mnmServer.unsubscribeQuote(streamId);
     };
   }, [inputMint, outputMint, inputRawAmount]);
@@ -57,6 +81,9 @@ export function useSwapQuote({
   return {
     swapQuote,
     streamId,
-    isStreaming,
+    status,
+    isError: status === "error",
+    isLoading: status === "loading",
+    error,
   };
 }

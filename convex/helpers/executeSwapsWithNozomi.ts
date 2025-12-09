@@ -53,7 +53,7 @@ export async function executeSwapsWithNozomi({
       userAddress: userWallet.address,
       swapSpecs,
       useNozomi: true,
-      blockhash,
+      blockhash: blockhash.blockhash,
     });
 
     if (!build.ok) {
@@ -135,14 +135,14 @@ type SwapAtomicError = {
 
 type SwapAtomicResult = SwapAtomicSuccess | SwapAtomicError;
 
-async function buildMultipleJupiterSwapsAtomically({
+export async function buildMultipleJupiterSwapsAtomically({
   userAddress,
   swapSpecs,
   blockhash,
 }: {
   userAddress: string;
   swapSpecs: SwapSpec[];
-  blockhash: BlockhashWithExpiryBlockHeight;
+  blockhash: string;
   useNozomi?: boolean;
 }): Promise<SwapAtomicResult> {
   const MAX_TRIES = 7;
@@ -159,7 +159,7 @@ async function buildMultipleJupiterSwapsAtomically({
           outputMint,
           inputAmount: safeBigIntToNumber(amount, `swap ${inputMint}`),
           slippageBps,
-          blockhash: blockhash.blockhash,
+          blockhash,
           useNozomi: true,
           options: {
             skipUserAccountsRpcCalls: true,

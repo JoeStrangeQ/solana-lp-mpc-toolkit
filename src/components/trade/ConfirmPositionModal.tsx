@@ -24,6 +24,7 @@ import { useBalances } from "~/states/balances";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { LimitOrderValues } from "../LimitOrdersModal";
 import { LimitOrderInput } from "../../../convex/schema/limitOrders";
+import { Info } from "lucide-react";
 
 export function ConfirmPositionContent({
   poolAddress,
@@ -50,15 +51,23 @@ export function ConfirmPositionContent({
   const xDepositedRawAmount = depositRawAmount * tokenXSplit;
   const yDepositedRawAmount = depositRawAmount - xDepositedRawAmount;
 
-  const needSwapX = pool.mint_x !== collateralMint;
-  const needSwapY = pool.mint_y !== collateralMint;
+  const needSwapX = pool.mint_x !== collateralMint && xDepositedRawAmount > 0;
+  const needSwapY = pool.mint_y !== collateralMint && yDepositedRawAmount > 0;
 
-  const { swapQuote: xSwapQuote, streamId: xStreamId } = useSwapQuote({
+  const {
+    swapQuote: xSwapQuote,
+    streamId: xStreamId,
+    isError: isErrorX,
+  } = useSwapQuote({
     inputMint: collateralMint,
     outputMint: tokenX.address,
     inputRawAmount: xDepositedRawAmount,
   });
-  const { swapQuote: ySwapQuote, streamId: yStreamId } = useSwapQuote({
+  const {
+    swapQuote: ySwapQuote,
+    streamId: yStreamId,
+    isError: isErrorY,
+  } = useSwapQuote({
     inputMint: collateralMint,
     outputMint: tokenY.address,
     inputRawAmount: yDepositedRawAmount,
@@ -116,9 +125,35 @@ export function ConfirmPositionContent({
       });
     },
   });
+
+  const hasAnyQuoteError = isErrorX || isErrorY;
+  const hasBothQuoteErrors = isErrorX && isErrorY;
+
+  const quoteErrorTitle = hasBothQuoteErrors
+    ? "We had an error finding quotes to show you"
+    : "We had an error finding one of the quotes";
+
+  const quoteErrorSubtitle = hasBothQuoteErrors
+    ? "You can safely continue, we will still swap your assets"
+    : "One of your quotes failed, but you can safely continue";
+
   return (
     <div className="flex flex-col w-[480px]">
-      {needSwapX && !xSwapQuote ? (
+      {hasAnyQuoteError && (needSwapX || needSwapY) && (
+        <Row
+          fullWidth
+          className="bg-yellow/10 border border-yellow/20 rounded-xl gap-1.5 px-2 py-1.5 flex items-start mb-3"
+        >
+          <Info className="w-3 h-3 text-yellow shrink-0 mt-0.5" />
+
+          <div className="flex flex-col w-full items-start leading-tight">
+            <div className="text-yellow text-sm leading-tight">{quoteErrorTitle}</div>
+
+            <div className="text-yellow/60 text-xs leading-tight">{quoteErrorSubtitle}</div>
+          </div>
+        </Row>
+      )}
+      {needSwapX && !xSwapQuote && !isErrorX ? (
         <QuoteDetailsSkeleton />
       ) : (
         xSwapQuote && (
@@ -129,7 +164,7 @@ export function ConfirmPositionContent({
       )}
       {needSwapX && <div className="w-full h-px bg-white/10 my-3" />}
 
-      {needSwapY && !ySwapQuote ? (
+      {needSwapY && !ySwapQuote && !isErrorY ? (
         <QuoteDetailsSkeleton />
       ) : (
         ySwapQuote && (
@@ -148,7 +183,7 @@ export function ConfirmPositionContent({
           upperBin={upperBin}
           sl={sl}
           tp={tp}
-          txIndex={needSwapX && needSwapY ? 3 : 2}
+          txIndex={(needSwapX ? 1 : 0) + (needSwapY ? 1 : 0) + 1}
         />
       )}
 

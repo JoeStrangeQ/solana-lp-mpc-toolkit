@@ -17,7 +17,6 @@ import { getServerSwapQuote, vQuoteDetails } from "../../services/mnmServer";
 import { ActionRes } from "../../types/actionResults";
 import { connection } from "../../convexEnv";
 import { buildTipTx, signAndSendJitoBundle } from "../../helpers/jito";
-import { SwapQuotes } from "../../helpers/normalizeServerSwapQuote";
 import BN from "bn.js";
 import { amountToRawAmount, safeBigIntToNumber } from "../../utils/amounts";
 import { getJupiterTokenPrices } from "../../services/jupiter";
@@ -25,6 +24,8 @@ import { fastTransactionConfirm, getMarketFromMints, toAddress } from "../../uti
 import { api, internal } from "../../_generated/api";
 import { getDlmmPoolConn } from "../../services/meteora";
 import { vLimitOrderInput } from "../../schema/limitOrders";
+import { buildMultipleJupiterSwapsAtomically, SwapSpec } from "../../helpers/executeSwapsWithNozomi";
+import { tryCatch } from "../../utils/tryCatch";
 
 export const vCollateralToken = v.object({
   mint: v.string(),
@@ -60,15 +61,8 @@ export const createPosition = action({
       if (!user) throw new Error("Couldn't find user");
       console.time("quotes");
       const getSwapQuotes = args.quoteDetails.map((q) => getServerSwapQuote({ userId: user._id, ...q }));
-      const swapQuotes = await Promise.all(getSwapQuotes);
+      const swapQuotesRes = await tryCatch(Promise.all(getSwapQuotes));
       console.timeEnd("quotes");
-
-      const { xRawAmount, yRawAmount, collateralRawAmount } = getPairAmounts({
-        swapQuotes,
-        collateral,
-        tokenX,
-        tokenY,
-      });
 
       const { blockhash } = await connection.getLatestBlockhash();
       const { tipTx, cuPriceMicroLamports, cuLimit } = await buildTipTx({
@@ -77,26 +71,97 @@ export const createPosition = action({
         recentBlockhash: blockhash,
       });
 
-      const swapsTxs = await Promise.all(
-        swapQuotes.map((q) => {
-          const quote = Object.values(q.quotes)[0];
-          if (!quote) {
-            throw new Error("We couldn’t find a valid swap route to the pool’s pair assets.");
-          }
-          const { instructions, addressLookupTables } = quote;
-          return buildTitanSwapTransaction({
-            userAddress: userWallet.address,
-            instructions,
-            lookupTables: addressLookupTables,
-            options: {
-              cuLimit,
-              cuPriceMicroLamports,
-              recentBlockhash: blockhash,
-            },
-          });
-        })
-      );
+      const swapsTxs: VersionedTransaction[] = [];
+      const finalSwapQuotes: NormalizedSwapQuote[] = [];
 
+      const shouldSwapX = collateral.mint !== tokenX.mint && tokenX.split > 0;
+      const shouldSwapY = collateral.mint !== tokenY.mint && tokenY.split > 0;
+
+      const validTitanQuotes = swapQuotesRes.data?.filter((q) => Object.values(q.quotes).length > 0);
+
+      if (validTitanQuotes && validTitanQuotes.length > 0) {
+        const titanSwapTxs = await Promise.all(
+          validTitanQuotes.map((q) => {
+            const quote = Object.values(q.quotes)[0];
+            if (!quote) {
+              throw new Error("We couldn’t find a valid swap route to the pool’s pair assets.");
+            }
+            const { instructions, addressLookupTables } = quote;
+            finalSwapQuotes.push({
+              inputMint: q.inputMint,
+              outputMint: q.outputMint,
+              outAmount: quote.outAmount.toString(),
+              slippageBps: quote.slippageBps,
+            });
+            return buildTitanSwapTransaction({
+              userAddress: userWallet.address,
+              instructions,
+              lookupTables: addressLookupTables,
+              options: {
+                cuLimit,
+                cuPriceMicroLamports,
+                recentBlockhash: blockhash,
+              },
+            });
+          })
+        );
+        swapsTxs.push(...titanSwapTxs);
+      } else if (shouldSwapX || shouldSwapY) {
+        //titan quotes are empty although we need to have a swap.
+        console.log("using jupiter as fallback, no titan quotes but needs a swap");
+        const { rawAmountTokenX, rawAmountTokenY } = getPairCollateralAmount({
+          collateralUiAmount: collateral.amount,
+          collateralDecimals: collateral.decimals,
+          xSplit: tokenX.split,
+        });
+
+        const swapSpecs: SwapSpec[] = shouldSwapX
+          ? [
+              {
+                amount: new BN(rawAmountTokenX),
+                inputMint: toAddress(collateral.mint),
+                outputMint: toAddress(tokenX.mint),
+                slippageBps: 200,
+              },
+            ]
+          : [];
+
+        if (shouldSwapY) {
+          swapSpecs.push({
+            amount: new BN(rawAmountTokenY),
+            inputMint: toAddress(collateral.mint),
+            outputMint: toAddress(tokenY.mint),
+            slippageBps: 200,
+          });
+        }
+
+        const buildJupSwapRes = await buildMultipleJupiterSwapsAtomically({
+          userAddress: toAddress(userWallet.address),
+          blockhash,
+          swapSpecs,
+        });
+        if (!buildJupSwapRes.ok) throw new Error("Couldn't find a valid swap quote");
+        const jupiterSwaps = buildJupSwapRes.swapDetails.map(({ tx }) => tx);
+        const jupiterFormattedQuotes: NormalizedSwapQuote[] = buildJupSwapRes.swapDetails.map(({ quote }) => ({
+          inputMint: quote.inputMint,
+          outputMint: quote.outputMint,
+          outAmount: quote.outAmount,
+          slippageBps: quote.slippageBps,
+        }));
+        swapsTxs.push(...jupiterSwaps);
+        finalSwapQuotes.push(...jupiterFormattedQuotes);
+      }
+
+      const { xRawAmount, yRawAmount, collateralRawAmount } = getPairAmounts({
+        swapQuotes: finalSwapQuotes,
+        collateral,
+        tokenX,
+        tokenY,
+      });
+
+      if (xRawAmount.isZero() && yRawAmount.isZero()) {
+        throw new Error("Invalid DLMM position: both X and Y amounts are zero.");
+      }
       const { createPositionTx, positionPubkey } = await buildCreatePositionTx({
         userAddress: userWallet.address,
         poolAddress,
@@ -244,44 +309,48 @@ export const createPosition = action({
   },
 });
 
+type NormalizedSwapQuote = {
+  inputMint: string;
+  outputMint: string;
+  outAmount: string; // raw, before slippage
+  slippageBps?: number; // optional
+};
+
 export function getPairAmounts({
   swapQuotes,
   collateral,
   tokenX,
   tokenY,
 }: {
-  swapQuotes: SwapQuotes[];
+  swapQuotes: NormalizedSwapQuote[];
   collateral: Infer<typeof vCollateralToken>;
   tokenX: Infer<typeof vPairToken>;
   tokenY: Infer<typeof vPairToken>;
 }) {
-  const collateralRawAmount = amountToRawAmount(collateral.amount, collateral.decimals);
-  const rawAmountTokenX = Math.floor(collateralRawAmount * tokenX.split);
-  const rawAmountTokenY = Math.floor(collateralRawAmount * tokenY.split);
+  const { collateralRawAmount, rawAmountTokenX, rawAmountTokenY } = getPairCollateralAmount({
+    collateralUiAmount: collateral.amount,
+    collateralDecimals: collateral.decimals,
+    xSplit: tokenX.split,
+  });
 
-  let xRawAmount: BN = new BN(0);
-  let yRawAmount: BN = new BN(0);
+  let xRawAmount = new BN(0);
+  let yRawAmount = new BN(0);
 
   for (const quote of swapQuotes) {
-    const { outputMint, quotes } = quote;
+    const out = new BN(quote.outAmount);
+    const slippageBps = (quote.slippageBps ?? 0) + 5; // your safety margin
 
-    const swapRoute = Object.values(quotes)[0];
-    if (!swapRoute) throw new Error(`Couldn't find swap routes for ${quote.inputMint}-> ${quote.outputMint}`);
-
-    const out = new BN(swapRoute.outAmount);
-    const slippageBps = (swapRoute.slippageBps ?? 0) + 5; //+5 to add a little bit of margin of our own
-
-    // Apply slippage: minOut = out * (10000 - slippageBps) / 10000
     const minOut = out.mul(new BN(10_000 - slippageBps)).div(new BN(10_000));
 
-    if (outputMint === tokenX.mint) {
+    if (quote.outputMint === tokenX.mint) {
       xRawAmount = minOut;
-    } else if (outputMint === tokenY.mint) {
+    }
+
+    if (quote.outputMint === tokenY.mint) {
       yRawAmount = minOut;
     }
   }
 
-  // If no swap, fall back to raw split amounts
   if (xRawAmount.isZero() && collateral.mint === tokenX.mint) {
     xRawAmount = new BN(rawAmountTokenX);
   }
@@ -290,7 +359,31 @@ export function getPairAmounts({
     yRawAmount = new BN(rawAmountTokenY);
   }
 
-  return { xRawAmount, yRawAmount, collateralRawAmount };
+  //  Final safety in case of misconfigured split
+  if (tokenX.split === 0) xRawAmount = new BN(0);
+  if (tokenX.split === 1) yRawAmount = new BN(0);
+
+  return {
+    xRawAmount,
+    yRawAmount,
+    collateralRawAmount,
+  };
+}
+
+function getPairCollateralAmount({
+  collateralUiAmount,
+  collateralDecimals,
+  xSplit,
+}: {
+  collateralUiAmount: number;
+  collateralDecimals: number;
+  xSplit: number;
+}) {
+  const collateralRawAmount = amountToRawAmount(collateralUiAmount, collateralDecimals);
+  const rawAmountTokenX = Math.floor(collateralRawAmount * xSplit);
+  const rawAmountTokenY = Math.floor(collateralRawAmount * (1 - xSplit));
+
+  return { collateralRawAmount, rawAmountTokenX, rawAmountTokenY };
 }
 
 async function buildCreatePositionTx({
