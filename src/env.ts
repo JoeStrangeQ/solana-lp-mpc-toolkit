@@ -3,4 +3,4 @@ export const PRIVY_SIGNER_PUBLIC_KEY = import.meta.env.VITE_PRIVY_SIGNER_KEY as 
 
 export const MNM_SERVER_API_KEY = import.meta.env.VITE_MNM_SERVER_API_KEY as string;
 
-export const SERVER_URL = import.meta.env.SERVER_URL as string;
+export const SERVER_URL = import.meta.env.VITE_SERVER_URL as string;
