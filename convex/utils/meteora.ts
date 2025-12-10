@@ -77,7 +77,7 @@ export function deriveMeteoraPositionPubkey({
 
   const lbPairPubkey = new PublicKey(poolAddress);
 
-  const [pda, bump] = derivePositionPubkey(
+  const [pda, _] = derivePositionPubkey(
     lbPairPubkey,
     loanPda,
     new BN(lowerBinId),
