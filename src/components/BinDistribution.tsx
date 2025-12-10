@@ -72,7 +72,7 @@ export function BinDistribution({
   const upperBinId = upperBin?.binId ?? 0;
   const lowerBinId = lowerBin?.binId ?? 0;
 
-  const totalBins = Math.max(0, upperBinId - lowerBinId + 1);
+  const totalBins = Math.max(0, upperBinId - lowerBinId);
 
   let yBinCount = 0;
   if (lowerBin) {

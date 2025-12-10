@@ -54,11 +54,6 @@ export function useLoopscaleQuote({
 
       const best = quotes.reduce((a, b) => (a.ltv > b.ltv ? a : b));
 
-      console.log("Best qu", best);
-
-      console.log("colAmount", amountToRawAmount(collateralUiAmount, collateralToken.decimals));
-
-      console.log("aaas", best.amount / amountToRawAmount(collateralUiAmount, collateralToken.decimals));
       const maxLeverage = best.amount / amountToRawAmount(collateralUiAmount, collateralToken.decimals);
       return {
         maxLeverage: Math.max(1, maxLeverage),

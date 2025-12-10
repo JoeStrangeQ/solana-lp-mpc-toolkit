@@ -20,6 +20,7 @@ import { LeverageSlider, LeverageSliderCreatePosition, LeverageSliderSkeleton } 
 import { LimitOrderValues } from "../LimitOrdersModal";
 import { LabelValue } from "../ui/labelValueRow";
 import { LimitOrderInput } from "../../../convex/schema/limitOrders";
+import { RefreshTokenBalancesIcon } from "../RefreshBalanceIcon";
 
 export type CreatePositionState = {
   collateralMint: Address;
@@ -122,7 +123,10 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
   return (
     <div className="flex flex-col w-full h-full min-h-0">
       <Row fullWidth className="mb-2.5">
-        <div className="text-text text-sm">Collateral</div>
+        <Row className="gap-1.5">
+          <div className="text-text text-sm">Collateral</div>
+          {convexUser && <RefreshTokenBalancesIcon className="h-3" userAddress={convexUser?.address} />}
+        </Row>
         {convexUser && (
           <MnMSuspense fallback={<Skeleton className="w-12 h-3" />}>
             <MaxBalance

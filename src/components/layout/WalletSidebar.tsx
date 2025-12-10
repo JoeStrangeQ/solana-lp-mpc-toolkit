@@ -65,6 +65,7 @@ function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) 
   const { signout } = useConvexUser();
   const { logout } = usePrivy();
   const [copied, setCopied] = useState(false);
+  const { exportWalletWithMfa } = useMfaProtectedExportWallet();
 
   const handleCopy = async () => {
     try {
@@ -109,17 +110,22 @@ function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) 
         </Row>
       </div>
 
-      <div
-        className="ml-auto mr-0 bg-red/10 p-2 rounded-xl hover-effect hover:bg-red/15 cursor-pointer active:scale-95 "
-        onClick={async () => {
-          await logout();
-          convex.clearAuth();
-          onClose();
-          signout();
-        }}
-      >
-        <LogOut className="w-4 h-4 text-red" />
-      </div>
+      <Row className="gap-1 ml-auto mr-0">
+        <Button variant="neutral" className="h-8 text-xs rounded-2xl" onClick={exportWalletWithMfa}>
+          Export
+        </Button>
+        <div
+          className="ml-auto mr-0 bg-red/10 p-2 rounded-xl hover-effect hover:bg-red/15 cursor-pointer active:scale-95 "
+          onClick={async () => {
+            await logout();
+            convex.clearAuth();
+            onClose();
+            signout();
+          }}
+        >
+          <LogOut className="w-4 h-4 text-red" />
+        </div>
+      </Row>
     </Row>
   );
 }
@@ -128,7 +134,6 @@ function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: ()
   // const { resetWithdrawModalStates } = useWithdrawModalStates();
   // const { convexUser } = useConvexUser();
   const { fundWallet } = useFundWallet();
-  const { exportWalletWithMfa } = useMfaProtectedExportWallet();
 
   const totalUsdBalance = useTotalUsdBalance({ address: userAddress });
   const formattedUsdBalance = formatUsdValue(totalUsdBalance);
@@ -145,21 +150,18 @@ function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: ()
     <>
       <Row fullWidth>
         <div className="flex flex-col w-full">
-          <Button variant="neutral" onClick={exportWalletWithMfa}>
-            Export
-          </Button>
           <div className="text-textSecondary text-nowrap mb-0.5 ">Total balance</div>
 
           <Row fullWidth>
             <Ticker value={formattedUsdBalance} className={tickerSize} />
 
             <Row className="gap-2">
-              <button
+              {/* <button
                 className="flex p-2.5 bg-white/10 inner-white hover-effect hover:bg-white/15 active:scale-95 rounded-full cursor-pointer self-end "
                 // onClick={() => setWithdrawModalVis(true)}
               >
                 <Minus className="text-white w-3.5 h-3.5" />
-              </button>
+              </button> */}
               <button
                 className="flex p-2.5 bg-primary/10 inner-primary hover-effect hover:bg-primary/15 active:scale-95 rounded-full cursor-pointer self-end"
                 onClick={async () => await fundWallet(userAddress)}

@@ -158,7 +158,7 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
 
 export function RangeSelectorPanelSkeleton() {
   return (
-    <div className="flex flex-col items-center w-full gap-3 overflow-visible">
+    <div className="flex flex-col items-center w-full gap-3 overflow-visible select-none">
       <Row fullWidth>
         <Row justify="start" className="gap-1 items-center">
           <div className="text-text text-sm">Select range</div>
