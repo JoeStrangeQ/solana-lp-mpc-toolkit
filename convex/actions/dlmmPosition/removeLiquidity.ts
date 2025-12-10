@@ -1,7 +1,11 @@
 "use node";
 import { v } from "convex/values";
 import { action, ActionCtx, internalAction } from "../../_generated/server";
-import { authenticateUser, authenticateWithUserId, vPrivyWallet } from "../../privy";
+import {
+  authenticateUser,
+  authenticateWithUserId,
+  vPrivyWallet,
+} from "../../privy";
 import { api, internal } from "../../_generated/api";
 import { getDlmmPoolConn } from "../../services/meteora";
 import {
@@ -10,6 +14,7 @@ import {
   Transaction,
   TransactionInstruction,
   TransactionMessage,
+  VersionedMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
 import BN from "bn.js";
@@ -35,6 +40,7 @@ import { SwapSpec } from "../../helpers/executeSwapsWithNozomi";
 import { getJupiterTokenPrices, JupQuoteResponse } from "../../services/jupiter";
 import { buildTransferMnMTx } from "../../helpers/transferMnMFees";
 import { ActionRes } from "../../types/actionResults";
+import { repayLoan } from "../../services/loopscale";
 
 export const removeLiquidity = action({
   args: {
@@ -97,27 +103,57 @@ export const internalRemoveLiquidity = internalAction({
       const claimableFeeX = onChainPosition.feeX;
       const claimableFeeY = onChainPosition.feeY;
 
+      const transactions: { tx: VersionedTransaction; description: string }[] = [];
       const { blockhash } = await connection.getLatestBlockhash();
       const { tipTx, cuPriceMicroLamports, cuLimit } = await buildTipTx({
         speed: "low",
         payerAddress: userWallet.address,
         recentBlockhash: blockhash,
       });
+      let removeLiquidityTx: VersionedTransaction;
+      let xRemoved: BN;
+      let yRemoved: BN;
 
-      const { removeTx, xRemoved, yRemoved } = await buildAndSimulateRemoveLiquidityTx({
-        userAddress,
-        dlmmPoolConn,
-        fromBinId: args.fromBinId ?? position.details.lowerBin.id,
-        toBinId: args.toBinId ?? position.details.upperBin.id,
-        percentageToWithdraw,
-        positionPubkey,
-        dlmmPosition,
-        options: {
-          cuLimit,
-          cuPriceMicroLamports,
-          recentBlockhash: blockhash,
-        },
-      });
+      if (position.loanAddress) {
+        const {
+          xRemoved: x,
+          yRemoved: y,
+          repayTx,
+        } = await buildRepayLoanTx({
+          userAddress,
+          loanAddress: toAddress(position.loanAddress),
+          positionPubkey: toAddress(positionPubkey),
+          xMint,
+          yMint,
+        });
+
+        removeLiquidityTx = repayTx;
+        xRemoved = x;
+        yRemoved = y;
+      } else {
+        const {
+          removeTx,
+          xRemoved: x,
+          yRemoved: y,
+        } = await buildAndSimulateRemoveLiquidityTx({
+          userAddress,
+          dlmmPoolConn,
+          fromBinId: args.fromBinId ?? position.details.lowerBin.id,
+          toBinId: args.toBinId ?? position.details.upperBin.id,
+          percentageToWithdraw,
+          positionPubkey,
+          dlmmPosition,
+          options: {
+            cuLimit,
+            cuPriceMicroLamports,
+            recentBlockhash: blockhash,
+          },
+        });
+
+        removeLiquidityTx = removeTx;
+        xRemoved = x;
+        yRemoved = y;
+      }
 
       const swapSpecs: SwapSpec[] = [
         { inputMint: xMint, outputMint, amount: xRemoved, slippageBps: 150 },
@@ -145,16 +181,16 @@ export const internalRemoveLiquidity = internalAction({
         };
       }
 
-      const transactions: { tx: VersionedTransaction; description: string }[] = [
+      transactions.push(
         {
-          tx: toVersioned(removeTx),
+          tx: toVersioned(removeLiquidityTx),
           description: percentageToWithdraw === 100 ? "Close Position" : "Remove Liquidity",
         },
         ...swapsRes.data.map(({ tx }, i) => ({
           tx,
           description: `Swap #${i + 1}`,
-        })),
-      ];
+        }))
+      );
 
       const { totalFeesClaimedInOutputToken, totalReceivedOutToken } = computeTotalFeesClaimedInOutputToken({
         swapQuotes: swapsRes.data.map((s) => s.quote),
@@ -212,13 +248,13 @@ export const internalRemoveLiquidity = internalAction({
             usdPrice: collateralPrice,
           },
           tokenX: {
-            withdrawRaw: xRemoved.toNumber(),
-            claimedFee: claimableFeeX.toNumber(),
+            withdrawRaw: safeBigIntToNumber(xRemoved, "withdrawRaw X"),
+            claimedFee: safeBigIntToNumber(claimableFeeX, "claimedFee X"),
             usdPrice: xPrice,
           },
           tokenY: {
-            withdrawRaw: yRemoved.toNumber(),
-            claimedFee: claimableFeeY.toNumber(),
+            withdrawRaw: safeBigIntToNumber(yRemoved, "withdrawRaw Y"),
+            claimedFee: safeBigIntToNumber(claimableFeeY, "claimedFee Y"),
             usdPrice: yPrice,
           },
         };
@@ -539,5 +575,68 @@ function computeTotalFeesClaimedInOutputToken({
   return {
     totalFeesClaimedInOutputToken: outputFromFeeX.add(outputFromFeeY),
     totalReceivedOutToken: outAmountX.add(outAmountY),
+  };
+}
+
+async function buildRepayLoanTx({
+  userAddress,
+  loanAddress,
+  positionPubkey,
+  xMint,
+  yMint,
+}: {
+  userAddress: Address;
+  loanAddress: Address;
+  positionPubkey: Address;
+  xMint: Address;
+  yMint: Address;
+}) {
+  const { transactions } = await repayLoan({
+    userAddress,
+    loanAddress,
+    collateralWithdrawalParams: [{ amount: 1, collateralMint: positionPubkey }],
+    repayParams: [{ amount: 0, ledgerIndex: 0, repayAll: true }],
+  });
+
+  const versionedTxs = transactions.map((tx) => {
+    const rawMsg = Buffer.from(tx.message, "base64");
+    const msg = VersionedMessage.deserialize(rawMsg);
+
+    const vtx = new VersionedTransaction(msg);
+
+    // allocate correct number of signature slots
+    vtx.signatures = Array(msg.header.numRequiredSignatures).fill(Buffer.alloc(64)); // empty sig
+
+    // now apply program signatures
+    for (const s of tx.signatures) {
+      const pk = new PublicKey(s.publicKey);
+      const idx = msg.staticAccountKeys.findIndex((k) => k.equals(pk));
+
+      if (idx === -1) throw new Error("Signature pubkey not in account list");
+
+      vtx.signatures[idx] = Buffer.from(s.signature, "base64");
+    }
+
+    return vtx;
+  });
+
+  const transaction = versionedTxs[0];
+  const simRes = await simulateAndGetTokensBalance({ userAddress: toAddress(userAddress), transaction });
+
+  if (simRes.sim.err) {
+    throw new Error("Failed to simulate remove liquidity transaction");
+  }
+
+  console.log("x removed", simRes.tokenBalancesChange[xMint].rawAmount.toString());
+  console.log("y removed", simRes.tokenBalancesChange[yMint].rawAmount.toString());
+  const xDelta = simRes.tokenBalancesChange[xMint]?.rawAmount ?? new BN(0);
+  const yDelta = simRes.tokenBalancesChange[yMint]?.rawAmount ?? new BN(0);
+  const xRemoved = BN.max(adjustSolRent(xMint, xDelta), new BN(0));
+  const yRemoved = BN.max(adjustSolRent(yMint, yDelta), new BN(0));
+
+  return {
+    repayTx: transaction,
+    xRemoved,
+    yRemoved,
   };
 }
