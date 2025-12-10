@@ -18,6 +18,7 @@ const vDLMMDetails = v.object({
   upperBin: vBinIdAndPrice,
   liquidityStrategy: vLiquidityShape,
   autoCompoundSplit: v.number(),
+  loanAddress: v.optional(v.string()),
 });
 
 const vPositionDetails = v.union(vDLMMDetails);

@@ -139,10 +139,12 @@ export async function buildMultipleJupiterSwapsAtomically({
   userAddress,
   swapSpecs,
   blockhash,
+  skipCloseAccount = false,
 }: {
   userAddress: string;
   swapSpecs: SwapSpec[];
   blockhash: string;
+  skipCloseAccount?: boolean;
   useNozomi?: boolean;
 }): Promise<SwapAtomicResult> {
   const MAX_TRIES = 7;
@@ -161,8 +163,9 @@ export async function buildMultipleJupiterSwapsAtomically({
           slippageBps,
           blockhash,
           useNozomi: true,
+          skipCloseAccount,
           options: {
-            skipUserAccountsRpcCalls: true,
+            skipUserAccountsRpcCalls: false,
           },
         })
       );

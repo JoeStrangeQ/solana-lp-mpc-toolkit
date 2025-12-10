@@ -1,9 +1,26 @@
-import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { ComputeBudgetProgram, Transaction, TransactionInstruction, VersionedTransaction } from "@solana/web3.js";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
+  createSyncNativeInstruction,
+  getAssociatedTokenAddressSync,
+  NATIVE_MINT,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import {
+  ComputeBudgetProgram,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  TransactionInstruction,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import bs58 from "bs58";
 import z from "zod";
 import { connection } from "../convexEnv";
 import { SupportedMarket } from "../schema/limitOrders";
+import BN from "bn.js";
+import { safeBigIntToNumber } from "./amounts";
 
 export const Base58Z = ({
   invalid_type_error,
@@ -131,6 +148,45 @@ export async function fastTransactionConfirm(signatures: string[], timeoutMs = 1
   });
 }
 
+export function buildWrapSolInstructions({
+  userAddress,
+  lamports,
+}: {
+  userAddress: Address;
+  lamports: number | BN | bigint;
+}) {
+  if (Number(lamports) <= 0) {
+    throw new Error("Amount must be > 0");
+  }
+
+  const userPubkey = new PublicKey(userAddress);
+
+  // Compute ATA for WSOL
+  const wsolAta = getAssociatedTokenAddressSync(NATIVE_MINT, userPubkey, false, TOKEN_PROGRAM_ID);
+  const ixCreateAta = createAssociatedTokenAccountIdempotentInstruction(
+    userPubkey, // payer
+    wsolAta, // ATA to create
+    userPubkey, // owner of ATA
+    NATIVE_MINT,
+    TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+  // Send SOL into the WSOL ATA
+  const ixTransfer = SystemProgram.transfer({
+    fromPubkey: userPubkey,
+    toPubkey: wsolAta,
+    lamports: typeof lamports === "number" ? lamports : safeBigIntToNumber(lamports, "Wrap sol lamports"),
+  });
+
+  // Convert native lamports → WSOL SPL balance
+  const ixSync = createSyncNativeInstruction(wsolAta, TOKEN_PROGRAM_ID);
+
+  return {
+    wsolAta,
+    instructions: [ixCreateAta, ixTransfer, ixSync],
+  };
+}
 export const mints = {
   sol: toAddress("So11111111111111111111111111111111111111112"),
   usdc: toAddress("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),

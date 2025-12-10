@@ -113,9 +113,9 @@ export class MnMServerClient {
     this.send({ type: "subscribe_quotes", payload });
   }
 
-  unsubscribeQuote(streamId: string) {
-    this.quoteListeners.delete(streamId);
-    this.send({ type: "unsubscribe_quote", payload: { streamId } });
+  unsubscribeQuote(streamKey: string) {
+    this.quoteListeners.delete(streamKey);
+    this.send({ type: "unsubscribe_quote", payload: { streamKey } });
   }
 
   unsubscribeAllQuotes() {
@@ -124,8 +124,8 @@ export class MnMServerClient {
 
   /* ---------------- EVENT HANDLERS ---------------- */
 
-  onQuoteUpdate(streamId: string, callback: (update: QuoteUpdateMessage) => void) {
-    this.quoteListeners.set(streamId, callback);
+  onQuoteUpdate(streamKey: string, callback: (update: QuoteUpdateMessage) => void) {
+    this.quoteListeners.set(streamKey, callback);
   }
 
   onError(cb: (msg: string) => void) {
@@ -148,7 +148,7 @@ export class MnMServerClient {
           ...msg,
           payload: normalizeSwapQuotes(msg.payload),
         };
-        const listener = this.quoteListeners.get(normalized.streamId);
+        const listener = this.quoteListeners.get(normalized.streamKey);
         listener?.(normalized);
         break;
       }

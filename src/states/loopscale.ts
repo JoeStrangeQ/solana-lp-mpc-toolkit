@@ -66,6 +66,7 @@ export function useLoopscaleQuote({
         strategyAddress: best.strategy,
         apyPercent: best.apy / 10000,
         lqtCBps: best.lqt,
+        apyCBps: best.apy,
       };
     },
     refetchInterval: MS_1S * 30,

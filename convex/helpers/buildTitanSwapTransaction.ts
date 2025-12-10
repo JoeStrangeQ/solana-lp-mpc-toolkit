@@ -13,17 +13,20 @@ import { connection } from "../convexEnv";
 import { TitanSwapInstructionV } from "../types/titanSwapQuote";
 import { getRandomNozomiTipPubkey } from "./nozomi";
 import { getCachedALT } from "../services/solana";
+import { isTokenClose } from "../utils/solana";
 
 const TITAN_JITO_FRONT_RUN = "jitodontfronttitana111111111111111111111111";
 export async function buildTitanSwapTransaction({
   instructions,
   lookupTables,
   userAddress,
+  skipCloseAccount,
   options,
 }: {
   instructions: Infer<typeof TitanSwapInstructionV>[];
   lookupTables: string[];
   userAddress: string;
+  skipCloseAccount?: boolean;
   options?: {
     cuLimit?: number;
     cuPriceMicroLamports?: number;
@@ -32,7 +35,7 @@ export async function buildTitanSwapTransaction({
     recentBlockhash: string;
   };
 }) {
-  const ixList: TransactionInstruction[] = [];
+  let ixList: TransactionInstruction[] = [];
 
   if (options?.cuLimit || options?.cuPriceMicroLamports) {
     ixList.push(
@@ -72,6 +75,10 @@ export async function buildTitanSwapTransaction({
         lamports: 1_050_000,
       })
     );
+  }
+
+  if (skipCloseAccount) {
+    ixList = ixList.filter((ix) => !isTokenClose(ix));
   }
 
   // const a = ixList.filter((_, i) => i !== 2);

@@ -25,6 +25,8 @@ import { Doc } from "../../../convex/_generated/dataModel";
 import { LimitOrderValues } from "../LimitOrdersModal";
 import { LimitOrderInput } from "../../../convex/schema/limitOrders";
 import { Info } from "lucide-react";
+import { useBinsAroundActiveBin } from "~/states/dlmm";
+import { useLoopscaleQuote } from "~/states/loopscale";
 
 export function ConfirmPositionContent({
   poolAddress,
@@ -35,13 +37,32 @@ export function ConfirmPositionContent({
   convexUser: Doc<"users">;
   onClose: () => void;
 }) {
-  const { collateralMint, collateralUiAmount, sl, tp, tokenXSplit, liquidityShape, resetCreatePositionState } =
-    useCreatePositionState();
+  const {
+    collateralMint,
+    collateralUiAmount,
+    sl,
+    tp,
+    tokenXSplit,
+    liquidityShape,
+    leverage,
+    resetCreatePositionState,
+  } = useCreatePositionState();
   const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
   const createPosition = useAction(api.actions.dlmmPosition.createPosition.createPosition);
 
   const { refetch: refetchBalances } = useBalances({ address: toAddress(convexUser.address) });
 
+  const {
+    binRange: { bins, activeBin: activeBinId },
+  } = useBinsAroundActiveBin({ poolAddress, numberOfBinsToTheLeft: 124, numberOfBinsToTheRight: 124 });
+
+  const { strategyAddress, lqtCBps, apyCBps } = useLoopscaleQuote({
+    userAddress: toAddress(convexUser.address),
+    collateralMint,
+    collateralUiAmount,
+    poolAddress,
+    tokenXSplit,
+  });
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const tokenX = useToken({ mint: pool.mint_x });
   const tokenY = useToken({ mint: pool.mint_y });
@@ -56,7 +77,7 @@ export function ConfirmPositionContent({
 
   const {
     swapQuote: xSwapQuote,
-    streamId: xStreamId,
+    streamKey: xStreamKey,
     isError: isErrorX,
   } = useSwapQuote({
     inputMint: collateralMint,
@@ -65,7 +86,7 @@ export function ConfirmPositionContent({
   });
   const {
     swapQuote: ySwapQuote,
-    streamId: yStreamId,
+    streamKey: yStreamKey,
     isError: isErrorY,
   } = useSwapQuote({
     inputMint: collateralMint,
@@ -74,9 +95,9 @@ export function ConfirmPositionContent({
   });
 
   const quoteDetails = [
-    xSwapQuote && { quoteId: xSwapQuote.id, streamId: xStreamId },
-    ySwapQuote && { quoteId: ySwapQuote.id, streamId: yStreamId },
-  ].filter(Boolean) as { quoteId: string; streamId: string }[];
+    xSwapQuote && { quoteId: xSwapQuote.id, streamKey: xStreamKey },
+    ySwapQuote && { quoteId: ySwapQuote.id, streamKey: yStreamKey },
+  ].filter(Boolean) as { quoteId: string; streamKey: string }[];
 
   const createPositionMut = useTanstackMut({
     mutationFn: async () => {
@@ -84,6 +105,8 @@ export function ConfirmPositionContent({
         throw new Error("Range not selected!");
       }
 
+      const activeBin = bins.find((b) => b.binId === activeBinId);
+      if (!activeBin) throw new Error("Couldn't find active bin");
       const createPositionPromise = createPosition({
         poolAddress,
         quoteDetails,
@@ -91,6 +114,7 @@ export function ConfirmPositionContent({
         autoCompoundSplit: 0,
         poolEntryPrice: pool.current_price,
 
+        activeBin: { id: activeBin.binId, price: Number(activeBin.pricePerToken) },
         lowerBin: { id: lowerBin.binId, price: Number(lowerBin.pricePerToken) },
         upperBin: { id: upperBin.binId, price: Number(upperBin.pricePerToken) },
 
@@ -110,6 +134,12 @@ export function ConfirmPositionContent({
           split: 1 - tokenXSplit,
         },
         limits: { sl, tp },
+        borrowQuote: {
+          leverage,
+          strategy: strategyAddress,
+          cBpsApy: apyCBps,
+          cBpsLqt: lqtCBps,
+        },
       });
 
       onClose();

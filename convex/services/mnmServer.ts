@@ -6,19 +6,19 @@ const MNM_SERVER_URL = "https://apparitional-noninterdependent-dori.ngrok-free.d
 
 export const vQuoteDetails = v.object({
   quoteId: v.string(),
-  streamId: v.string(),
+  streamKey: v.string(),
 });
 export async function getServerSwapQuote({
   userId,
   quoteId,
-  streamId,
+  streamKey,
 }: {
   userId: string;
-  streamId: string;
+  streamKey: string;
   quoteId: string;
 }) {
   const res = await fetch(
-    `${MNM_SERVER_URL}/swap-quote?userId=${encodeURIComponent(userId)}&streamId=${encodeURIComponent(streamId)}&quoteId=${encodeURIComponent(quoteId)}`,
+    `${MNM_SERVER_URL}/swap-quote?userId=${encodeURIComponent(userId)}&streamKey=${encodeURIComponent(streamKey)}&quoteId=${encodeURIComponent(quoteId)}`,
     { headers: { "Content-Type": "application/json" } }
   );
 

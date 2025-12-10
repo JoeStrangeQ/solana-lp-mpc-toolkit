@@ -17,7 +17,7 @@ export function useSwapQuote({
   const { convexUser } = useConvexUser();
   const mnmServer = useMnMServerClient();
 
-  const [streamId] = useState(`${convexUser?._id}:${randomUUID()}`);
+  const [streamKey] = useState(`${convexUser?._id}:${randomUUID()}`);
   const [swapQuote, setSwapQuote] = useState<SwapQuotes | null>(null);
 
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -45,13 +45,13 @@ export function useSwapQuote({
 
         // ✅ listen for server errors
         mnmServer.onError((msg) => {
-          console.log("Error found");
+          console.log("Error found", msg);
           if (!active) return;
           setStatus("error");
           setError(msg);
         });
 
-        mnmServer.onQuoteUpdate(streamId, (update) => {
+        mnmServer.onQuoteUpdate(streamKey, (update) => {
           if (!active) return;
           setSwapQuote(update.payload);
           setStatus("success");
@@ -61,7 +61,7 @@ export function useSwapQuote({
           inputMint,
           outputMint,
           amount: inputRawAmount,
-          streamId,
+          streamKey,
         });
       } catch (err) {
         console.error("Failed to start quote streaming:", err);
@@ -74,13 +74,13 @@ export function useSwapQuote({
 
     return () => {
       active = false;
-      mnmServer.unsubscribeQuote(streamId);
+      mnmServer.unsubscribeQuote(streamKey);
     };
   }, [inputMint, outputMint, inputRawAmount]);
 
   return {
     swapQuote,
-    streamId,
+    streamKey,
     status,
     isError: status === "error",
     isLoading: status === "loading",

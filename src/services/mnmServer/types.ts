@@ -20,7 +20,7 @@ export const ErrorMessageZ = z.object({
 export const EncodedQuoteUpdateMessageZ = z.object({
   type: z.literal("quote_update"),
   payload: z.custom<EncodedSwapQuotes>(),
-  streamId: z.string(),
+  streamKey: z.string(),
 });
 export type EncodedQuoteUpdateMessage = z.infer<typeof EncodedQuoteUpdateMessageZ>;
 
@@ -34,12 +34,12 @@ export const SubscribeQuotesPayloadZ = z.object({
   inputMint: z.string().min(32), // base58 pubkey
   outputMint: z.string().min(32),
   amount: z.number().positive(),
-  streamId: z.string(),
+  streamKey: z.string(),
 });
 export type SubscribeQuotesPayload = z.infer<typeof SubscribeQuotesPayloadZ>;
 
 export const UnsubscribeQuotePayloadZ = z.object({
-  streamId: z.string(),
+  streamKey: z.string(),
 });
 export type UnsubscribeQuotePayload = z.infer<typeof UnsubscribeQuotePayloadZ>;
 

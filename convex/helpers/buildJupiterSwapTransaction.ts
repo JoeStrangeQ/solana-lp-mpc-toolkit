@@ -6,7 +6,7 @@ import {
   VersionedTransaction,
 } from "@solana/web3.js";
 import { getJupSwapInstructions, getJupSwapQuote, JupQuoteResponse } from "../services/jupiter";
-import { Address, getCuInstructions } from "../utils/solana";
+import { Address, getCuInstructions, isTokenClose } from "../utils/solana";
 import { connection } from "../convexEnv";
 import { tryCatch } from "../utils/tryCatch";
 import { getRandomNozomiTipPubkey } from "./nozomi";
@@ -35,6 +35,7 @@ export async function buildJupSwapTransaction({
   slippageBps,
   blockhash,
   useNozomi,
+  skipCloseAccount,
   options,
 }: {
   userAddress: Address;
@@ -44,7 +45,7 @@ export async function buildJupSwapTransaction({
   slippageBps: number;
   useNozomi?: boolean;
   blockhash?: string;
-
+  skipCloseAccount?: boolean;
   options?: Parameters<typeof getJupSwapInstructions>[0]["options"];
 }) {
   console.time("Jupiter quote");
@@ -100,13 +101,17 @@ export async function buildJupSwapTransaction({
     : getCuInstructions();
 
   // Build all instructions
-  const allInstructions: TransactionInstruction[] = [
+  let allInstructions: TransactionInstruction[] = [
     ...inst.setupInstructions.map(buildIx),
     ...cuIxs,
     ...inst.otherInstructions.map(buildIx),
     buildIx(inst.swapInstruction),
     ...(inst.cleanupInstruction ? [buildIx(inst.cleanupInstruction)] : []),
   ];
+
+  if (skipCloseAccount) {
+    allInstructions = allInstructions.filter((ix) => !isTokenClose(ix));
+  }
 
   if (useNozomi) {
     allInstructions.push(
@@ -155,6 +160,7 @@ export async function buildAndSimulateJupiterSwap(params: {
   slippageBps: number;
   blockhash?: string;
   useNozomi: boolean;
+  skipCloseAccount?: boolean;
   options?: Parameters<typeof getJupSwapInstructions>[0]["options"];
 }) {
   const { tx, quote } = await buildJupSwapTransaction(params);
