@@ -270,13 +270,9 @@ export const createPosition = action({
 
       //TODO: Make it more accurate with simulations on the create leverage position
       const leverage = args.borrowQuote?.leverage ?? 1;
-      const xInitialSize = isLeverage
-        ? safeBigIntToNumber(xRawAmount) + safeBigIntToNumber(xRawAmount) * leverage
-        : safeBigIntToNumber(xRawAmount);
+      const xInitialSize = isLeverage ? safeBigIntToNumber(xRawAmount) * leverage : safeBigIntToNumber(xRawAmount);
 
-      const yInitialSize = isLeverage
-        ? safeBigIntToNumber(yRawAmount) + safeBigIntToNumber(yRawAmount) * leverage
-        : safeBigIntToNumber(yRawAmount);
+      const yInitialSize = isLeverage ? safeBigIntToNumber(yRawAmount) * leverage : safeBigIntToNumber(yRawAmount);
       const tokenDetails = {
         collateral: {
           mint: collateral.mint,
