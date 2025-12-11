@@ -188,8 +188,10 @@ export const createPosition = action({
 
       let positionPubkey: Address;
       let loanAddress: Address | undefined;
+      let loopscaleBlockHash: string | null = null;
       const createPositionTransactions: VersionedTransaction[] = [];
-      if (args.borrowQuote && args.borrowQuote.leverage > 1) {
+      const isLeverage = args.borrowQuote && args.borrowQuote.leverage > 1;
+      if (isLeverage && args.borrowQuote) {
         const { wrapSolTx } = buildWrapSolTx({
           userAddress: toAddress(userWallet.address),
           xMint: toAddress(tokenX.mint),
@@ -218,9 +220,10 @@ export const createPosition = action({
         });
 
         positionPubkey = pk;
-        loanAddress: loan;
+        loanAddress = toAddress(loan);
         if (wrapSolTx) createPositionTransactions.push(wrapSolTx);
         createPositionTransactions.push(createLeveragedPositionTx[0]);
+        loopscaleBlockHash = createLeveragedPositionTx[0].message.recentBlockhash;
       } else {
         const { createPositionTx, positionPubkey: pk } = await buildCreatePositionTx({
           userAddress: userWallet.address,
@@ -250,6 +253,7 @@ export const createPosition = action({
 
       const sendBundle = signAndSendJitoBundle({
         userWallet,
+        overwriteBlockHash: loopscaleBlockHash ? loopscaleBlockHash : blockhash,
         transactions: [...swapsTxs, ...createPositionTransactions, tipTx],
       });
 
@@ -264,6 +268,15 @@ export const createPosition = action({
       }
       console.time("db");
 
+      //TODO: Make it more accurate with simulations on the create leverage position
+      const leverage = args.borrowQuote?.leverage ?? 1;
+      const xInitialSize = isLeverage
+        ? safeBigIntToNumber(xRawAmount) + safeBigIntToNumber(xRawAmount) * leverage
+        : safeBigIntToNumber(xRawAmount);
+
+      const yInitialSize = isLeverage
+        ? safeBigIntToNumber(yRawAmount) + safeBigIntToNumber(yRawAmount) * leverage
+        : safeBigIntToNumber(yRawAmount);
       const tokenDetails = {
         collateral: {
           mint: collateral.mint,
@@ -272,12 +285,12 @@ export const createPosition = action({
         },
         tokenX: {
           mint: tokenX.mint,
-          rawAmount: safeBigIntToNumber(xRawAmount),
+          rawAmount: xInitialSize,
           usdPrice: tokenPrices[toAddress(tokenX.mint)]?.usdPrice ?? 0,
         },
         tokenY: {
           mint: tokenY.mint,
-          rawAmount: safeBigIntToNumber(yRawAmount),
+          rawAmount: yInitialSize,
           usdPrice: tokenPrices[toAddress(tokenY.mint)]?.usdPrice ?? 0,
         },
       };

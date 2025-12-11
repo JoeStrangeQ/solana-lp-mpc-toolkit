@@ -34,11 +34,17 @@ export const TIP_SPEED_TO_LAMPORTS: Record<TipSpeed, number> = {
 export async function signAndSendJitoBundle({
   transactions,
   userWallet,
+  overwriteBlockHash,
 }: {
   transactions: Transaction[] | VersionedTransaction[];
   userWallet: PrivyWallet;
+  overwriteBlockHash?: string;
 }) {
-  const versionedTransactions = transactions.map((tx) => toVersioned(tx));
+  const versionedTransactions = transactions.map((tx) => {
+    const versionedTx = toVersioned(tx);
+    if (overwriteBlockHash) versionedTx.message.recentBlockhash = overwriteBlockHash;
+    return versionedTx;
+  });
   const signTransactions = versionedTransactions.map((tx) =>
     privy
       .wallets()

@@ -1,11 +1,7 @@
 "use node";
 import { v } from "convex/values";
 import { action, ActionCtx, internalAction } from "../../_generated/server";
-import {
-  authenticateUser,
-  authenticateWithUserId,
-  vPrivyWallet,
-} from "../../privy";
+import { authenticateUser, authenticateWithUserId, vPrivyWallet } from "../../privy";
 import { api, internal } from "../../_generated/api";
 import { getDlmmPoolConn } from "../../services/meteora";
 import {
@@ -138,8 +134,8 @@ export const internalRemoveLiquidity = internalAction({
         } = await buildAndSimulateRemoveLiquidityTx({
           userAddress,
           dlmmPoolConn,
-          fromBinId: args.fromBinId ?? position.details.lowerBin.id,
-          toBinId: args.toBinId ?? position.details.upperBin.id,
+          fromBinId: args.fromBinId ?? onChainPosition.lowerBinId,
+          toBinId: args.toBinId ?? onChainPosition.upperBinId,
           percentageToWithdraw,
           positionPubkey,
           dlmmPosition,
