@@ -31,6 +31,7 @@ export const insertPosition = internalMutation({
       tokenX: input.tokenX,
       tokenY: input.tokenY,
 
+      loanAddress: input.loanAddress,
       details: input.details,
       leverage: input.leverage,
 
