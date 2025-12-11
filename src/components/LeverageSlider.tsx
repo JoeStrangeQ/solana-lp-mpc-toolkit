@@ -53,7 +53,7 @@ export function LeverageSliderCreatePosition({
   return (
     <LeverageSlider
       leverage={leverage}
-      maxLeverage={maxLeverage}
+      maxLeverage={Math.min(5, maxLeverage)}
       onLeverageChange={(newLev) => setCreatePositionState({ leverage: newLev })}
       toolTip={
         <div className="flex flex-col gap-0.5 grow min-w-32">
