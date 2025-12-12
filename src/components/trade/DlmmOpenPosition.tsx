@@ -2,7 +2,7 @@ import { usePool } from "~/states/pools";
 import { cn } from "~/utils/cn";
 import { abbreviateAmount, formatUsdValue } from "~/utils/numberFormats";
 import { Doc } from "../../../convex/_generated/dataModel";
-import { Address, toAddress, tokensMetadata } from "../../../convex/utils/solana";
+import { Address, getMarketFromMints, toAddress, tokensMetadata } from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { PoolTokenIcons } from "../TokenIcon";
 import { LabelValue } from "../ui/labelValueRow";
@@ -21,8 +21,11 @@ import { startTrackingAction } from "../ActionTracker";
 import { useMutation as useTanstackMut } from "@tanstack/react-query";
 import { Button } from "../ui/Button";
 import { LimitOrderValues } from "../LimitOrdersModal";
+import { useConvexUser } from "~/providers/UserStates";
+import { LimitOrderInput as LimitOrderInputType } from "../../../convex/schema/limitOrders";
 
 export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions"> }) {
+  const { convexUser } = useConvexUser();
   const poolAddress = toAddress(dbPosition.poolAddress);
   const positionPubkey = toAddress(dbPosition.positionPubkey);
 
@@ -31,6 +34,7 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
       positionPubkey,
     }) ?? [];
 
+  const createOrder = useMutation(api.tables.orders.mutations.createOrder);
   const updateOrder = useMutation(api.tables.orders.mutations.updateOrder);
   const cancel = useMutation(api.tables.orders.mutations.cancelOrder);
 
@@ -88,26 +92,66 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
             sl={sl ? { price: sl.triggerPrice, swapTo: sl.swapTo } : undefined}
             tp={tp ? { price: tp.triggerPrice, swapTo: tp.swapTo } : undefined}
             onSaveOrders={async (newSl, newTp) => {
-              console.log("New", newSl, sl);
-              console.log("New", newTp, tp);
+              // --- Helper to compare order deep equality ---
+              const isSame = (oldOrder?: LimitOrderInputType, newOrder?: LimitOrderInputType) => {
+                if (!oldOrder && !newOrder) return true;
+                if (!oldOrder || !newOrder) return false;
+                return oldOrder.price === newOrder.price && oldOrder.swapTo === newOrder.swapTo;
+              };
 
-              if (sl && newSl && newSl.price !== 0) {
-                await updateOrder({
-                  orderId: sl._id,
-                  orderInput: newSl,
+              // --------------------------
+              //   NORMALIZED INPUTS
+              // --------------------------
+              const slInput = newSl?.price ? newSl : ({ price: 0, swapTo: "none" } as LimitOrderInputType);
+              const tpInput = newTp?.price ? newTp : ({ price: 0, swapTo: "none" } as LimitOrderInputType);
+
+              // --------------------------
+              //   HANDLE STOP LOSS (SL)
+              // --------------------------
+              if (!sl && slInput.price === 0) {
+                // Case: No SL before, no SL now → NOOP
+              } else if (!sl && slInput.price > 0) {
+                // Case: No SL before, user added one → CREATE
+                await createOrder({
+                  direction: "sl",
+                  market: getMarketFromMints(dbPosition.tokenX.mint, dbPosition.tokenY.mint),
+                  orderInput: slInput,
+                  percentageToWithdraw: 100,
+                  positionPubkey: dbPosition.positionPubkey,
+                  userId: convexUser!._id,
                 });
+              } else if (sl && slInput.price === 0) {
+                // Case: SL existed & now cleared → CANCEL
+                await cancel({ orderId: sl._id, reason: "User canceled SL from UI" });
+              } else if (sl && slInput.price > 0 && !isSame({ price: sl.triggerPrice, swapTo: sl.swapTo }, slInput)) {
+                // Case: SL existed & changed → UPDATE
+                await updateOrder({ orderId: sl._id, orderInput: slInput });
               }
+              // else: SL existed & new value identical → NOOP
 
-              // Update TP
-              if (tp && newTp && newTp.price !== 0) {
-                await updateOrder({
-                  orderId: tp._id,
-                  orderInput: newTp,
+              // --------------------------
+              //   HANDLE TAKE PROFIT (TP)
+              // --------------------------
+              if (!tp && tpInput.price === 0) {
+                // Case: No TP before, no TP now → NOOP
+              } else if (!tp && tpInput.price > 0) {
+                // Case: No TP before, user added one → CREATE
+                await createOrder({
+                  direction: "tp",
+                  market: getMarketFromMints(dbPosition.tokenX.mint, dbPosition.tokenY.mint),
+                  orderInput: tpInput,
+                  percentageToWithdraw: 100,
+                  positionPubkey: dbPosition.positionPubkey,
+                  userId: convexUser!._id,
                 });
+              } else if (tp && tpInput.price === 0) {
+                // Case: TP existed & now cleared → CANCEL
+                await cancel({ orderId: tp._id, reason: "User canceled TP from UI" });
+              } else if (tp && tpInput.price > 0 && !isSame({ price: tp.triggerPrice, swapTo: tp.swapTo }, tpInput)) {
+                // Case: TP existed & changed → UPDATE
+                await updateOrder({ orderId: tp._id, orderInput: tpInput });
               }
-
-              if (sl && newSl.price === 0) await cancel({ orderId: sl._id, reason: "User canaled order from the ui" });
-              if (tp && newTp.price === 0) await cancel({ orderId: tp._id, reason: "User canaled order from the ui" });
+              // else: TP existed & new value identical → NOOP
             }}
           />
         </MnMSuspense>
