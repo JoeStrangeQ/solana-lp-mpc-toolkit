@@ -12,7 +12,7 @@ import { useToken, useTokenPrice } from "~/states/tokens";
 import { Skeleton } from "../ui/Skeleton";
 import { BinIdAndPrice, PositionTokenAmount } from "../../../convex/schema/positions";
 import { FormattedBinPrice } from "../FormattedBinPrice";
-import { Ellipsis, TriangleAlert, XCircle } from "lucide-react";
+import { TriangleAlert, XCircle } from "lucide-react";
 import { rawAmountToAmount } from "../../../convex/utils/amounts";
 import { useDlmmOnChainPosition } from "~/states/positions";
 import { api } from "../../../convex/_generated/api";
@@ -248,8 +248,9 @@ function ViewMoreButton({ positionPubkey, loanAddress }: { positionPubkey: Addre
       }}
       loading={claimFeesMut.isPending}
     >
-      <Ellipsis className="w-2.5 h-2.5" />
-      View More
+      {/* <Ellipsis className="w-2.5 h-2.5" /> */}
+      {/* View More */}
+      Claim Fees
     </Button>
   );
 }
