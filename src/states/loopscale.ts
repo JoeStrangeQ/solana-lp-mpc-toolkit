@@ -40,8 +40,18 @@ export function useLoopscaleQuote({
       const oraclePrices = await getLoopscaleOraclePrices();
       const xOracle = oraclePrices[pool.mint_x];
       const yOracle = oraclePrices[pool.mint_y];
+
       if (!xOracle || !yOracle) {
-        throw new Error("Missing oracle prices for tokens");
+        //TODO: we should not call this hook when its not needed and then we wont have problem with no oracle price
+        // throw new Error("Missing oracle prices for tokens");
+        return {
+          maxLeverage: 2,
+          collateralIdentifier: "",
+          strategyAddress: "",
+          apyPercent: 0,
+          lqtCBps: 0,
+          apyCBps: 0,
+        };
       }
 
       const priceOverride = xAmount * xOracle.twapPrice + yAmount * yOracle.twapPrice;

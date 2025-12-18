@@ -491,6 +491,7 @@ async function buildCreatePositionTx({
     totalXAmount: xRawAmount,
     totalYAmount: yRawAmount,
     strategy,
+    slippage: 1,
   });
 
   const cuIxs: TransactionInstruction[] = [];

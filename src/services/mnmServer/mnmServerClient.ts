@@ -13,7 +13,6 @@ export class MnMServerClient {
   private ws?: WebSocket;
   private _isConnected = false;
   private _isConnecting = false;
-  private _isError = false;
   private _connectPromise: Promise<void> | null = null;
   private quoteListeners = new Map<string, (update: QuoteUpdateMessage) => void>();
 
@@ -28,10 +27,6 @@ export class MnMServerClient {
 
   public get canConnect() {
     return !this.isConnected && !this._isConnecting;
-  }
-
-  public get isError() {
-    return this._isError;
   }
 
   /* ---------------- CONNECT ---------------- */
@@ -60,7 +55,6 @@ export class MnMServerClient {
       this.ws.onerror = (evt) => {
         this._isConnected = false;
         this._isConnecting = false;
-        this._isError = true;
         console.error("⚠️ WS error:", evt);
         this.onErrorCallback?.(JSON.stringify(evt));
         reject(evt);
@@ -80,7 +74,7 @@ export class MnMServerClient {
           const msg = ServerMessageZ.parse(decoded);
           this.handleMessage(msg);
         } catch (err) {
-          this._isError = true;
+          if (debug) console.log("Failed to decode ws message");
           this.onErrorCallback?.(`Failed to decode WS message: ${err}`);
         }
       };
@@ -129,8 +123,6 @@ export class MnMServerClient {
   }
 
   onError(cb: (msg: string) => void) {
-    console.log("Error from the mnm server client");
-    this._isError = true;
     this.onErrorCallback = cb;
   }
 
@@ -153,7 +145,6 @@ export class MnMServerClient {
         break;
       }
       case "error":
-        this._isError = true;
         this.onErrorCallback?.(msg.message);
         break;
       case "hello":

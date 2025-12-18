@@ -26,13 +26,6 @@ export function useSwapQuote({
 
   useEffect(() => {
     if (!inputMint || !outputMint || inputMint === outputMint || inputRawAmount <= 0) return;
-    if (mnmServer.isError) {
-      setStatus("error");
-      setError("Unknown error");
-    }
-  }, [mnmServer.isError]);
-  useEffect(() => {
-    if (!inputMint || !outputMint || inputMint === outputMint || inputRawAmount <= 0) return;
 
     let active = true;
     setStatus("loading");
@@ -43,7 +36,6 @@ export function useSwapQuote({
       try {
         await mnmServer.connect();
 
-        // ✅ listen for server errors
         mnmServer.onError((msg) => {
           console.log("Error found", msg);
           if (!active) return;
