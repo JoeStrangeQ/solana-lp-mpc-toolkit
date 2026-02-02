@@ -12,12 +12,17 @@
 import { Connection, PublicKey, Keypair, Transaction, SystemProgram } from '@solana/web3.js';
 import { Program, AnchorProvider } from '@coral-xyz/anchor';
 import BN from 'bn.js';
-import { x25519 } from '@noble/curves/ed25519';
+import nacl from 'tweetnacl';
 import { randomBytes } from 'crypto';
 
-// Arcium SDK imports
-// @ts-ignore - types may not be complete
-import { getMXEPublicKey, RescueCipher } from '@arcium-hq/client';
+// Arcium SDK imports (optional - gracefully degrade if not available)
+let getMXEPublicKey: any;
+try {
+  const arciumClient = require('@arcium-hq/client');
+  getMXEPublicKey = arciumClient.getMXEPublicKey;
+} catch {
+  getMXEPublicKey = null;
+}
 
 // ============ Types ============
 
@@ -82,26 +87,24 @@ export const ARCIUM_CONFIG = {
 // ============ Key Generation ============
 
 /**
- * Generate X25519 keypair for encryption using @noble/curves
+ * Generate X25519 keypair for encryption using tweetnacl
  * Used for deriving shared secrets with Arcium MXE
  */
 export function generateEncryptionKeys(mxePublicKey?: Uint8Array): EncryptionKeys {
-  // Generate random 32-byte private key
-  const privateKey = randomBytes(32);
-  
-  // Derive X25519 public key from private key
-  const publicKey = x25519.getPublicKey(privateKey);
+  // Generate X25519 keypair using nacl.box (which uses x25519 internally)
+  const keyPair = nacl.box.keyPair();
   
   // If MXE public key provided, derive shared secret
   let sharedSecret = new Uint8Array(32);
   if (mxePublicKey && mxePublicKey.length === 32) {
-    sharedSecret = x25519.getSharedSecret(privateKey, mxePublicKey);
+    // nacl.box.before computes the shared secret
+    sharedSecret = nacl.box.before(mxePublicKey, keyPair.secretKey);
   }
   
   return { 
-    privateKey: new Uint8Array(privateKey), 
-    publicKey: new Uint8Array(publicKey), 
-    sharedSecret: new Uint8Array(sharedSecret) 
+    privateKey: keyPair.secretKey, 
+    publicKey: keyPair.publicKey, 
+    sharedSecret 
   };
 }
 
@@ -116,7 +119,8 @@ export function deriveSharedSecret(
   if (privateKey.length !== 32 || mxePublicKey.length !== 32) {
     throw new Error('Keys must be 32 bytes for X25519');
   }
-  return x25519.getSharedSecret(privateKey, mxePublicKey);
+  // nacl.box.before computes x25519 shared secret
+  return nacl.box.before(mxePublicKey, privateKey);
 }
 
 /**
