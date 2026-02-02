@@ -1,73 +1,117 @@
-# React + TypeScript + Vite
+# MnM DLMM Leverage Protocol
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**Leveraged concentrated liquidity positions on Solana via Meteora DLMM**
 
-Currently, two official plugins are available:
+[![Status](https://img.shields.io/badge/Status-Devnet-yellow)]()
+[![Leverage](https://img.shields.io/badge/Leverage-2x--5x-blue)]()
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+---
 
-## React Compiler
+## Overview
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+MnM enables users to open leveraged DLMM positions with **2x-5x leverage** through atomic flash loan mechanics. Deposit $100, control a $500 position, earn amplified trading fees.
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+User Capital ($100)  ──▶  Flash Borrow ($400)  ──▶  Create LP ($500)
+                                                          │
+                   Repay Flash ◀── Borrow ($400) ◀── Lock LP as Collateral
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+All steps execute atomically in a **single Solana transaction**.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Run tests
+npm test
 ```
+
+---
+
+## Key Features
+
+- **Atomic Leverage**: No gap risk - borrow, LP, collateralize in one tx
+- **DLMM Integration**: Native Meteora DLMM support
+- **Real-time Risk**: Health factor monitoring with liquidation alerts
+- **Flexible**: 2x-5x leverage, multiple pool support
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [DLMM_LEVERAGE.md](./docs/DLMM_LEVERAGE.md) | How the leverage system works |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Technical architecture & flows |
+
+---
+
+## Supported Pools
+
+| Pool | Status |
+|------|--------|
+| SOL/USDC | ✅ Active |
+| USDC/USDT | ✅ Active |
+| SOL/USDT | ✅ Active |
+
+---
+
+## Risk Parameters
+
+| Parameter | Value |
+|-----------|-------|
+| Max LTV | 80% |
+| Liquidation Threshold | 85% |
+| Liquidation Penalty | 5% |
+| Max Leverage | 5x |
+
+---
+
+## Project Structure
+
+```
+mnm-leverage/
+├── src/
+│   ├── components/     # React UI components
+│   ├── services/       # TypeScript service layer
+│   ├── hooks/          # React hooks
+│   └── utils/          # Calculations & helpers
+├── docs/               # Documentation
+├── tests/              # Test suites
+└── convex/             # State persistence
+```
+
+---
+
+## Tech Stack
+
+- **Frontend**: React + Vite + TypeScript
+- **State**: Convex
+- **Wallet**: Solana Wallet Adapter
+- **Oracle**: Pyth Network
+- **DLMM**: Meteora SDK
+
+---
+
+## Status
+
+| Milestone | Status |
+|-----------|--------|
+| Core Services | ✅ Complete |
+| Frontend Components | ✅ Complete |
+| Devnet Deployment | ✅ Deployed |
+| Mainnet | 🔜 Pending Audit |
+
+---
+
+## License
+
+MIT
