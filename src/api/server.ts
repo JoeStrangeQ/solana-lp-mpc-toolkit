@@ -14,6 +14,7 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { ArciumPrivacyService, ARCIUM_DEVNET_CONFIG } from '../lp-toolkit/services/arciumPrivacy';
 import { parseIntent } from '../lp-toolkit/api/intentParser';
 import { formatPoolsForChat, formatPositionsForChat } from '../lp-toolkit/adapters/types';
+import { buildAddLiquidityTx, buildRemoveLiquidityTx, describeTx } from './txBuilder';
 
 // ============ Configuration ============
 
@@ -49,6 +50,9 @@ app.get('/', (c) => {
       intent: 'POST /v1/intent/parse',
       encrypt: 'POST /v1/encrypt/strategy',
       positions: 'GET /v1/positions/:wallet',
+      txAdd: 'POST /v1/tx/add-liquidity',
+      txRemove: 'POST /v1/tx/remove-liquidity',
+      txDescribe: 'POST /v1/tx/describe',
     },
   });
 });
@@ -294,6 +298,141 @@ app.get('/v1/positions/:wallet', async (c) => {
       success: false,
       error: error.message,
       suggestion: 'Ensure wallet is a valid Solana public key',
+    }, 500);
+  }
+});
+
+// ============ Transaction Building (Wallet-less) ============
+
+app.post('/v1/tx/add-liquidity', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { userPubkey, poolAddress, venue, tokenA, tokenB, amountA, amountB, slippageBps } = body;
+
+    if (!userPubkey || !tokenA || !tokenB) {
+      return c.json({
+        success: false,
+        error: 'Missing required fields: userPubkey, tokenA, tokenB',
+        example: {
+          userPubkey: 'YourWalletPubkey',
+          poolAddress: 'optional - auto-selects best',
+          venue: 'meteora',
+          tokenA: 'SOL',
+          tokenB: 'USDC',
+          amountA: 1.0,
+          amountB: 150,
+        },
+      }, 400);
+    }
+
+    const result = await buildAddLiquidityTx(connection, {
+      userPubkey,
+      poolAddress: poolAddress || 'auto',
+      venue: venue || 'meteora',
+      tokenA,
+      tokenB,
+      amountA: amountA || 0,
+      amountB: amountB || 0,
+      slippageBps,
+    });
+
+    if (!result.success) {
+      return c.json({
+        success: false,
+        error: result.error,
+      }, 500);
+    }
+
+    return c.json({
+      success: true,
+      transaction: result.transaction,
+      instructions: result.instructions,
+      signing: {
+        note: 'Transaction is unsigned. Sign with your wallet and submit to Solana.',
+        methods: [
+          'Phantom: signTransaction()',
+          'Solflare: signTransaction()',
+          'CLI: solana sign <tx>',
+        ],
+      },
+    });
+
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message,
+    }, 500);
+  }
+});
+
+app.post('/v1/tx/remove-liquidity', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { userPubkey, positionId, venue, percentage } = body;
+
+    if (!userPubkey || !positionId) {
+      return c.json({
+        success: false,
+        error: 'Missing required fields: userPubkey, positionId',
+        example: {
+          userPubkey: 'YourWalletPubkey',
+          positionId: 'PositionAddress',
+          venue: 'meteora',
+          percentage: 100,
+        },
+      }, 400);
+    }
+
+    const result = await buildRemoveLiquidityTx(connection, {
+      userPubkey,
+      positionId,
+      venue: venue || 'meteora',
+      percentage,
+    });
+
+    if (!result.success) {
+      return c.json({
+        success: false,
+        error: result.error,
+      }, 500);
+    }
+
+    return c.json({
+      success: true,
+      transaction: result.transaction,
+      instructions: result.instructions,
+    });
+
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message,
+    }, 500);
+  }
+});
+
+app.post('/v1/tx/describe', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { serializedTx } = body;
+
+    if (!serializedTx) {
+      return c.json({
+        success: false,
+        error: 'Missing serializedTx',
+      }, 400);
+    }
+
+    const description = describeTx(serializedTx);
+    return c.json({
+      success: true,
+      description,
+    });
+
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message,
     }, 500);
   }
 });
