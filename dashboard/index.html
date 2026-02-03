@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Solana LP MPC Toolkit - Dashboard</title>
+  <title>LP Agent Toolkit - Colosseum Hackathon Dashboard</title>
   <style>
     :root {
       --bg-dark: #0a0a0f;
@@ -28,7 +28,6 @@
       min-height: 100vh;
     }
     
-    /* Header */
     .header {
       background: var(--bg-card);
       border-bottom: 1px solid var(--border);
@@ -66,7 +65,6 @@
       50% { opacity: 0.5; }
     }
     
-    /* Tabs */
     .tabs {
       display: flex;
       border-bottom: 1px solid var(--border);
@@ -87,11 +85,9 @@
       background: var(--bg-hover);
     }
     
-    /* Content */
     .content { padding: 20px; display: none; }
     .content.active { display: block; }
     
-    /* Cards */
     .card {
       background: var(--bg-card);
       border: 1px solid var(--border);
@@ -109,18 +105,15 @@
     }
     .card-title { font-size: 14px; font-weight: bold; color: var(--accent); }
     
-    /* Grid */
     .grid { display: grid; gap: 20px; }
     .grid-2 { grid-template-columns: repeat(2, 1fr); }
     .grid-3 { grid-template-columns: repeat(3, 1fr); }
     .grid-4 { grid-template-columns: repeat(4, 1fr); }
     
-    /* Stats */
     .stat { text-align: center; padding: 15px; }
     .stat-value { font-size: 24px; font-weight: bold; color: var(--accent); }
     .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
     
-    /* Progress */
     .progress-bar {
       height: 6px;
       background: var(--border);
@@ -134,7 +127,6 @@
       transition: width 0.3s;
     }
     
-    /* Table */
     .table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .table th { 
       text-align: left; 
@@ -146,7 +138,6 @@
     .table td { padding: 10px; border-bottom: 1px solid #1a1a1a; }
     .table tr:hover { background: var(--bg-hover); }
     
-    /* Tags */
     .tag {
       display: inline-block;
       padding: 2px 8px;
@@ -159,7 +150,6 @@
     .tag-error { background: rgba(255, 68, 68, 0.2); color: var(--error); }
     .tag-info { background: rgba(68, 153, 255, 0.2); color: var(--accent-blue); }
     
-    /* Architecture Diagram */
     .arch-diagram {
       font-family: 'SF Mono', monospace;
       font-size: 11px;
@@ -170,12 +160,8 @@
       overflow-x: auto;
       white-space: pre;
     }
-    .arch-layer {
-      color: var(--accent);
-      margin-bottom: 5px;
-    }
+    .arch-layer { color: var(--accent); }
     
-    /* Timeline */
     .timeline { position: relative; padding-left: 20px; }
     .timeline::before {
       content: '';
@@ -206,7 +192,6 @@
     .timeline-title { font-weight: bold; margin: 3px 0; }
     .timeline-desc { font-size: 11px; color: var(--text-muted); }
 
-    /* Checklist */
     .checklist { list-style: none; }
     .checklist li {
       padding: 8px 0;
@@ -218,28 +203,29 @@
     .checklist .check { color: var(--success); }
     .checklist .pending { color: var(--text-muted); }
     
-    /* Code block */
     code {
       background: #0a0a0a;
       padding: 2px 6px;
       border-radius: 3px;
       font-size: 11px;
     }
+    a { color: var(--accent-blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="logo">
       <span style="font-size: 24px;">🦐</span>
-      <h1>Solana LP MPC Toolkit</h1>
-      <span class="badge">HACKATHON</span>
+      <h1>LP Agent Toolkit</h1>
+      <span class="badge">COLOSSEUM</span>
     </div>
     <div class="header-right">
       <div class="status-indicator">
         <span class="status-dot"></span>
-        <span>API Running</span>
+        <span>Building</span>
       </div>
-      <span style="color: var(--text-muted); font-size: 12px;">Colosseum Agent Hackathon • Feb 2-12, 2026</span>
+      <span style="color: var(--text-muted); font-size: 12px;">Agent Hackathon • Feb 2-12, 2026</span>
     </div>
   </div>
 
@@ -256,14 +242,8 @@
     <div class="grid grid-4">
       <div class="card">
         <div class="stat">
-          <div class="stat-value">9</div>
-          <div class="stat-label">DEX Adapters</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="stat">
-          <div class="stat-value">184K+</div>
-          <div class="stat-label">Pools Available</div>
+          <div class="stat-value">3</div>
+          <div class="stat-label">Core DEXs</div>
         </div>
       </div>
       <div class="card">
@@ -274,37 +254,60 @@
       </div>
       <div class="card">
         <div class="stat">
-          <div class="stat-value" id="days-left">10</div>
+          <div class="stat-value">MPC</div>
+          <div class="stat-label">Wallet Security</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value" id="days-left">9</div>
           <div class="stat-label">Days Left</div>
         </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🎯 What We're Building</span>
+      </div>
+      <p style="font-size: 13px; line-height: 1.6; margin-bottom: 15px;">
+        <strong>LP Agent Toolkit</strong> — A natural language interface for AI agents to manage liquidity positions on Solana DEXs. 
+        Combines <strong>Portal MPC</strong> for secure key management, <strong>Arcium</strong> for strategy privacy, and 
+        <strong>Hummingbot Gateway</strong> for unified DEX access.
+      </p>
+      <div style="font-size: 12px; color: var(--text-muted);">
+        <strong>Example:</strong> <code>"LP $500 into the best SOL-USDC pool on Meteora"</code> → Agent parses intent, 
+        finds optimal pool, encrypts strategy, builds TX, signs via MPC, executes.
       </div>
     </div>
 
     <div class="grid grid-2">
       <div class="card">
         <div class="card-header">
-          <span class="card-title">✅ Completed Features</span>
+          <span class="card-title">✅ Completed</span>
         </div>
         <ul class="checklist">
-          <li><span class="check">✓</span> 9 DEX adapters (Meteora, Orca, Raydium, Lifinity, Saber, Crema, FluxBeam, Invariant, DAMM v2)</li>
-          <li><span class="check">✓</span> Arcium privacy layer (real devnet MXE integration)</li>
-          <li><span class="check">✓</span> Portal MPC wallet integration</li>
-          <li><span class="check">✓</span> Hummingbot Gateway integration</li>
-          <li><span class="check">✓</span> Natural language intent parser</li>
+          <li><span class="check">✓</span> Hummingbot Gateway running (Docker)</li>
           <li><span class="check">✓</span> REST API server (Hono)</li>
-          <li><span class="check">✓</span> 1% protocol fee mechanism</li>
-          <li><span class="check">✓</span> Strategy templates (6 strategies)</li>
+          <li><span class="check">✓</span> Natural language intent parser</li>
+          <li><span class="check">✓</span> Portal MPC client (mock mode)</li>
+          <li><span class="check">✓</span> Arcium privacy layer (placeholder)</li>
+          <li><span class="check">✓</span> 1% fee collection module</li>
+          <li><span class="check">✓</span> Gateway adapter client</li>
+          <li><span class="check">✓</span> Dashboard (this page)</li>
         </ul>
       </div>
       <div class="card">
         <div class="card-header">
-          <span class="card-title">🎯 Remaining Tasks</span>
+          <span class="card-title">🔄 In Progress / Blocked</span>
         </div>
         <ul class="checklist">
-          <li><span class="pending">○</span> Configure Helius RPC for Gateway</li>
-          <li><span class="pending">○</span> End-to-end transaction flow test</li>
-          <li><span class="pending">○</span> Demo video recording</li>
-          <li><span class="pending">○</span> Submit to Colosseum</li>
+          <li><span class="pending">○</span> Portal API key (waiting)</li>
+          <li><span class="pending">○</span> Helius RPC URL (for Gateway)</li>
+          <li><span class="pending">○</span> Arcium crypto (tooling issues)</li>
+          <li><span class="pending">○</span> E2E transaction test</li>
+          <li><span class="pending">○</span> Demo video</li>
+          <li><span class="pending">○</span> Colosseum submission</li>
         </ul>
       </div>
     </div>
@@ -315,11 +318,11 @@
         <span class="tag tag-info">Day 2 of 10</span>
       </div>
       <div class="progress-bar">
-        <div class="progress-fill" style="width: 75%"></div>
+        <div class="progress-fill" style="width: 60%"></div>
       </div>
       <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--text-muted);">
         <span>Feb 2 - Started</span>
-        <span>~75% Complete</span>
+        <span>~60% Complete</span>
         <span>Feb 12 - Deadline</span>
       </div>
     </div>
@@ -329,118 +332,135 @@
   <div class="content" id="architecture">
     <div class="card">
       <div class="card-header">
-        <span class="card-title">🏗️ System Architecture (v2.0)</span>
+        <span class="card-title">🏗️ System Architecture</span>
         <span class="tag tag-success">CURRENT</span>
       </div>
       <div class="arch-diagram">
 <span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
-<span class="arch-layer">│                        CHAT / API INTERFACE                                  │</span>
-│  Telegram │ Discord │ REST API │ Agent SDK │ Clawdbot                       │
-│  Natural language: "LP $500 into best SOL-USDC pool"                        │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
+<span class="arch-layer">│                           USER / AGENT INTERFACE                             │</span>
+│                                                                              │
+│   "LP $500 into SOL-USDC on Meteora"  →  Natural Language Input              │
+│                                                                              │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
 <span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
-<span class="arch-layer">│                      LP AGENT API SERVER (Hono)                              │</span>
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
-│  │  Intent Parser  │  │  Fee Collector  │  │  Strategy Engine            │  │
-│  │  NL → Actions   │  │  1% per TX      │  │  6 templates + custom       │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                    │
-              ┌─────────────────────┼─────────────────────┐
-              ▼                     ▼                     ▼
-<span class="arch-layer">┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐</span>
-<span class="arch-layer">│  ARCIUM PRIVACY   │  │   PORTAL MPC      │  │ HUMMINGBOT GATEWAY│</span>
-│  ─────────────────│  │  ─────────────────│  │  ─────────────────│
-│  • x25519 ECDH    │  │  • 2-of-2 signing │  │  • Unified DEX API │
-│  • RescueCipher   │  │  • No full key    │  │  • Real SDK calls  │
-│  • Strategy enc   │  │  • Agent custody  │  │  • TX building     │
-│  • MXE cluster    │  │  • Ed25519 sig    │  │  • Pool discovery  │
-└───────────────────┘  └───────────────────┘  └───────────────────┘
-                                    │
-                                    ▼
+<span class="arch-layer">│                        LP AGENT API (Hono :3000)                             │</span>
+│  ┌────────────────┐  ┌────────────────┐  ┌────────────────┐                  │
+│  │  Intent Parser │  │  Fee Collector │  │  Chat Handler  │                  │
+│  │  NL → Action   │  │  1% per TX     │  │  /chat endpoint│                  │
+│  └───────┬────────┘  └───────┬────────┘  └───────┬────────┘                  │
+│          │                   │                   │                           │
+│  ┌───────▼───────────────────▼───────────────────▼────────┐                  │
+│  │                    Request Router                       │                  │
+│  │  /wallet/create  /pools/scan  /position/open  /fees    │                  │
+│  └────────────────────────────────────────────────────────┘                  │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+         ┌─────────────────────────┼─────────────────────────┐
+         ▼                         ▼                         ▼
+<span class="arch-layer">┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐</span>
+<span class="arch-layer">│   PORTAL MPC    │    │ HUMMINGBOT GW   │    │  ARCIUM MXE     │</span>
+│  ───────────────│    │  ───────────────│    │  ───────────────│
+│  2-of-2 signing │    │  Unified DEX    │    │  Strategy       │
+│  Ed25519 keys   │    │  Pool discovery │    │  encryption     │
+│  No full key    │    │  TX building    │    │  x25519 ECDH    │
+│  exposure       │    │  :15888 Docker  │    │  RescueCipher   │
+└─────────────────┘    └────────┬────────┘    └─────────────────┘
+                                │
+                                ▼
 <span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
-<span class="arch-layer">│                         SOLANA DEX LAYER                                     │</span>
-│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
-│  │ Meteora │ │  Orca   │ │ Raydium │ │Lifinity │ │  Saber  │ │ + More  │   │
-│  │  DLMM   │ │Whirlpool│ │  CLMM   │ │ Oracle  │ │ Stable  │ │ Crema   │   │
-│  │ DAMM v2 │ │         │ │         │ │  Based  │ │  Swap   │ │FluxBeam │   │
-│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘   │
+<span class="arch-layer">│                            SOLANA DEX LAYER                                  │</span>
+│                                                                              │
+│    ┌───────────┐      ┌───────────┐      ┌───────────┐                       │
+│    │  METEORA  │      │   ORCA    │      │  RAYDIUM  │                       │
+│    │  DLMM     │      │ Whirlpool │      │   CLMM    │                       │
+│    └───────────┘      └───────────┘      └───────────┘                       │
+│                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔄 Transaction Flow</span>
+      </div>
+      <div class="arch-diagram" style="font-size: 12px;">
+1. USER INPUT
+   └─▶ "Open LP position with $500 in SOL-USDC"
+
+2. INTENT PARSING (intent.ts)
+   └─▶ { action: "open", pair: "SOL-USDC", amount: 500, dex: undefined }
+
+3. STRATEGY ENCRYPTION (arcium.ts)  [OPTIONAL]
+   └─▶ Strategy params encrypted with MXE public key
+   └─▶ Only decrypted at execution time
+
+4. FEE CALCULATION (fees/index.ts)
+   └─▶ Gross: $500 → Fee: $5 (1%) → Net: $495
+   └─▶ Fee instruction added to transaction
+
+5. POOL DISCOVERY (gateway/client.ts → Hummingbot Gateway)
+   └─▶ GET /clmm/pools?tokenA=SOL&tokenB=USDC
+   └─▶ Returns available pools with APR, TVL, fees
+
+6. TRANSACTION BUILDING (gateway/client.ts)
+   └─▶ POST /clmm/position/open
+   └─▶ Returns unsigned transaction bytes
+
+7. MPC SIGNING (mpc/client.ts → Portal API)
+   └─▶ 2-of-2 threshold signature
+   └─▶ Agent holds one share, Portal holds one share
+   └─▶ Neither party has full key
+
+8. BROADCAST
+   └─▶ Signed TX submitted to Solana
+   └─▶ LP position created, fee sent to treasury
       </div>
     </div>
 
     <div class="grid grid-3">
       <div class="card">
         <div class="card-header">
-          <span class="card-title">🔐 Arcium Privacy</span>
+          <span class="card-title">🔑 Portal MPC</span>
         </div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
-          MXE (Multi-Party Execution) on Solana devnet
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+          Threshold signing for agent wallets
         </p>
         <ul class="checklist" style="font-size: 11px;">
-          <li><span class="check">✓</span> x25519 key derivation</li>
-          <li><span class="check">✓</span> RescueCipher encryption</li>
-          <li><span class="check">✓</span> Real MXE cluster key</li>
-          <li><span class="check">✓</span> Strategy param encryption</li>
+          <li><span class="check">✓</span> Client implementation</li>
+          <li><span class="check">✓</span> Mock mode for dev</li>
+          <li><span class="pending">○</span> API key (blocked)</li>
+          <li><span class="pending">○</span> Production testing</li>
         </ul>
       </div>
       <div class="card">
         <div class="card-header">
-          <span class="card-title">🔑 Portal MPC</span>
+          <span class="card-title">🔐 Arcium Privacy</span>
         </div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
-          Threshold signing for agent wallets
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+          MPC-based strategy encryption
         </p>
         <ul class="checklist" style="font-size: 11px;">
-          <li><span class="check">✓</span> 2-of-2 key shares</li>
-          <li><span class="check">✓</span> Ed25519 Solana signing</li>
-          <li><span class="check">✓</span> No full key exposure</li>
-          <li><span class="check">✓</span> Wallet generation API</li>
+          <li><span class="check">✓</span> Interface defined</li>
+          <li><span class="check">✓</span> Placeholder impl</li>
+          <li><span class="pending">○</span> x25519 + Rescue (tooling issue)</li>
+          <li><span class="pending">○</span> Real MXE test</li>
         </ul>
       </div>
       <div class="card">
         <div class="card-header">
           <span class="card-title">🌉 Hummingbot Gateway</span>
         </div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
-          Unified DEX connector layer
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+          Unified DEX connector
         </p>
         <ul class="checklist" style="font-size: 11px;">
-          <li><span class="check">✓</span> Pool discovery API</li>
-          <li><span class="check">✓</span> Position management</li>
-          <li><span class="check">✓</span> Real TX building</li>
+          <li><span class="check">✓</span> Docker running</li>
+          <li><span class="check">✓</span> Swagger at :15888</li>
+          <li><span class="check">✓</span> Client adapter</li>
           <li><span class="pending">○</span> Premium RPC config</li>
         </ul>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">📁 Codebase Structure</span>
-      </div>
-      <div class="arch-diagram" style="font-size: 12px;">
-solana-lp-mpc-toolkit/
-├── src/
-│   ├── agent/           # REST API server + intent parser
-│   │   ├── server.ts    # Hono API (wallet, chat, positions)
-│   │   ├── intent.ts    # Natural language → LPIntent
-│   │   └── types.ts     # API types
-│   ├── gateway/         # Hummingbot Gateway client
-│   │   ├── client.ts    # DEX operations via Gateway
-│   │   └── types.ts     # Pool, Position types
-│   ├── mpc/             # Portal MPC wallet
-│   │   ├── client.ts    # Threshold signing
-│   │   └── mockClient.ts# Dev mode mock
-│   ├── privacy/         # Arcium encryption
-│   │   ├── arcium.ts    # x25519 + RescueCipher
-│   │   └── types.ts     # Encrypted strategy types
-│   ├── fees/            # Revenue model
-│   │   └── index.ts     # 1% fee calculation
-│   └── config/          # Environment config
-├── dashboard/           # This dashboard
-└── README.md            # Documentation
       </div>
     </div>
   </div>
@@ -462,64 +482,70 @@ solana-lp-mpc-toolkit/
         </thead>
         <tbody>
           <tr>
-            <td>DEX Adapter Layer (9 DEXs)</td>
+            <td>Hummingbot Gateway Setup</td>
             <td><span class="tag tag-success">DONE</span></td>
             <td>P0</td>
-            <td>Meteora, Orca, Raydium, Lifinity, Saber, Crema, FluxBeam, Invariant, DAMM v2</td>
-          </tr>
-          <tr>
-            <td>Arcium Privacy Integration</td>
-            <td><span class="tag tag-success">DONE</span></td>
-            <td>P0</td>
-            <td>Real MXE devnet key, x25519 + RescueCipher</td>
-          </tr>
-          <tr>
-            <td>Portal MPC Wallet</td>
-            <td><span class="tag tag-success">DONE</span></td>
-            <td>P0</td>
-            <td>2-of-2 threshold signing, mock client for dev</td>
-          </tr>
-          <tr>
-            <td>Hummingbot Gateway</td>
-            <td><span class="tag tag-success">DONE</span></td>
-            <td>P0</td>
-            <td>Docker running, Swagger docs at :15888</td>
+            <td>Docker running, Swagger docs accessible</td>
           </tr>
           <tr>
             <td>REST API Server</td>
             <td><span class="tag tag-success">DONE</span></td>
             <td>P0</td>
-            <td>Hono server, all endpoints working</td>
+            <td>Hono server with all endpoints</td>
           </tr>
           <tr>
-            <td>Natural Language Parser</td>
+            <td>Intent Parser</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>P1</td>
-            <td>Intent extraction from chat messages</td>
+            <td>P0</td>
+            <td>NL → LPIntent, improved token detection</td>
           </tr>
           <tr>
-            <td>1% Protocol Fee</td>
+            <td>Portal MPC Client</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>P1</td>
-            <td>Fee calculation + treasury transfer instructions</td>
+            <td>P0</td>
+            <td>Interface + mock client for dev</td>
           </tr>
           <tr>
-            <td>Strategy Templates</td>
+            <td>Fee Collection Module</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>P1</td>
-            <td>6 templates: balanced, concentrated, wide, delta-neutral, bid/ask-heavy</td>
+            <td>P0</td>
+            <td>1% fee calculation + TX instructions</td>
           </tr>
           <tr>
-            <td>Configure Premium RPC</td>
+            <td>Gateway Client Adapter</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P0</td>
+            <td>Wraps Hummingbot Gateway HTTP API</td>
+          </tr>
+          <tr>
+            <td>Dashboard</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P2</td>
+            <td>This page, all tabs updated</td>
+          </tr>
+          <tr>
+            <td>Portal API Key</td>
+            <td><span class="tag tag-error">BLOCKED</span></td>
+            <td>P0</td>
+            <td>Waiting for key from Portal team</td>
+          </tr>
+          <tr>
+            <td>Helius RPC for Gateway</td>
             <td><span class="tag tag-warning">TODO</span></td>
             <td>P1</td>
-            <td>Helius API key needed for Gateway</td>
+            <td>Need fast RPC for Solana mainnet</td>
+          </tr>
+          <tr>
+            <td>Arcium Crypto Implementation</td>
+            <td><span class="tag tag-warning">DEFERRED</span></td>
+            <td>P2</td>
+            <td>ESM/CJS tooling issues, using placeholder</td>
           </tr>
           <tr>
             <td>E2E Transaction Test</td>
             <td><span class="tag tag-warning">TODO</span></td>
             <td>P1</td>
-            <td>Full flow with real devnet wallet</td>
+            <td>Full flow on devnet</td>
           </tr>
           <tr>
             <td>Demo Video</td>
@@ -548,34 +574,34 @@ solana-lp-mpc-toolkit/
           <div class="timeline-desc">Pivoted from "Private Leverage Lending" to "LP Agent Toolkit"</div>
         </div>
         <div class="timeline-item">
-          <div class="timeline-date">Feb 2, 22:00-23:00</div>
-          <div class="timeline-title">Core Adapters Built</div>
-          <div class="timeline-desc">Meteora, Orca, Raydium adapters + yield scanner + chat commands</div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-date">Feb 3, 00:00-02:00</div>
-          <div class="timeline-title">Production Hardening</div>
-          <div class="timeline-desc">Validation, rate limiting, logging, security headers</div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-date">Feb 3, 11:30</div>
+          <div class="timeline-date">Feb 3, 11:30 CST</div>
           <div class="timeline-title">Architecture Pivot</div>
-          <div class="timeline-desc">Switched to Hummingbot Gateway + Portal MPC + Arcium stack</div>
+          <div class="timeline-desc">Adopted Hummingbot Gateway + Portal MPC + Arcium stack</div>
         </div>
         <div class="timeline-item">
-          <div class="timeline-date">Feb 3, 12:03</div>
-          <div class="timeline-title">Gateway Setup Complete</div>
-          <div class="timeline-desc">Docker running, Swagger docs verified, all connectors present</div>
+          <div class="timeline-date">Feb 3, 12:03 CST</div>
+          <div class="timeline-title">Gateway Running</div>
+          <div class="timeline-desc">Docker container up, Swagger docs verified at :15888</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Feb 3, 12:15 CST</div>
+          <div class="timeline-title">API Server + Fee Module</div>
+          <div class="timeline-desc">Hono server, intent parser, 1% fee collection implemented</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Feb 3, 12:18 CST</div>
+          <div class="timeline-title">NL Parser Improved</div>
+          <div class="timeline-desc">Generalized token detection, more action aliases</div>
         </div>
         <div class="timeline-item pending">
           <div class="timeline-date">Feb 3-4</div>
-          <div class="timeline-title">E2E Testing</div>
-          <div class="timeline-desc">Full transaction flow with real devnet funds</div>
+          <div class="timeline-title">API Keys + E2E</div>
+          <div class="timeline-desc">Portal key, Helius RPC, full transaction test</div>
         </div>
         <div class="timeline-item pending">
           <div class="timeline-date">Feb 10-12</div>
           <div class="timeline-title">Demo & Submit</div>
-          <div class="timeline-desc">Record demo video, submit to Colosseum</div>
+          <div class="timeline-desc">Record video, submit to Colosseum</div>
         </div>
       </div>
     </div>
@@ -587,7 +613,7 @@ solana-lp-mpc-toolkit/
       <div class="card">
         <div class="stat">
           <div class="stat-value">1%</div>
-          <div class="stat-label">Protocol Fee (per TX)</div>
+          <div class="stat-label">Protocol Fee (100 bps)</div>
         </div>
       </div>
       <div class="card">
@@ -598,8 +624,8 @@ solana-lp-mpc-toolkit/
       </div>
       <div class="card">
         <div class="stat">
-          <div class="stat-value">0.68 SOL</div>
-          <div class="stat-label">Treasury Balance</div>
+          <div class="stat-value">$1</div>
+          <div class="stat-label">Exempt Threshold</div>
         </div>
       </div>
     </div>
@@ -610,64 +636,33 @@ solana-lp-mpc-toolkit/
       </div>
       <div class="arch-diagram" style="font-size: 12px;">
 ┌─────────────────────────────────────────────────────────────────┐
-│                     PROTOCOL FEE FLOW                           │
+│                     1% PROTOCOL FEE FLOW                        │
 └─────────────────────────────────────────────────────────────────┘
 
-  Agent Request                                          Treasury
-       │                                                    ▲
-       │  "Open LP position with $1000"                     │
-       ▼                                                    │
-  ┌─────────────────────────────────────────────────────────┼─────┐
-  │                    FEE COLLECTOR                        │     │
-  │  ─────────────────────────────────────────────────────  │     │
-  │  Gross Amount:  $1,000.00                               │     │
-  │  Protocol Fee:  $10.00 (1%)  ──────────────────────────►│     │
-  │  Net Amount:    $990.00                                       │
-  │                                                               │
-  │  Fee Config:                                                  │
-  │  • 100 basis points (1%)                                      │
-  │  • Min fee: 10,000 lamports                                   │
-  │  • Exempt threshold: $1 USD                                   │
-  └───────────────────────────────────────────────────────────────┘
+  Agent Request: "LP $1,000 into SOL-USDC"
        │
        ▼
-  DEX (Meteora/Orca/Raydium...)
+  ┌─────────────────────────────────────────────────────────────┐
+  │                      FEE CALCULATION                         │
+  │  ───────────────────────────────────────────────────────────│
+  │  Gross Amount:    $1,000.00                                  │
+  │  Protocol Fee:    $10.00 (1% = 100 basis points)             │
+  │  Net to DEX:      $990.00                                    │
+  │                                                              │
+  │  Config:                                                     │
+  │  • Fee: 100 bps (1%)                                         │
+  │  • Min fee: 10,000 lamports (~$0.002)                        │
+  │  • Exempt if TX < $1 USD                                     │
+  └─────────────────────────────────────────────────────────────┘
        │
-       ▼
-  LP Position Created ($990)
+       ├──────────────────┐
+       ▼                  ▼
+  ┌─────────────┐    ┌─────────────┐
+  │   DEX       │    │  TREASURY   │
+  │   $990.00   │    │   $10.00    │
+  │  LP Created │    │   Fee       │
+  └─────────────┘    └─────────────┘
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">📊 Fee API Endpoints</span>
-      </div>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Endpoint</th>
-            <th>Method</th>
-            <th>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><code>GET /fees</code></td>
-            <td>GET</td>
-            <td>Get fee configuration and treasury address</td>
-          </tr>
-          <tr>
-            <td><code>GET /fees/calculate?amount=1000</code></td>
-            <td>GET</td>
-            <td>Calculate fee breakdown for specific amount</td>
-          </tr>
-          <tr>
-            <td><code>POST /position/open</code></td>
-            <td>POST</td>
-            <td>Response includes <code>fees</code> object with breakdown</td>
-          </tr>
-        </tbody>
-      </table>
     </div>
 
     <div class="card">
@@ -677,9 +672,48 @@ solana-lp-mpc-toolkit/
       <p style="font-size: 12px; margin-bottom: 10px;">
         <strong>Address:</strong> <code>BNQnCszvPwYfjBMUmFgmCooMSRrdkC7LncMQBExDakLp</code>
       </p>
-      <p style="font-size: 11px; color: var(--text-muted);">
-        All protocol fees are collected to this address. View on Solscan or any Solana explorer.
+      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">
+        All protocol fees are collected to this address via SPL token transfer or SOL transfer instructions 
+        appended to each LP transaction.
       </p>
+      <div style="font-size: 11px;">
+        <strong>Fee API:</strong><br>
+        <code>GET /fees</code> — Get fee config<br>
+        <code>GET /fees/calculate?amount=1000</code> — Calculate fee breakdown
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📊 Fee Implementation</span>
+      </div>
+      <div class="arch-diagram" style="font-size: 11px;">
+// src/fees/index.ts
+
+export const FEE_CONFIG = {
+  FEE_BPS: 100,                    // 1%
+  TREASURY_ADDRESS: 'BNQnCsz...',  // Protocol treasury
+  MIN_FEE_LAMPORTS: 10000,         // ~$0.002 minimum
+  EXEMPT_THRESHOLD_USD: 1,         // Skip fee if < $1
+};
+
+export function calculateFee(amount: number): FeeCalculation {
+  const feeAmount = Math.floor(amount * FEE_CONFIG.FEE_BPS / 10000);
+  return {
+    grossAmount: amount,
+    feeAmount: Math.max(feeAmount, 0),
+    netAmount: amount - feeAmount,
+    feeBps: FEE_CONFIG.FEE_BPS,
+    treasury: FEE_CONFIG.TREASURY_ADDRESS,
+  };
+}
+
+// Creates SOL transfer instruction for fee
+export function createSolFeeInstruction(payer, amount) { ... }
+
+// Creates SPL token transfer instruction for fee
+export function createTokenFeeInstruction(payer, mint, amount) { ... }
+      </div>
     </div>
   </div>
 
@@ -695,29 +729,29 @@ solana-lp-mpc-toolkit/
             <tr>
               <th>Service</th>
               <th>Status</th>
-              <th>Port</th>
+              <th>Details</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td>LP Agent API</td>
-              <td><span class="tag tag-success">RUNNING</span></td>
-              <td>3000</td>
+              <td><span class="tag tag-success">READY</span></td>
+              <td>:3000, pnpm dev</td>
             </tr>
             <tr>
               <td>Hummingbot Gateway</td>
               <td><span class="tag tag-success">RUNNING</span></td>
-              <td>15888</td>
-            </tr>
-            <tr>
-              <td>Arcium MXE (devnet)</td>
-              <td><span class="tag tag-success">CONNECTED</span></td>
-              <td>—</td>
+              <td>:15888, Docker</td>
             </tr>
             <tr>
               <td>Portal MPC</td>
-              <td><span class="tag tag-info">MOCK MODE</span></td>
-              <td>—</td>
+              <td><span class="tag tag-info">MOCK</span></td>
+              <td>Waiting for API key</td>
+            </tr>
+            <tr>
+              <td>Arcium MXE</td>
+              <td><span class="tag tag-info">PLACEHOLDER</span></td>
+              <td>Tooling deferred</td>
             </tr>
           </tbody>
         </table>
@@ -731,20 +765,19 @@ solana-lp-mpc-toolkit/
             <tr>
               <th>Endpoint</th>
               <th>Method</th>
-              <th>Auth</th>
+              <th>Description</th>
             </tr>
           </thead>
           <tbody>
-            <tr><td>/</td><td>GET</td><td>—</td></tr>
-            <tr><td>/health</td><td>GET</td><td>—</td></tr>
-            <tr><td>/fees</td><td>GET</td><td>—</td></tr>
-            <tr><td>/wallet/create</td><td>POST</td><td>—</td></tr>
-            <tr><td>/wallet/load</td><td>POST</td><td>—</td></tr>
-            <tr><td>/chat</td><td>POST</td><td>—</td></tr>
-            <tr><td>/pools/scan</td><td>GET</td><td>—</td></tr>
-            <tr><td>/positions</td><td>GET</td><td>Wallet</td></tr>
-            <tr><td>/position/open</td><td>POST</td><td>Wallet</td></tr>
-            <tr><td>/position/close</td><td>POST</td><td>Wallet</td></tr>
+            <tr><td>/health</td><td>GET</td><td>Health check</td></tr>
+            <tr><td>/fees</td><td>GET</td><td>Fee config</td></tr>
+            <tr><td>/fees/calculate</td><td>GET</td><td>Calculate fee</td></tr>
+            <tr><td>/wallet/create</td><td>POST</td><td>Create MPC wallet</td></tr>
+            <tr><td>/chat</td><td>POST</td><td>Natural language</td></tr>
+            <tr><td>/pools/scan</td><td>GET</td><td>Discover pools</td></tr>
+            <tr><td>/positions</td><td>GET</td><td>List positions</td></tr>
+            <tr><td>/position/open</td><td>POST</td><td>Open LP position</td></tr>
+            <tr><td>/position/close</td><td>POST</td><td>Close position</td></tr>
           </tbody>
         </table>
       </div>
@@ -755,40 +788,70 @@ solana-lp-mpc-toolkit/
         <span class="card-title">🔧 Quick Commands</span>
       </div>
       <div class="arch-diagram" style="font-size: 12px;">
-# Start API server
-pnpm dev
+# Start services
+cd ~/clawd/mnm-leverage && pnpm dev          # API server on :3000
+docker start gateway-pr543                    # Gateway on :15888
 
-# Start Hummingbot Gateway
-docker start gateway-pr543
-
-# Test health
+# Health checks
 curl http://localhost:3000/health
+curl http://localhost:15888/                  # Gateway swagger
 
-# Create wallet
+# Create wallet (mock mode)
 curl -X POST http://localhost:3000/wallet/create
-
-# Scan pools
-curl "http://localhost:3000/pools/scan?tokenA=SOL&tokenB=USDC"
 
 # Chat interface
 curl -X POST http://localhost:3000/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "Find best SOL-USDC pools"}'
+  -d '{"message": "LP 500 into SOL-USDC"}'
 
 # Calculate fee
 curl "http://localhost:3000/fees/calculate?amount=1000"
+
+# Scan pools (requires Gateway + RPC)
+curl "http://localhost:3000/pools/scan?tokenA=SOL&tokenB=USDC"
       </div>
     </div>
 
     <div class="card">
       <div class="card-header">
-        <span class="card-title">📚 Documentation</span>
+        <span class="card-title">📂 Project Structure</span>
+      </div>
+      <div class="arch-diagram" style="font-size: 11px;">
+mnm-leverage/
+├── src/
+│   ├── agent/
+│   │   ├── server.ts      # Hono REST API
+│   │   ├── intent.ts      # NL → LPIntent parser
+│   │   └── types.ts       # API types
+│   ├── gateway/
+│   │   ├── client.ts      # Hummingbot Gateway adapter
+│   │   └── types.ts       # Pool, Position types
+│   ├── mpc/
+│   │   ├── client.ts      # Portal MPC interface
+│   │   └── mockClient.ts  # Dev mode mock
+│   ├── privacy/
+│   │   ├── arcium.ts      # Strategy encryption
+│   │   └── types.ts       # Encrypted types
+│   ├── fees/
+│   │   └── index.ts       # 1% fee calculation
+│   ├── config/
+│   │   └── index.ts       # Environment config
+│   └── index.ts           # Entry point
+├── dashboard/
+│   └── index.html         # This dashboard
+├── README.md
+└── package.json
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📚 Links</span>
       </div>
       <ul class="checklist">
-        <li><span class="check">✓</span> <a href="https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit" style="color: var(--accent-blue);">GitHub Repository</a></li>
-        <li><span class="check">✓</span> README.md with API docs</li>
-        <li><span class="check">✓</span> AGENT_REFLECTIONS.md</li>
-        <li><span class="check">✓</span> Gateway Swagger: <code>http://localhost:15888/docs</code></li>
+        <li><span class="check">✓</span> <a href="https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit">GitHub Repository</a></li>
+        <li><span class="check">✓</span> <a href="http://localhost:15888/docs">Gateway Swagger Docs</a> (local)</li>
+        <li><span class="check">✓</span> <a href="https://colosseum.com/agent-hackathon">Colosseum Hackathon</a></li>
       </ul>
     </div>
   </div>
@@ -809,11 +872,6 @@ curl "http://localhost:3000/fees/calculate?amount=1000"
     const now = new Date();
     const daysLeft = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
     document.getElementById('days-left').textContent = Math.max(0, daysLeft);
-
-    // Update functions for external control
-    window.dashboardUpdate = function(section, data) {
-      console.log('Dashboard update:', section, data);
-    };
   </script>
 </body>
 </html>
