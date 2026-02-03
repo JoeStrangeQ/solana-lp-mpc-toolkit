@@ -1,13 +1,11 @@
 /**
  * Privy Embedded Wallet Client
  * 
- * Uses Privy's server-side API to create and manage embedded wallets
+ * Uses Privy's server-side Wallets API to create and manage embedded wallets
  * for AI agents. Replaces Portal MPC with same interface.
  */
 
 import { PrivyClient } from '@privy-io/node';
-import { Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
-import * as bs58 from 'bs58';
 
 export interface PrivyWalletInfo {
   id: string;
@@ -24,7 +22,6 @@ export interface PrivyConfig {
 export class PrivyWalletClient {
   private client: PrivyClient;
   private wallet: PrivyWalletInfo | null = null;
-  private userId: string | null = null;
 
   constructor(config: PrivyConfig) {
     this.client = new PrivyClient({
@@ -34,36 +31,25 @@ export class PrivyWalletClient {
   }
 
   /**
-   * Create a new embedded wallet for an agent
-   * Privy creates a user + wallet in one step
+   * Create a new Solana wallet using Privy's Wallets API
    */
   async generateWallet(): Promise<{
     id: string;
     addresses: { solana: string };
-    userId: string;
     createdAt: string;
   }> {
     try {
-      // Create a new Privy user with an embedded Solana wallet
-      const user = await this.client.createUser({
-        createEmbeddedWallet: true,
-        linkedAccounts: [],
+      // Create a new Solana wallet directly via Privy Wallets API
+      // Access through privyApiClient which has the create method
+      const wallet = await (this.client as any).privyApiClient.wallets.create({
+        chain_type: 'solana',
       });
 
-      // Find the Solana wallet
-      const solanaWallet = user.linkedAccounts.find(
-        (account: { type: string; chainType?: string }) => 
-          account.type === 'wallet' && account.chainType === 'solana'
-      ) as { address: string; id: string } | undefined;
+      console.log('[Privy] Wallet created:', wallet.id, wallet.address);
 
-      if (!solanaWallet) {
-        throw new Error('Failed to create Solana wallet');
-      }
-
-      this.userId = user.id;
       this.wallet = {
-        id: solanaWallet.id,
-        address: solanaWallet.address,
+        id: wallet.id,
+        address: wallet.address,
         chainType: 'solana',
         createdAt: new Date().toISOString(),
       };
@@ -71,7 +57,6 @@ export class PrivyWalletClient {
       return {
         id: this.wallet.id,
         addresses: { solana: this.wallet.address },
-        userId: user.id,
         createdAt: this.wallet.createdAt,
       };
     } catch (error) {
@@ -81,25 +66,15 @@ export class PrivyWalletClient {
   }
 
   /**
-   * Load an existing wallet by user ID
+   * Load an existing wallet by wallet ID
    */
-  async loadWallet(userId: string): Promise<PrivyWalletInfo> {
+  async loadWallet(walletId: string): Promise<PrivyWalletInfo> {
     try {
-      const user = await this.client.getUser(userId);
-      
-      const solanaWallet = user.linkedAccounts.find(
-        (account: { type: string; chainType?: string }) => 
-          account.type === 'wallet' && account.chainType === 'solana'
-      ) as { address: string; id: string } | undefined;
+      const wallet = await (this.client as any).privyApiClient.wallets.get(walletId);
 
-      if (!solanaWallet) {
-        throw new Error('No Solana wallet found for user');
-      }
-
-      this.userId = userId;
       this.wallet = {
-        id: solanaWallet.id,
-        address: solanaWallet.address,
+        id: wallet.id,
+        address: wallet.address,
         chainType: 'solana',
         createdAt: new Date().toISOString(),
       };
@@ -112,24 +87,48 @@ export class PrivyWalletClient {
   }
 
   /**
-   * Sign a transaction using Privy's embedded wallet
+   * Sign a Solana transaction using Privy's Wallets API
    */
   async signTransaction(transactionBase64: string): Promise<string> {
-    if (!this.wallet || !this.userId) {
+    if (!this.wallet) {
       throw new Error('No wallet loaded');
     }
 
     try {
-      // Privy expects the transaction as base64
-      const result = await this.client.walletApi.solana.signTransaction({
-        userId: this.userId,
-        walletId: this.wallet.id,
-        transaction: transactionBase64,
-      });
+      // Use the Solana-specific RPC method for signing
+      const result = await this.client.wallets.solana().signTransaction(
+        this.wallet.id,
+        {
+          transaction: transactionBase64,
+        }
+      );
 
-      return result.signedTransaction;
+      return result.signed_transaction;
     } catch (error) {
       console.error('[Privy] Failed to sign transaction:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Sign and send a Solana transaction
+   */
+  async signAndSendTransaction(transactionBase64: string): Promise<string> {
+    if (!this.wallet) {
+      throw new Error('No wallet loaded');
+    }
+
+    try {
+      const result = await this.client.wallets.solana().signAndSendTransaction(
+        this.wallet.id,
+        {
+          transaction: transactionBase64,
+        }
+      );
+
+      return result.transaction_hash;
+    } catch (error) {
+      console.error('[Privy] Failed to sign and send transaction:', error);
       throw error;
     }
   }
@@ -138,16 +137,18 @@ export class PrivyWalletClient {
    * Sign a message
    */
   async signMessage(message: string): Promise<string> {
-    if (!this.wallet || !this.userId) {
+    if (!this.wallet) {
       throw new Error('No wallet loaded');
     }
 
     try {
-      const result = await this.client.walletApi.solana.signMessage({
-        userId: this.userId,
-        walletId: this.wallet.id,
-        message: Buffer.from(message).toString('base64'),
-      });
+      const result = await this.client.wallets.solana().signMessage(
+        this.wallet.id,
+        {
+          message: Buffer.from(message).toString('base64'),
+          encoding: 'base64',
+        }
+      );
 
       return result.signature;
     } catch (error) {
@@ -168,11 +169,6 @@ export class PrivyWalletClient {
   getWalletId(): string {
     if (!this.wallet) throw new Error('No wallet loaded');
     return this.wallet.id;
-  }
-
-  getUserId(): string {
-    if (!this.userId) throw new Error('No user loaded');
-    return this.userId;
   }
 }
 
