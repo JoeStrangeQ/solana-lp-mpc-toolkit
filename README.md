@@ -128,6 +128,29 @@ POST /wallet/load
 }
 ```
 
+### LP Pipeline (Swap→LP)
+
+```bash
+# List available pools
+GET /lp/pools
+
+# Prepare liquidity (check balances, calc swap needed)
+POST /lp/prepare
+{
+  "tokenA": "SOL",
+  "tokenB": "USDC",
+  "totalValueUsd": 500
+}
+
+# Execute full pipeline (swap to 50/50 if needed, then LP)
+POST /lp/execute
+{
+  "tokenA": "SOL",
+  "tokenB": "USDC",
+  "totalValueUsd": 500
+}
+```
+
 ### LP Positions (Meteora)
 
 ```bash
@@ -137,7 +160,7 @@ GET /pools/scan?tokenA=SOL&tokenB=USDC
 # View positions
 GET /positions
 
-# Open position
+# Open position (direct)
 POST /position/open
 {
   "dex": "meteora",
@@ -174,10 +197,11 @@ The `/chat` endpoint understands:
 | Input | Action |
 |-------|--------|
 | `swap 1 SOL to USDC` | Execute swap via Jupiter |
-| `swap 100 USDC for BONK` | Execute swap |
-| `add $500 to SOL-USDC` | Open LP position |
+| `convert 100 USDC into SOL` | Execute swap |
+| `LP $500 into SOL-USDC` | Full swap→LP pipeline |
+| `add liquidity to SOL-USDC pool` | Open LP position |
+| `put $1000 in the best SOL pool` | Find best pool + LP |
 | `show my positions` | List all positions |
-| `close position 8abc...` | Close LP position |
 
 ---
 
