@@ -18,6 +18,7 @@ import { buildAddLiquidityTx, buildRemoveLiquidityTx, describeTx } from './txBui
 import { checkPositionHealth, checkPoolHealth, formatHealthReport, formatPoolReport } from './monitoring';
 import { validatePublicKey, validateAddLiquidityRequest, validateEncryptRequest } from './validation';
 import { safeFetch } from './fetch';
+import { standardLimit, strictLimit, txLimit, readLimit, getRateLimitStats } from './rateLimit';
 
 // ============ Configuration ============
 
@@ -62,6 +63,9 @@ app.get('/', (c) => {
   });
 });
 
+// Apply rate limiting to all /v1 routes
+app.use('/v1/*', standardLimit);
+
 app.get('/v1/health', (c) => {
   return c.json({
     status: 'healthy',
@@ -71,6 +75,7 @@ app.get('/v1/health', (c) => {
       mxeKey: ARCIUM_DEVNET_CONFIG.mxePublicKeyHex.slice(0, 16) + '...',
     },
     dexes: ['meteora', 'orca', 'raydium', 'saber', 'lifinity', 'crema', 'fluxbeam', 'invariant'],
+    rateLimit: getRateLimitStats(),
   });
 });
 
@@ -305,7 +310,8 @@ app.get('/v1/positions/:wallet', async (c) => {
 
 // ============ Transaction Building (Wallet-less) ============
 
-app.post('/v1/tx/add-liquidity', async (c) => {
+// Transaction endpoints have stricter limits
+app.post('/v1/tx/add-liquidity', txLimit, async (c) => {
   try {
     const body = await c.req.json();
     
