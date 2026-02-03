@@ -94,14 +94,14 @@ export class JupiterClient {
     const response = await fetch(url, {
       method: 'GET',
       headers: this.headers,
-    }) as globalThis.Response;
+    });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Jupiter quote failed: ${response.status} - ${error}`);
+    if (!(response as any).ok) {
+      const error = await (response as any).text();
+      throw new Error(`Jupiter quote failed: ${(response as any).status} - ${error}`);
     }
 
-    return response.json() as Promise<JupiterQuote>;
+    return (response as any).json() as Promise<JupiterQuote>;
   }
 
   /**
@@ -123,14 +123,14 @@ export class JupiterClient {
         dynamicComputeUnitLimit: true,
         prioritizationFeeLamports: 'auto',
       }),
-    }) as globalThis.Response;
+    });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Jupiter swap failed: ${response.status} - ${error}`);
+    if (!(response as any).ok) {
+      const error = await (response as any).text();
+      throw new Error(`Jupiter swap failed: ${(response as any).status} - ${error}`);
     }
 
-    return response.json() as Promise<SwapResult>;
+    return (response as any).json() as Promise<SwapResult>;
   }
 
   /**
