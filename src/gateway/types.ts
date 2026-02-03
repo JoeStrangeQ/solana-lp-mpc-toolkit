@@ -13,10 +13,26 @@ export interface PoolInfo {
   liquidity: string;
   currentPrice: number;
   tickSpacing?: number;
+  apy?: number;
+  volume24h?: number;
+}
+
+// Raw Meteora API response type
+export interface MeteoraPool {
+  address: string;
+  name: string;
+  mint_x: string;
+  mint_y: string;
+  liquidity: string;
+  base_fee_percentage: string;
+  current_price: number;
+  apy: number;
+  trade_volume_24h: number;
 }
 
 export interface TokenInfo {
-  address: string;
+  address?: string;
+  mint?: string;
   symbol: string;
   decimals: number;
 }
