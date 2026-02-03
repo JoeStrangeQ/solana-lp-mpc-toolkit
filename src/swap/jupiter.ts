@@ -94,7 +94,7 @@ export class JupiterClient {
     const response = await fetch(url, {
       method: 'GET',
       headers: this.headers,
-    });
+    }) as globalThis.Response;
 
     if (!response.ok) {
       const error = await response.text();
@@ -123,7 +123,7 @@ export class JupiterClient {
         dynamicComputeUnitLimit: true,
         prioritizationFeeLamports: 'auto',
       }),
-    });
+    }) as globalThis.Response;
 
     if (!response.ok) {
       const error = await response.text();

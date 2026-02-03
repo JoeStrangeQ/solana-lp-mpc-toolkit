@@ -68,7 +68,7 @@ app.get('/fees/calculate', (c) => {
   if (!amount || amount <= 0) {
     return c.json({ error: 'Invalid amount' }, 400);
   }
-  const breakdown = createFeeBreakdown(amount, 'SOL');
+  const breakdown = createFeeBreakdown(amount);
   return c.json(breakdown);
 });
 
