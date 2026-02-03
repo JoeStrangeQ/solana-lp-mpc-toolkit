@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LP Toolkit - Agent Swarm Dashboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'SF Mono', 'Menlo', monospace; 
+      background: #0a0a0f; 
+      color: #e0e0e0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+      border-bottom: 1px solid #333;
+      padding-bottom: 20px;
+    }
+    .header h1 { color: #00ff88; font-size: 24px; }
+    .header .subtitle { color: #888; font-size: 12px; margin-top: 5px; }
+    
+    .agents {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+    .agent {
+      background: #111118;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 15px;
+    }
+    .agent-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .agent-icon { font-size: 24px; }
+    .agent-name { font-weight: bold; color: #fff; }
+    .agent-role { font-size: 11px; color: #666; }
+    
+    .status {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .status.idle { background: #333; color: #888; }
+    .status.working { background: #0066ff33; color: #4499ff; }
+    .status.success { background: #00ff8833; color: #00ff88; }
+    .status.failed { background: #ff333333; color: #ff6666; }
+    
+    .task-current {
+      background: #0a0a0a;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+      font-size: 11px;
+    }
+    .task-label { color: #666; margin-bottom: 5px; }
+    .task-text { color: #ccc; }
+    
+    .metrics {
+      display: flex;
+      gap: 15px;
+      margin-top: 10px;
+      font-size: 11px;
+    }
+    .metric { color: #888; }
+    .metric span { color: #fff; }
+    
+    .log {
+      background: #111118;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .log-header { 
+      color: #888; 
+      font-size: 12px; 
+      margin-bottom: 10px;
+      border-bottom: 1px solid #222;
+      padding-bottom: 10px;
+    }
+    .log-entry {
+      font-size: 11px;
+      padding: 5px 0;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    .log-time { color: #666; }
+    .log-agent { font-weight: bold; }
+    .log-agent.builder { color: #4499ff; }
+    .log-agent.reviewer { color: #ff9944; }
+    .log-agent.deployer { color: #00ff88; }
+    .log-msg { color: #ccc; }
+    
+    .progress-bar {
+      height: 4px;
+      background: #222;
+      border-radius: 2px;
+      margin-top: 10px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #00ff88, #4499ff);
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🦐 LP Toolkit Agent Swarm</h1>
+    <div class="subtitle">Colosseum Hackathon • Real-time Agent Status</div>
+  </div>
+
+  <div class="agents">
+    <div class="agent" id="builder">
+      <div class="agent-header">
+        <span class="agent-icon">🔨</span>
+        <div>
+          <div class="agent-name">Builder</div>
+          <div class="agent-role">Code Writer • PR Creator</div>
+        </div>
+        <span class="status idle" id="builder-status">IDLE</span>
+      </div>
+      <div class="task-current">
+        <div class="task-label">Current Task</div>
+        <div class="task-text" id="builder-task">Waiting for assignment...</div>
+      </div>
+      <div class="metrics">
+        <div class="metric">Commits: <span id="builder-commits">0</span></div>
+        <div class="metric">PRs: <span id="builder-prs">0</span></div>
+        <div class="metric">Retries: <span id="builder-retries">0</span>/5</div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="builder-progress" style="width: 0%"></div></div>
+    </div>
+
+    <div class="agent" id="reviewer">
+      <div class="agent-header">
+        <span class="agent-icon">🔍</span>
+        <div>
+          <div class="agent-name">Reviewer</div>
+          <div class="agent-role">Quality Gate • Test Runner</div>
+        </div>
+        <span class="status idle" id="reviewer-status">IDLE</span>
+      </div>
+      <div class="task-current">
+        <div class="task-label">Current Task</div>
+        <div class="task-text" id="reviewer-task">Waiting for PRs...</div>
+      </div>
+      <div class="metrics">
+        <div class="metric">Reviewed: <span id="reviewer-reviewed">0</span></div>
+        <div class="metric">Approved: <span id="reviewer-approved">0</span></div>
+        <div class="metric">Rejected: <span id="reviewer-rejected">0</span></div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="reviewer-progress" style="width: 0%"></div></div>
+    </div>
+
+    <div class="agent" id="deployer">
+      <div class="agent-header">
+        <span class="agent-icon">🚀</span>
+        <div>
+          <div class="agent-name">Deployer</div>
+          <div class="agent-role">Ship Master • Prod Pusher</div>
+        </div>
+        <span class="status idle" id="deployer-status">IDLE</span>
+      </div>
+      <div class="task-current">
+        <div class="task-label">Current Task</div>
+        <div class="task-text" id="deployer-task">Waiting for approval...</div>
+      </div>
+      <div class="metrics">
+        <div class="metric">Deployed: <span id="deployer-deployed">0</span></div>
+        <div class="metric">Failed: <span id="deployer-failed">0</span></div>
+        <div class="metric">Retries: <span id="deployer-retries">0</span>/5</div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="deployer-progress" style="width: 0%"></div></div>
+    </div>
+  </div>
+
+  <div class="log">
+    <div class="log-header">📋 Activity Log</div>
+    <div id="log-entries">
+      <div class="log-entry">
+        <span class="log-time">01:42:00</span>
+        <span class="log-agent builder">[SYSTEM]</span>
+        <span class="log-msg">Agent swarm initialized. Hackathon mode active.</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Dashboard will be updated via canvas eval() calls
+    window.updateAgent = function(agent, data) {
+      if (data.status) {
+        const el = document.getElementById(agent + '-status');
+        el.textContent = data.status.toUpperCase();
+        el.className = 'status ' + data.status;
+      }
+      if (data.task) document.getElementById(agent + '-task').textContent = data.task;
+      if (data.progress !== undefined) document.getElementById(agent + '-progress').style.width = data.progress + '%';
+      if (data.commits !== undefined) document.getElementById(agent + '-commits').textContent = data.commits;
+      if (data.prs !== undefined) document.getElementById(agent + '-prs').textContent = data.prs;
+      if (data.retries !== undefined) document.getElementById(agent + '-retries').textContent = data.retries;
+      if (data.reviewed !== undefined) document.getElementById(agent + '-reviewed').textContent = data.reviewed;
+      if (data.approved !== undefined) document.getElementById(agent + '-approved').textContent = data.approved;
+      if (data.rejected !== undefined) document.getElementById(agent + '-rejected').textContent = data.rejected;
+      if (data.deployed !== undefined) document.getElementById(agent + '-deployed').textContent = data.deployed;
+      if (data.failed !== undefined) document.getElementById(agent + '-failed').textContent = data.failed;
+    };
+    
+    window.addLog = function(agent, msg) {
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.innerHTML = '<span class="log-time">' + time + '</span> <span class="log-agent ' + agent + '">[' + agent.toUpperCase() + ']</span> <span class="log-msg">' + msg + '</span>';
+      document.getElementById('log-entries').prepend(entry);
+    };
+  </script>
+</body>
+</html>
