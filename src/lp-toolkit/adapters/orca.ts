@@ -14,8 +14,20 @@ import {
   LPPosition,
   AddLiquidityIntent,
   RemoveLiquidityIntent,
-  LPOperationResult,
 } from "./types";
+import { getAssociatedTokenAddress } from "@solana/spl-token";
+import {
+  WhirlpoolContext,
+  buildWhirlpoolClient,
+  PDAUtil,
+  PriceMath,
+  WhirlpoolIx,
+  toTx,
+  TickUtil,
+} from "@orca-so/whirlpools-sdk";
+import { AnchorProvider } from "@coral-xyz/anchor";
+import { Decimal } from "decimal.js";
+import BN from "bn.js";
 
 // Orca Whirlpool Program IDs
 const WHIRLPOOL_PROGRAM_ID = new PublicKey(
@@ -218,70 +230,81 @@ export class OrcaAdapter implements DEXAdapter {
     user: Keypair,
     params: AddLiquidityIntent,
   ): Promise<{ transaction: Transaction; positionId: string }> {
-    // In production, use @orca-so/whirlpools-sdk
-    // This is a reference implementation
+    const { poolAddress, tokenA, tokenB, totalValueUSD, strategy = "balanced" } = params;
 
-    const {
-      poolAddress,
-      tokenA,
-      tokenB,
-      amountA,
-      amountB,
-      totalValueUSD,
-      strategy = "balanced",
-      slippageBps = 100,
-    } = params;
+    const provider = new AnchorProvider(connection, new anchor.Wallet(user), {});
+    const ctx = WhirlpoolContext.withProvider(provider, WHIRLPOOL_PROGRAM_ID);
+    const client = buildWhirlpoolClient(ctx);
 
-    // Find the best pool if not specified
-    let targetPool = poolAddress;
-    if (!targetPool) {
+    let targetPoolAddress: PublicKey;
+    if (poolAddress) {
+      targetPoolAddress = new PublicKey(poolAddress);
+    } else {
       const pairKey = `${tokenA}-${tokenB}`;
       const knownPool = WHIRLPOOLS[pairKey as keyof typeof WHIRLPOOLS];
-      if (knownPool) {
-        targetPool = knownPool.toBase58();
-      } else {
-        throw new Error(`No known pool for pair ${tokenA}-${tokenB}`);
-      }
+      if (!knownPool) throw new Error(`No known Orca pool for ${pairKey}`);
+      targetPoolAddress = knownPool;
     }
-
-    // Calculate tick range based on strategy
-    const { tickLower, tickUpper } = this.calculateTickRange(strategy);
-
-    // Build the transaction
-    // Using SDK: WhirlpoolIx.openPositionWithMetadataIx()
-    const transaction = new Transaction();
-
-    // 1. Open position (creates NFT)
-    // const openPositionIx = await WhirlpoolIx.openPositionWithMetadataIx(ctx, {
-    //   whirlpool: new PublicKey(targetPool),
-    //   owner: user.publicKey,
-    //   tickLowerIndex: tickLower,
-    //   tickUpperIndex: tickUpper,
-    //   funder: user.publicKey,
-    // });
-
-    // 2. Increase liquidity
-    // const increaseLiquidityIx = await WhirlpoolIx.increaseLiquidityIx(ctx, {
-    //   whirlpool: new PublicKey(targetPool),
-    //   position: positionAddress,
-    //   tokenOwnerAccountA: userTokenA,
-    //   tokenOwnerAccountB: userTokenB,
-    //   liquidityAmount: liquidity,
-    //   tokenMaxA: maxAmountA,
-    //   tokenMaxB: maxAmountB,
-    // });
-
-    // For now, return placeholder
-    const positionId = `orca_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-    console.log(`[Orca] Creating position in pool ${targetPool}`);
-    console.log(
-      `[Orca] Strategy: ${strategy}, Tick range: ${tickLower} - ${tickUpper}`,
+    
+    const whirlpool = await client.getPool(targetPoolAddress);
+    const { tokenMintA, tokenMintB, tickCurrentIndex, tickSpacing } = whirlpool.getData();
+    const tokenAInfo = whirlpool.getTokenAInfo();
+    const tokenBInfo = whirlpool.getTokenBInfo();
+    
+    // Calculate price range
+    const price = PriceMath.tickIndexToPrice(tickCurrentIndex, tokenAInfo.decimals, tokenBInfo.decimals);
+    const { lowerPrice, upperPrice } = this.calculatePriceRange(price, strategy);
+    const { tickLowerIndex, tickUpperIndex } = TickUtil.getTickArrayRange(
+      tickCurrentIndex,
+      tickSpacing,
+      100 // Using a fixed number of arrays for simplicity
     );
+      
+    // Position PDA
+    const positionMint = Keypair.generate();
+    const positionPda = PDAUtil.getPosition(ctx.program.programId, positionMint.publicKey);
+    
+    // Create transaction
+    const openPositionTx = await whirlpool.openPosition(
+      tickLowerIndex,
+      tickUpperIndex,
+      { owner: user.publicKey, funder: user.publicKey, positionMint: positionMint.publicKey }
+    );
+    
+    // Calculate liquidity amount from USD value
+    const liquidity = PriceMath.estimateLiquidityFromTokenAmounts(
+      tickCurrentIndex,
+      tickLowerIndex,
+      tickUpperIndex,
+      {
+        tokenA: new Decimal(totalValueUSD || 100).div(2).div(price.toString()),
+        tokenB: new Decimal(totalValueUSD || 100).div(2),
+      },
+      true
+    );
+    
+    const { maxTokenA, maxTokenB } = PriceMath.getTokenAmountsFromLiquidity(
+      liquidity,
+      whirlpool.getData().sqrtPrice,
+      PriceMath.tickIndexToSqrtPrice(tickLowerIndex),
+      PriceMath.tickIndexToSqrtPrice(tickUpperIndex),
+      true
+    );
+    
+    const increaseLiquidityTx = await whirlpool.increaseLiquidity({
+      liquidityAmount: new BN(liquidity.floor().toString()),
+      tokenMaxA: new BN(maxTokenA.floor().toString()),
+      tokenMaxB: new BN(maxTokenB.floor().toString()),
+      position: positionPda.publicKey,
+      tokenOwnerAccountA: await getAssociatedTokenAddress(tokenMintA, user.publicKey),
+      tokenOwnerAccountB: await getAssociatedTokenAddress(tokenMintB, user.publicKey),
+    });
+
+    const transaction = toTx(ctx, openPositionTx).add(increaseLiquidityTx.transaction);
 
     return {
       transaction,
-      positionId,
+      positionId: positionPda.publicKey.toBase58(),
     };
   }
 
@@ -375,6 +398,26 @@ export class OrcaAdapter implements DEXAdapter {
     return Math.abs(il);
   }
 
+  private calculatePriceRange(
+    price: Decimal,
+    strategy: string,
+  ): { lowerPrice: Decimal; upperPrice: Decimal } {
+    let lowerPrice: Decimal, upperPrice: Decimal;
+    switch (strategy) {
+      case "concentrated":
+        lowerPrice = price.mul(0.95);
+        upperPrice = price.mul(1.05);
+        break;
+      case "balanced":
+        lowerPrice = price.mul(0.8);
+        upperPrice = price.mul(1.2);
+        break;
+      default:
+        lowerPrice = price.mul(0.5);
+        upperPrice = price.mul(1.5);
+    }
+    return { lowerPrice, upperPrice };
+  }
   // ============ Private Helpers ============
 
   private parseWhirlpoolData(wp: any): LPPool | null {
