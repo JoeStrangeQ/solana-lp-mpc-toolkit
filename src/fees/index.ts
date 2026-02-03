@@ -15,7 +15,7 @@ import {
 // Protocol fee configuration
 export const FEE_CONFIG = {
   // 1% fee on every transaction
-  FEE_BPS: 100, // 100 basis points = 1%
+  FEE_BPS: 10, // 10 basis points = 0.1%
   
   // Protocol treasury (receives fees)
   TREASURY_ADDRESS: new PublicKey('BNQnCszvPwYfjBMUmFgmCooMSRrdkC7LncMQBExDakLp'),
