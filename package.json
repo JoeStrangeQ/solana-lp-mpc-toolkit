@@ -4,10 +4,10 @@
   "description": "AI-native liquidity provision across Solana DEXs with MPC custody and Arcium privacy",
   "main": "dist/index.js",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "start": "tsx --env-file=.env src/index.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "test": "tsx scripts/test.ts",
+    "test": "jest",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit"
   },
@@ -22,6 +22,7 @@
   "dependencies": {
     "@hono/node-server": "^1.19.9",
     "@solana/web3.js": "^1.98.4",
+    "dotenv": "^17.2.3",
     "hono": "^4.11.7"
   },
   "devDependencies": {

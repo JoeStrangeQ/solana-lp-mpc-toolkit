@@ -1,6 +1,6 @@
 /**
  * LP Agent API Server
- * 
+ *
  * REST API for AI agents to manage LP positions across Solana DEXs
  * with MPC custody and Arcium privacy
  */
@@ -13,6 +13,7 @@ import { Connection } from '@solana/web3.js';
 import { config } from '../config';
 import { GatewayClient } from '../gateway';
 import { MPCClient } from '../mpc';
+import { MockMPCClient } from '../mpc/mockClient';
 import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types';
@@ -23,13 +24,13 @@ const app = new Hono();
 app.use('*', cors());
 
 // State
-let mpcClient: MPCClient | null = null;
+let mpcClient: MPCClient | MockMPCClient | null = null;
 let gatewayClient: GatewayClient | null = null;
 let connection: Connection;
 
 // ============ Health & Status ============
 
-app.get('/', (c) => c.json({ 
+app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
   version: '2.0.0',
   status: 'running',
@@ -56,11 +57,23 @@ app.get('/health', async (c) => {
 
 app.post('/wallet/create', async (c) => {
   try {
-    mpcClient = new MPCClient();
+    console.log('[/wallet/create] Received request');
+    if (config.portal.useMock) {
+      mpcClient = new MockMPCClient();
+    } else {
+      if (!config.portal.apiKey) {
+        throw new Error('Portal API key is not configured.');
+      }
+      mpcClient = new MPCClient();
+    }
+    console.log('[/wallet/create] MPC client initialized');
+    
     const wallet = await mpcClient.generateWallet();
+    console.log('[/wallet/create] Wallet generated:', wallet.addresses.solana);
     
     // Initialize gateway with new wallet address
     gatewayClient = new GatewayClient(wallet.addresses.solana);
+    console.log('[/wallet/create] Gateway client initialized');
 
     return c.json<AgentResponse>({
       success: true,
@@ -72,6 +85,7 @@ app.post('/wallet/create', async (c) => {
       },
     });
   } catch (error) {
+    console.error('[/wallet/create] Error:', error);
     return c.json<AgentResponse>({
       success: false,
       message: 'Failed to create wallet',
@@ -83,7 +97,7 @@ app.post('/wallet/create', async (c) => {
 app.post('/wallet/load', async (c) => {
   try {
     const { address, share, id } = await c.req.json();
-    
+
     if (!address || !share) {
       return c.json<AgentResponse>({
         success: false,
@@ -91,7 +105,15 @@ app.post('/wallet/load', async (c) => {
       }, 400);
     }
 
-    mpcClient = new MPCClient();
+    if (config.portal.useMock) {
+      mpcClient = new MockMPCClient();
+    } else {
+      if (!config.portal.apiKey) {
+        throw new Error('Portal API key is not configured.');
+      }
+      mpcClient = new MPCClient();
+    }
+
     mpcClient.loadWallet({
       id: id || 'loaded',
       addresses: { solana: address },
@@ -135,7 +157,7 @@ app.get('/wallet/address', (c) => {
 app.post('/chat', async (c) => {
   try {
     const { message } = await c.req.json();
-    
+
     if (!message) {
       return c.json<AgentResponse>({
         success: false,
@@ -279,7 +301,7 @@ async function handleGetPositions(): Promise<AgentResponse> {
 
   try {
     const allPositions = await gatewayClient.getAllPositions();
-    
+
     const summary = allPositions.flatMap(({ dex, positions }) =>
       positions.map((p) => ({
         id: p.id,
@@ -332,7 +354,7 @@ async function handleOpenPosition(intent: LPIntent): Promise<AgentResponse> {
     // Get pool info to determine price range
     const pools = await gatewayClient.fetchPools(intent.dex);
     const pool = pools[0]; // In production, match by pair
-    
+
     if (!pool) {
       return { success: false, message: 'Pool not found' };
     }
@@ -468,7 +490,7 @@ async function broadcastTransaction(signedTx: string): Promise<string> {
 
 export function startServer() {
   connection = new Connection(config.solana.rpc);
-  
+
   console.log('🚀 LP Agent Toolkit');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📡 Gateway: ${config.gateway.url}`);

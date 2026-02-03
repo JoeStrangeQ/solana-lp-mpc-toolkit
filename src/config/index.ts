@@ -13,6 +13,7 @@ export const config = {
   portal: {
     apiUrl: process.env.PORTAL_API_URL || 'https://mpc-client.portalhq.io',
     apiKey: process.env.PORTAL_API_KEY || '',
+    useMock: process.env.USE_MOCK_MPC === 'true',
   },
 
   // Arcium Privacy
