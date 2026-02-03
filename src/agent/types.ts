@@ -5,7 +5,7 @@
 import type { DEX } from '../gateway/types';
 
 export interface LPIntent {
-  action: 'scan' | 'open' | 'close' | 'add' | 'remove' | 'collect' | 'positions';
+  action: 'scan' | 'open' | 'close' | 'add' | 'remove' | 'collect' | 'positions' | 'swap';
   dex?: DEX;
   pair?: string;
   amount?: number;
@@ -18,6 +18,9 @@ export interface LPIntent {
     lower: number;
     upper: number;
   };
+  // Swap-specific fields
+  inputToken?: string;
+  outputToken?: string;
 }
 
 export interface AgentResponse {

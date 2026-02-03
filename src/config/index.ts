@@ -38,6 +38,12 @@ export const config = {
   solana: {
     rpc: process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com',
   },
+
+  // Jupiter Swap
+  jupiter: {
+    apiKey: process.env.JUPITER_API_KEY || '',
+    baseUrl: 'https://quote-api.jup.ag/v6',
+  },
 };
 
 export type Config = typeof config;
