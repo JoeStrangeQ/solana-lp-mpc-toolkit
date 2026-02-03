@@ -319,6 +319,100 @@ export function formatPoolForChat(pool: MeteoraPool): string {
 └ Fee: ${pool.baseFee}%`;
 }
 
+// ============ Class Adapter (implements DEXAdapter interface) ============
+
+import { DEXAdapter, DEXVenue, LPPool, LPPosition, AddLiquidityIntent, RemoveLiquidityIntent } from './types';
+
+export class MeteoraAdapter implements DEXAdapter {
+  venue: DEXVenue = 'meteora';
+
+  async getPools(connection: Connection): Promise<LPPool[]> {
+    const pools = await getPools(connection);
+    return pools.map(p => ({
+      venue: 'meteora' as DEXVenue,
+      address: p.address,
+      name: p.name,
+      tokenA: { mint: p.mintX, symbol: p.name.split('-')[0], decimals: 9 },
+      tokenB: { mint: p.mintY, symbol: p.name.split('-')[1], decimals: 6 },
+      fee: p.baseFee,
+      tvl: p.tvl,
+      apy: p.apy24h,
+      apy7d: p.apy7d,
+      volume24h: p.volume24h,
+      priceRange: { lower: 0, upper: Infinity, current: p.currentPrice },
+    }));
+  }
+
+  async getPool(connection: Connection, address: string): Promise<LPPool | null> {
+    const pools = await this.getPools(connection);
+    return pools.find(p => p.address === address) || null;
+  }
+
+  async getPositions(connection: Connection, user: PublicKey): Promise<LPPosition[]> {
+    const positions = await getPositions(connection, user);
+    return positions.map(p => ({
+      venue: 'meteora' as DEXVenue,
+      positionId: p.address,
+      poolAddress: p.poolAddress,
+      poolName: p.poolName,
+      owner: user.toBase58(),
+      tokenAAmount: p.tokenXAmount,
+      tokenBAmount: p.tokenYAmount,
+      valueUSD: p.valueUSD,
+      unclaimedFees: {
+        tokenA: p.unclaimedFeesX,
+        tokenB: p.unclaimedFeesY,
+        totalUSD: p.unclaimedFeesUSD,
+      },
+      priceRange: { lower: p.lowerBinId, upper: p.upperBinId },
+      inRange: true,
+    }));
+  }
+
+  async getPosition(connection: Connection, positionId: string): Promise<LPPosition | null> {
+    // Would need to fetch specific position
+    return null;
+  }
+
+  async addLiquidity(connection: Connection, user: Keypair, params: AddLiquidityIntent) {
+    const result = await addLiquidity({
+      connection,
+      user,
+      poolAddress: params.poolAddress!,
+      tokenXAmount: params.amountA || 0,
+      tokenYAmount: params.amountB || 0,
+      slippageBps: params.slippageBps,
+    });
+    return { transaction: result.transaction, positionId: result.positionAddress.toBase58() };
+  }
+
+  async removeLiquidity(connection: Connection, user: Keypair, params: RemoveLiquidityIntent) {
+    return removeLiquidity({
+      connection,
+      user,
+      positionAddress: params.positionId,
+      percentage: params.percentage,
+    });
+  }
+
+  async claimFees(connection: Connection, user: Keypair, positionId: string) {
+    return claimFees(connection, user, positionId);
+  }
+
+  estimateYield(pool: LPPool, amount: number, days: number): number {
+    return (pool.apy / 365) * days * amount / 100;
+  }
+
+  estimateIL(pool: LPPool, priceChange: number): number {
+    // Simplified IL formula for DLMM
+    const k = 2 * Math.sqrt(1 + priceChange) / (1 + priceChange + 1) - 1;
+    return Math.abs(k) * 100;
+  }
+}
+
+// Singleton instance
+export const meteoraAdapter = new MeteoraAdapter();
+
 export default {
   getPools,
   getTopPools,
@@ -329,4 +423,6 @@ export default {
   formatPositionForChat,
   formatPoolForChat,
   POPULAR_POOLS,
+  MeteoraAdapter,
+  meteoraAdapter,
 };
