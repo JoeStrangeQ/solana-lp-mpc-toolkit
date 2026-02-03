@@ -134,7 +134,6 @@ app.post('/wallet/create', async (c) => {
         data: {
           address: wallet.addresses.solana,
           walletId: wallet.id,
-          userId: wallet.userId,
           provider: 'privy',
         },
       });
@@ -508,7 +507,11 @@ async function handleSwap(intent: LPIntent): Promise<AgentResponse> {
 
     // Convert amount to base units (lamports for SOL = 9 decimals, USDC = 6 decimals)
     // For simplicity, we assume SOL has 9 decimals, stablecoins 6
-    const inputDecimals = intent.inputToken.toUpperCase() === 'SOL' ? 9 : 6;
+    // Token decimals - BONK is 5, most others are 6, SOL is 9
+    const TOKEN_DECIMALS: Record<string, number> = {
+      SOL: 9, USDC: 6, USDT: 6, BONK: 5, WIF: 6, JUP: 6, RAY: 6,
+    };
+    const inputDecimals = TOKEN_DECIMALS[intent.inputToken.toUpperCase()] ?? 6;
     const amountBaseUnits = Math.floor(intent.amount * Math.pow(10, inputDecimals));
 
     // Get the user's wallet address
