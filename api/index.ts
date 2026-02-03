@@ -1,20 +1,42 @@
 /**
  * Vercel serverless entry point
- * Routes to the Hono API server
+ * Lightweight API without heavy Solana dependencies
  */
 
 import { Hono } from 'hono';
 import { handle } from 'hono/vercel';
 import { cors } from 'hono/cors';
-import { createFeeBreakdown, FEE_CONFIG } from '../src/fees';
 
-// Create a minimal Hono app for Vercel (no runtime dependencies)
+// Create Hono app
 const app = new Hono().basePath('/');
 
 // Middleware
 app.use('*', cors());
 
-// ============ Health & Status ============
+// Fee config (static to avoid Solana imports)
+const FEE_CONFIG = {
+  FEE_BPS: 10, // 0.1%
+  TREASURY: 'BNQnCszvPwYfjBMUmFgmCooMSRrdkC7LncMQBExDakLp',
+  MIN_FEE_LAMPORTS: 10000,
+  EXEMPT_THRESHOLD_USD: 1,
+};
+
+function createFeeBreakdown(grossAmount: number) {
+  const feeAmount = (grossAmount * FEE_CONFIG.FEE_BPS) / 10000;
+  const netAmount = grossAmount - feeAmount;
+  return {
+    protocol: {
+      bps: FEE_CONFIG.FEE_BPS,
+      amount: feeAmount,
+    },
+    total: {
+      grossAmount,
+      netAmount,
+    },
+  };
+}
+
+// ============ Root ============
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
@@ -27,16 +49,18 @@ app.get('/', (c) => c.json({
     'GET /health - Health check',
     'GET /fees - Fee configuration',
     'GET /fees/calculate?amount=1000 - Calculate fee',
-    'GET /pools/scan?tokenA=SOL&tokenB=USDC - Scan pools (coming soon)',
+    'GET /pools/scan?tokenA=SOL&tokenB=USDC - Scan pools',
   ],
 }));
+
+// ============ Health ============
 
 app.get('/health', (c) => c.json({
   status: 'ok',
   timestamp: new Date().toISOString(),
 }));
 
-// ============ Fee Info ============
+// ============ Fees ============
 
 app.get('/fees', (c) => {
   return c.json({
@@ -45,7 +69,7 @@ app.get('/fees', (c) => {
       percentage: `${FEE_CONFIG.FEE_BPS / 100}%`,
       description: 'Fee deducted from every LP transaction',
     },
-    treasury: FEE_CONFIG.TREASURY_ADDRESS.toBase58(),
+    treasury: FEE_CONFIG.TREASURY,
     minFee: {
       lamports: FEE_CONFIG.MIN_FEE_LAMPORTS,
       description: 'Minimum fee threshold to avoid dust',
@@ -54,7 +78,7 @@ app.get('/fees', (c) => {
       usd: FEE_CONFIG.EXEMPT_THRESHOLD_USD,
       description: 'Transactions below this USD value are fee-exempt',
     },
-    calculate: '/fees/calculate?amount=1000 - Calculate fee for specific amount',
+    calculate: '/fees/calculate?amount=1000',
   });
 });
 
@@ -69,11 +93,11 @@ app.get('/fees/calculate', (c) => {
     input: amount,
     fee: breakdown.protocol,
     output: breakdown.total.netAmount,
-    message: `${breakdown.protocol.amount} (${breakdown.protocol.bps / 100}%) goes to protocol treasury`,
+    message: `${breakdown.protocol.amount.toFixed(4)} (${breakdown.protocol.bps / 100}%) goes to protocol treasury`,
   });
 });
 
-// ============ Pool Scanning (Vercel-safe, static data) ============
+// ============ Pool Scanning ============
 
 const SAMPLE_POOLS = [
   {
@@ -98,6 +122,17 @@ const SAMPLE_POOLS = [
     binStep: 2,
     baseFee: 0.0001,
   },
+  {
+    address: 'FpCMFDFGYotvufJ7HrFHsWEiiQCGbkLCtwHiDnh7o28Q',
+    name: 'SOL-USDC',
+    dex: 'meteora',
+    tokens: ['SOL', 'USDC'],
+    tvl: 1500000,
+    apy: 35.0,
+    volume24h: 650000,
+    binStep: 1,
+    baseFee: 0.0001,
+  },
 ];
 
 app.get('/pools/scan', (c) => {
@@ -114,7 +149,7 @@ app.get('/pools/scan', (c) => {
     pair: `${tokenA}-${tokenB}`,
     count: pools.length,
     pools: pools,
-    note: 'Sample data for demo. Full scanning requires Gateway connection.',
+    note: 'Sample data for demo. Full scanning requires local server with Gateway connection.',
   });
 });
 
