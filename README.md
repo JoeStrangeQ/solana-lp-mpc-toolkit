@@ -184,7 +184,20 @@ npm run api          # Start REST API server
 npm run api:dev      # Start with hot reload
 npm run test:arcium  # Test Arcium encryption
 npm run test:dex     # Test DEX API connectivity
+npm run test:e2e     # Run end-to-end tests
+npm run validate     # Validate all API endpoints
 npm run example      # Run agent client demo
+```
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and customize:
+
+```bash
+PORT=3456                    # API port
+SOLANA_RPC=https://...       # Solana RPC URL
+LOG_LEVEL=info               # debug, info, warn, error
+RATE_LIMIT_ENABLED=true      # Enable rate limiting
 ```
 
 ### Test Arcium Encryption
@@ -371,6 +384,27 @@ Payment: USDC
 - [ ] Strategy sharing (encrypted)
 - [ ] Reputation system
 - [ ] DAO governance
+
+---
+
+## 🛡️ Production Features
+
+### Security
+- **Input Validation**: All inputs validated and sanitized
+- **Rate Limiting**: 100 req/min standard, 10 req/min for TX building
+- **Security Headers**: X-Content-Type-Options, X-Frame-Options, etc.
+- **Request IDs**: Unique ID per request for tracing
+
+### Reliability
+- **Timeout Handling**: 10s timeout on all external calls
+- **Retry Logic**: Automatic retries with backoff
+- **Fallback Data**: Hardcoded pools if APIs are down
+- **Health Checks**: `/v1/health/deep` tests all dependencies
+
+### Observability
+- **Structured Logging**: Configurable log levels
+- **Request Timing**: Server-Timing header on all responses
+- **Rate Limit Headers**: X-RateLimit-* on all responses
 
 ---
 
