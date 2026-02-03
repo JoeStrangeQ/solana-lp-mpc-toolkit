@@ -77,24 +77,7 @@ pnpm start
 
 ### Environment Variables
 
-```env
-# Required
-SOLANA_RPC=https://api.mainnet-beta.solana.com
-
-# Wallet Provider (Privy)
-PRIVY_APP_ID=your_privy_app_id
-PRIVY_APP_SECRET=your_privy_secret
-USE_MOCK_MPC=true                        # Use mock wallet for dev
-
-# Swaps
-JUPITER_API_KEY=your_jupiter_api_key    # Optional, improves rate limits
-
-# Privacy
-ARCIUM_CLUSTER=456
-
-# Server
-PORT=3456
-```
+See `.env.example` for required configuration.
 
 ---
 
