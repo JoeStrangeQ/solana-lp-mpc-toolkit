@@ -21,8 +21,9 @@ Both Meteora (`@meteora-ag/dlmm`) and Orca (`@orca-so/whirlpools-sdk`) have ESM/
 - [x] Fix remaining TypeScript warnings in src/api/
 - [x] Clean up unused imports
 - [ ] Update README with final architecture
-- [ ] Create NIGHT_SPRINT_REPORT.md for Joe
-- [ ] Test API server end-to-end
+- [x] Create NIGHT_SPRINT_REPORT.md for Joe
+- [x] Test API server end-to-end
+- [x] Fix formatPoolsForChat null handling bug
 
 ## What's Working Well
 
