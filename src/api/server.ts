@@ -15,6 +15,7 @@ import { ArciumPrivacyService, ARCIUM_DEVNET_CONFIG } from '../lp-toolkit/servic
 import { parseIntent } from '../lp-toolkit/api/intentParser';
 import { formatPoolsForChat, formatPositionsForChat } from '../lp-toolkit/adapters/types';
 import { buildAddLiquidityTx, buildRemoveLiquidityTx, describeTx } from './txBuilder';
+import { checkPositionHealth, checkPoolHealth, formatHealthReport, formatPoolReport } from './monitoring';
 
 // ============ Configuration ============
 
@@ -53,6 +54,8 @@ app.get('/', (c) => {
       txAdd: 'POST /v1/tx/add-liquidity',
       txRemove: 'POST /v1/tx/remove-liquidity',
       txDescribe: 'POST /v1/tx/describe',
+      monitorPositions: 'GET /v1/monitor/positions/:wallet',
+      monitorPools: 'GET /v1/monitor/pools',
     },
   });
 });
@@ -403,6 +406,108 @@ app.post('/v1/tx/remove-liquidity', async (c) => {
       instructions: result.instructions,
     });
 
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message,
+    }, 500);
+  }
+});
+
+// ============ Monitoring & Alerts ============
+
+app.get('/v1/monitor/positions/:wallet', async (c) => {
+  const wallet = c.req.param('wallet');
+  
+  try {
+    // Fetch positions
+    const posRes = await fetch(`https://dlmm-api.meteora.ag/position/${wallet}`);
+    const positions = await posRes.json();
+    
+    if (!Array.isArray(positions) || positions.length === 0) {
+      return c.json({
+        success: true,
+        alerts: [],
+        chatDisplay: '📭 No positions to monitor',
+      });
+    }
+    
+    // Check health of each position
+    const healthReports = positions.map((p: any) => {
+      // Get current price from pool (simplified)
+      const currentPrice = p.current_price || 100; // Would fetch from pool
+      const rangeMin = p.price_lower || currentPrice * 0.9;
+      const rangeMax = p.price_upper || currentPrice * 1.1;
+      
+      return checkPositionHealth({
+        positionId: p.address,
+        poolName: p.pair_name || 'Unknown',
+        venue: 'meteora',
+        currentPrice,
+        rangeMin,
+        rangeMax,
+        unclaimedFeesUSD: p.unclaimed_fee_usd || 0,
+      });
+    });
+    
+    const allAlerts = healthReports.flatMap(h => h.alerts);
+    const urgentCount = allAlerts.filter(a => a.severity === 'urgent').length;
+    
+    return c.json({
+      success: true,
+      wallet,
+      positionCount: positions.length,
+      urgentAlerts: urgentCount,
+      alerts: allAlerts,
+      healthReports,
+      chatDisplay: formatHealthReport(healthReports),
+    });
+    
+  } catch (error: any) {
+    return c.json({
+      success: false,
+      error: error.message,
+    }, 500);
+  }
+});
+
+app.get('/v1/monitor/pools', async (c) => {
+  const venue = c.req.query('venue') || 'meteora';
+  const limit = parseInt(c.req.query('limit') || '10');
+  
+  try {
+    // Fetch top pools
+    let pools: any[] = [];
+    
+    if (venue === 'meteora') {
+      const res = await fetch('https://dlmm-api.meteora.ag/pair/all');
+      const data = await res.json();
+      pools = Array.isArray(data) ? data.slice(0, limit) : [];
+    }
+    
+    // Check health of each pool
+    const healthReports = pools.map((p: any) => checkPoolHealth({
+      poolAddress: p.address,
+      poolName: p.name,
+      venue: 'meteora',
+      currentAPY: p.apr || 0,
+      apy24hAgo: p.apr_24h_ago || p.apr,
+      currentTVL: p.liquidity || 0,
+    }));
+    
+    const opportunities = healthReports.filter(h => h.alerts.some(a => a.type === 'yield_spike'));
+    const warnings = healthReports.filter(h => h.alerts.some(a => a.severity === 'warning'));
+    
+    return c.json({
+      success: true,
+      venue,
+      poolCount: pools.length,
+      opportunities: opportunities.length,
+      warnings: warnings.length,
+      healthReports,
+      chatDisplay: formatPoolReport(healthReports),
+    });
+    
   } catch (error: any) {
     return c.json({
       success: false,
