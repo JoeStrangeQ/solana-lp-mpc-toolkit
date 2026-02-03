@@ -34,15 +34,22 @@ export class MeteoraDirectClient {
   /**
    * Get pool info
    */
-  async getPoolInfo(poolAddress: string) {
+  async getPoolInfo(poolAddress: string): Promise<{
+    address: string;
+    activeBinId: number;
+    currentPrice: number;
+    binStep: number;
+    tokenX: string;
+    tokenY: string;
+  }> {
     const pool = await DLMM.create(this.connection, new PublicKey(poolAddress));
     const activeBin = await pool.getActiveBin();
     
     return {
       address: poolAddress,
       activeBinId: activeBin.binId,
-      currentPrice: pool.fromPricePerLamport(Number(activeBin.price)),
-      binStep: pool.lbPair.binStep,
+      currentPrice: Number(pool.fromPricePerLamport(Number(activeBin.price))),
+      binStep: Number(pool.lbPair.binStep),
       tokenX: pool.tokenX.publicKey.toBase58(),
       tokenY: pool.tokenY.publicKey.toBase58(),
     };
@@ -74,28 +81,29 @@ export class MeteoraDirectClient {
       strategy: {
         maxBinId,
         minBinId,
-        strategyType: StrategyType.SpotBalanced,
+        strategyType: StrategyType.Spot, // Spot = balanced distribution
       },
       slippage: slippageBps / 10000, // Convert bps to decimal
     });
 
-    // Get the transaction
-    const tx = addLiquidityTx.tx || addLiquidityTx;
+    // Get the transaction - SDK returns an object with tx property or the tx directly
+    const tx = (addLiquidityTx as { tx?: Transaction }).tx || addLiquidityTx;
     
-    // Serialize (need to handle if it's a Transaction or VersionedTransaction)
+    // Serialize - handle both Transaction and VersionedTransaction
     let serialized: string;
-    if (tx instanceof Transaction) {
-      // Set recent blockhash
-      const { blockhash } = await this.connection.getLatestBlockhash();
+    
+    // Set recent blockhash
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    
+    if ('recentBlockhash' in tx) {
+      // Legacy Transaction
       tx.recentBlockhash = blockhash;
       tx.feePayer = new PublicKey(userPublicKey);
-      
-      // Partial sign with position keypair
       tx.partialSign(newPosition);
-      
       serialized = tx.serialize({ requireAllSignatures: false }).toString('base64');
     } else {
-      serialized = Buffer.from(tx.serialize()).toString('base64');
+      // VersionedTransaction - serialize as-is
+      serialized = Buffer.from((tx as { serialize(): Uint8Array }).serialize()).toString('base64');
     }
 
     return {
