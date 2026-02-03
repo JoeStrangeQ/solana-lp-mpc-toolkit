@@ -20,6 +20,8 @@ import {
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
 } from "@solana/spl-token";
+import DLMM, { LbPair, PDA, toLamports } from '@meteora-ag/dlmm';
+import { BN } from 'bn.js';
 
 // Common token mints
 const TOKENS: Record<string, { mint: string; decimals: number }> = {
@@ -56,118 +58,100 @@ export interface AddLiquidityTxParams {
 }
 
 /**
- * Build unsigned add liquidity transaction
- *
- * For hackathon demo: creates a placeholder TX structure
- * In production: would use actual DEX SDK to build real instructions
+ * Build a real, unsigned add liquidity transaction for Meteora DLMM
  */
 export async function buildAddLiquidityTx(
   connection: Connection,
   params: AddLiquidityTxParams,
 ): Promise<UnsignedTxResult> {
+  const { userPubkey, poolAddress, venue, tokenA, tokenB, amountA, amountB, slippageBps = 50 } = params;
+  
+  if (venue !== 'meteora') {
+    return { success: false, error: `Transaction building for ${venue} is not yet supported.` };
+  }
+
   try {
-    const { userPubkey, poolAddress, venue, tokenA, tokenB, amountA, amountB } =
-      params;
     const user = new PublicKey(userPubkey);
+    const lbPair = new PublicKey(poolAddress);
 
     // Get recent blockhash
-    const { blockhash, lastValidBlockHeight } =
-      await connection.getLatestBlockhash();
-
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    
     // Create transaction
-    const tx = new Transaction();
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = user;
-
+    const tx = new Transaction({ recentBlockhash: blockhash, feePayer: user });
     const instructions: string[] = [];
-
-    // Token A setup (if not SOL)
+    
     const tokenAInfo = TOKENS[tokenA.toUpperCase()];
-    if (tokenAInfo && tokenA.toUpperCase() !== "SOL") {
-      const mintA = new PublicKey(tokenAInfo.mint);
-      const ataA = await getAssociatedTokenAddress(mintA, user);
-
-      // Check if ATA exists, if not add create instruction
-      const ataAInfo = await connection.getAccountInfo(ataA);
-      if (!ataAInfo) {
-        tx.add(
-          createAssociatedTokenAccountInstruction(user, ataA, user, mintA),
-        );
-        instructions.push(`Create ${tokenA} token account`);
-      }
-    }
-
-    // Token B setup (if not SOL)
     const tokenBInfo = TOKENS[tokenB.toUpperCase()];
-    if (tokenBInfo && tokenB.toUpperCase() !== "SOL") {
-      const mintB = new PublicKey(tokenBInfo.mint);
-      const ataB = await getAssociatedTokenAddress(mintB, user);
-
-      const ataBInfo = await connection.getAccountInfo(ataB);
-      if (!ataBInfo) {
-        tx.add(
-          createAssociatedTokenAccountInstruction(user, ataB, user, mintB),
-        );
-        instructions.push(`Create ${tokenB} token account`);
-      }
+    if (!tokenAInfo || !tokenBInfo) {
+      return { success: false, error: 'Invalid token symbols' };
     }
 
-    // Add liquidity instruction placeholder
-    // In production: would use actual DEX SDK (Meteora, Orca, etc.)
-    // For demo: add a memo instruction showing intent
-    const memoProgram = new PublicKey(
-      "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",
-    );
-    const memoData = Buffer.from(
-      JSON.stringify({
-        action: "add_liquidity",
-        venue,
-        pool: poolAddress,
-        tokenA,
-        tokenB,
-        amountA,
-        amountB,
-        encrypted: true, // Indicates Arcium privacy
-      }),
-    );
+    // Get or create ATAs
+    const userAtaA = await getAssociatedTokenAddress(new PublicKey(tokenAInfo.mint), user);
+    if (!(await connection.getAccountInfo(userAtaA))) {
+      tx.add(createAssociatedTokenAccountInstruction(user, userAtaA, user, new PublicKey(tokenAInfo.mint)));
+      instructions.push(`Create ${tokenA} token account`);
+    }
+    const userAtaB = await getAssociatedTokenAddress(new PublicKey(tokenBInfo.mint), user);
+    if (!(await connection.getAccountInfo(userAtaB))) {
+      tx.add(createAssociatedTokenAccountInstruction(user, userAtaB, user, new PublicKey(tokenBInfo.mint)));
+      instructions.push(`Create ${tokenB} token account`);
+    }
 
-    tx.add(
-      new TransactionInstruction({
-        keys: [{ pubkey: user, isSigner: true, isWritable: false }],
-        programId: memoProgram,
-        data: memoData,
-      }),
-    );
-    instructions.push(
-      `Add ${amountA} ${tokenA} + ${amountB} ${tokenB} to ${venue} pool`,
-    );
+    // Create a new position PDA
+    const position = PDA.newPosition(lbPair);
+    instructions.push(`Create new LP position: ${position.publicKey.toBase58().slice(0, 8)}...`);
 
-    // Serialize transaction
-    const serialized = tx
-      .serialize({
-        requireAllSignatures: false,
-        verifySignatures: false,
-      })
-      .toString("base64");
+    // Get DLMM pair info
+    const pairInfo = await LbPair.getLbPair(lbPair, connection);
 
+    // Convert amounts to lamports
+    const amountALamports = toLamports(new BN(amountA * 10**tokenAInfo.decimals), tokenAInfo.decimals);
+    const amountBLamports = toLamports(new BN(amountB * 10**tokenBInfo.decimals), tokenBInfo.decimals);
+    
+    const activeBin = pairInfo.activeBin;
+    const binStep = pairInfo.binStep;
+
+    // Add liquidity instruction
+    const addLiqIx = await pairInfo.addLiquidityByStrategy({
+      position: position.publicKey,
+      user: user,
+      totalXAmount: amountALamports,
+      totalYAmount: amountBLamports,
+      strategy: {
+        strategyType: 'SpotBalanced',
+        minBinId: activeBin.binId - 10 * binStep,
+        maxBinId: activeBin.binId + 10 * binStep,
+      },
+      slippage: slippageBps / 10000,
+    });
+    
+    tx.add(addLiqIx);
+    instructions.push(`Add ${amountA} ${tokenA} + ${amountB} ${tokenB} to Meteora pool`);
+
+    // Serialize transaction (partially signed by position PDA)
+    tx.partialSign(position);
+    const serialized = tx.serialize({ requireAllSignatures: false }).toString('base64');
+    
     // Estimate fee
-    const feeEstimate = 0.000005; // ~5000 lamports
+    const fee = await tx.getEstimatedFee(connection);
 
     return {
       success: true,
       transaction: {
         serialized,
-        message: `Add liquidity: ${amountA} ${tokenA} + ${amountB} ${tokenB} to ${venue}`,
-        estimatedFee: feeEstimate,
-        expiresAt: lastValidBlockHeight + 150, // ~1 minute
+        message: `Add ${amountA} ${tokenA} + ${amountB} ${tokenB} to ${venue}`,
+        estimatedFee: fee / LAMPORTS_PER_SOL,
+        expiresAt: lastValidBlockHeight + 150,
       },
       instructions,
     };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message,
-    };
+
+  } catch (error: unknown) {
+    const err = error as Error;
+    log.error('Failed to build Meteora TX', { error: err.message, stack: err.stack });
+    return { success: false, error: err.message };
   }
 }
 

@@ -1,0 +1,13 @@
+diff --git a/node_modules/@meteora-ag/dlmm/dist/index.mjs b/node_modules/@meteora-ag/dlmm/dist/index.mjs
+index 0c20638..655381f 100644
+--- a/node_modules/@meteora-ag/dlmm/dist/index.mjs
++++ b/node_modules/@meteora-ag/dlmm/dist/index.mjs
+@@ -23,7 +23,7 @@ import Decimal9 from "decimal.js";
+ 
+ // src/dlmm/constants/index.ts
+ import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+-import { BN } from "@coral-xyz/anchor";
++import BN from "bn.js";
+ 
+ // src/dlmm/dlmm.json
+ var dlmm_default = {
