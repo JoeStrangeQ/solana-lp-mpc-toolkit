@@ -51,6 +51,23 @@ A toolkit that enables AI agents to manage LP positions and execute swaps throug
 
 ---
 
+## 🚂 Deploy to Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit)
+
+One-click deploy with Railway:
+1. Click the button above
+2. Configure environment variables (see `.env.example`)
+3. Deploy!
+
+Railway will automatically:
+- Detect Node.js 20
+- Install dependencies with pnpm
+- Build TypeScript
+- Start the server with health checks
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -236,6 +253,33 @@ src/
 ├── privacy/         # Arcium encryption layer
 ├── fees/            # Protocol fee calculation
 └── config/          # Environment config
+```
+
+---
+
+## 🐳 Docker
+
+### Build & Run
+
+```bash
+# Build image
+docker build -t lp-agent-toolkit .
+
+# Run container
+docker run -p 3456:3456 --env-file .env lp-agent-toolkit
+```
+
+### Docker Compose
+
+```bash
+# Start service
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
 ```
 
 ---
