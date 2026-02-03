@@ -17,6 +17,7 @@ import { formatPoolsForChat, formatPositionsForChat } from '../lp-toolkit/adapte
 import { buildAddLiquidityTx, buildRemoveLiquidityTx, describeTx } from './txBuilder';
 import { checkPositionHealth, checkPoolHealth, formatHealthReport, formatPoolReport } from './monitoring';
 import { validatePublicKey, validateAddLiquidityRequest, validateEncryptRequest } from './validation';
+import { safeFetch } from './fetch';
 
 // ============ Configuration ============
 
@@ -87,50 +88,43 @@ app.get('/v1/pools/scan', async (c) => {
     
     // Meteora DLMM
     if (!venue || venue === 'meteora') {
-      try {
-        const response = await fetch('https://dlmm-api.meteora.ag/pair/all');
-        const data = await response.json();
-        if (Array.isArray(data)) {
-          const filtered = data
-            .filter((p: any) => {
-              const name = (p.name || '').toUpperCase();
-              return name.includes(tokenA.toUpperCase()) && name.includes(tokenB.toUpperCase());
-            })
-            .slice(0, 20)
-            .map((p: any) => ({
-              venue: 'meteora',
-              address: p.address,
-              name: p.name,
-              apy: p.apr || 0,
-              apy7d: p.apr_7d || p.apr || 0,
-              tvl: p.liquidity || 0,
-              volume24h: p.trade_volume_24h || 0,
-              fee: p.base_fee_percentage || 0,
-            }));
-          pools.push(...filtered);
-        }
-      } catch (e) {
-        console.warn('Meteora API error:', e);
+      const result = await safeFetch<any[]>('https://dlmm-api.meteora.ag/pair/all', { timeout: 15000, retries: 2 });
+      if (result.success && Array.isArray(result.data)) {
+        const filtered = result.data
+          .filter((p: any) => {
+            const name = (p.name || '').toUpperCase();
+            return name.includes(tokenA.toUpperCase()) && name.includes(tokenB.toUpperCase());
+          })
+          .slice(0, 20)
+          .map((p: any) => ({
+            venue: 'meteora',
+            address: p.address,
+            name: p.name,
+            apy: p.apr || 0,
+            apy7d: p.apr_7d || p.apr || 0,
+            tvl: p.liquidity || 0,
+            volume24h: p.trade_volume_24h || 0,
+            fee: p.base_fee_percentage || 0,
+          }));
+        pools.push(...filtered);
       }
     }
 
     // Orca Whirlpool
     if (!venue || venue === 'orca') {
-      try {
-        const response = await fetch('https://api.mainnet.orca.so/v1/whirlpool/list');
-        const data = await response.json();
-        if (data.whirlpools) {
-          const filtered = data.whirlpools
-            .filter((p: any) => {
-              const symA = p.tokenA?.symbol?.toUpperCase() || '';
-              const symB = p.tokenB?.symbol?.toUpperCase() || '';
-              return (symA.includes(tokenA.toUpperCase()) || symB.includes(tokenA.toUpperCase())) &&
-                     (symA.includes(tokenB.toUpperCase()) || symB.includes(tokenB.toUpperCase()));
-            })
-            .slice(0, 20)
-            .map((p: any) => ({
-              venue: 'orca',
-              address: p.address,
+      const result = await safeFetch<any>('https://api.mainnet.orca.so/v1/whirlpool/list', { timeout: 15000, retries: 2 });
+      if (result.success && result.data?.whirlpools) {
+        const filtered = result.data.whirlpools
+          .filter((p: any) => {
+            const symA = p.tokenA?.symbol?.toUpperCase() || '';
+            const symB = p.tokenB?.symbol?.toUpperCase() || '';
+            return (symA.includes(tokenA.toUpperCase()) || symB.includes(tokenA.toUpperCase())) &&
+                   (symA.includes(tokenB.toUpperCase()) || symB.includes(tokenB.toUpperCase()));
+          })
+          .slice(0, 20)
+          .map((p: any) => ({
+            venue: 'orca',
+            address: p.address,
               name: `${p.tokenA?.symbol}-${p.tokenB?.symbol}`,
               apy: p.feeApr || 0,
               tvl: p.tvl || 0,
