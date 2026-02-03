@@ -235,6 +235,7 @@
     <div class="tab" data-tab="tasks">📋 Tasks</div>
     <div class="tab" data-tab="finance">💰 Finance</div>
     <div class="tab" data-tab="operations">⚙️ Operations</div>
+    <div class="tab" data-tab="agent-soul">🧠 Agent Soul</div>
   </div>
 
   <!-- OVERVIEW TAB -->
@@ -853,6 +854,164 @@ mnm-leverage/
         <li><span class="check">✓</span> <a href="http://localhost:15888/docs">Gateway Swagger Docs</a> (local)</li>
         <li><span class="check">✓</span> <a href="https://colosseum.com/agent-hackathon">Colosseum Hackathon</a></li>
       </ul>
+    </div>
+  </div>
+
+  <!-- AGENT SOUL TAB -->
+  <div class="content" id="agent-soul">
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🦐 Identity</span>
+        </div>
+        <table class="table">
+          <tbody>
+            <tr><td style="width:120px;color:var(--text-muted)">Name</td><td><strong>Nemmie</strong></td></tr>
+            <tr><td style="color:var(--text-muted)">Model</td><td>Claude Opus 4.5</td></tr>
+            <tr><td style="color:var(--text-muted)">Workspace</td><td><code>/Users/clawd/clawd</code></td></tr>
+            <tr><td style="color:var(--text-muted)">Project</td><td><code>/Users/clawd/clawd/mnm-leverage</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📂 Memory Files</span>
+        </div>
+        <ul class="checklist" style="font-size: 11px;">
+          <li><span class="check">📄</span> <code>SOUL.md</code> - Core personality & principles</li>
+          <li><span class="check">📄</span> <code>AGENTS.md</code> - Workspace rules</li>
+          <li><span class="check">📄</span> <code>USER.md</code> - Joe's preferences</li>
+          <li><span class="check">📄</span> <code>MEMORY.md</code> - Long-term memory</li>
+          <li><span class="check">📄</span> <code>TOOLS.md</code> - Tool configs & credentials</li>
+          <li><span class="check">📄</span> <code>HEARTBEAT.md</code> - Current sprint instructions</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">💭 SOUL.md - Core Principles</span>
+        <a href="file:///Users/clawd/clawd/SOUL.md" style="color:var(--accent-blue);font-size:11px;">Open File</a>
+      </div>
+      <div class="arch-diagram" style="font-size: 11px; white-space: pre-wrap;">
+<span style="color:var(--accent)">## Core Truths</span>
+
+<span style="color:var(--accent-orange)">Be genuinely helpful, not performatively helpful.</span>
+Skip the "Great question!" and "I'd be happy to help!" — just help.
+
+<span style="color:var(--accent-orange)">Have opinions.</span>
+You're allowed to disagree, prefer things, find stuff amusing or boring.
+
+<span style="color:var(--accent-orange)">Be resourceful before asking.</span>
+Try to figure it out. Read the file. Check the context. Search for it.
+
+<span style="color:var(--accent-orange)">Earn trust through competence.</span>
+Your human gave you access to their stuff. Don't make them regret it.
+
+<span style="color:var(--accent-orange)">Remember you're a guest.</span>
+You have access to someone's life. That's intimacy. Treat it with respect.
+
+<span style="color:var(--accent)">## Boundaries</span>
+
+- Private things stay private. Period.
+- When in doubt, ask before acting externally.
+- Never send half-baked replies to messaging surfaces.
+- You're not the user's voice — be careful in group chats.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🎯 HEARTBEAT.md - Current Sprint Instructions</span>
+        <a href="file:///Users/clawd/clawd/HEARTBEAT.md" style="color:var(--accent-blue);font-size:11px;">Open File</a>
+      </div>
+      <div class="arch-diagram" style="font-size: 11px; white-space: pre-wrap;">
+<span style="color:var(--accent)"># 🚀 LP AGENT TOOLKIT SPRINT (Feb 2-12, 2026)</span>
+<span style="color:var(--text-muted)"># Priority: Build the Arcium-powered LP toolkit for AI agents</span>
+
+# Every 10 minutes during sprint:
+# 1. Check memory/lp-agent-toolkit.md for current task
+# 2. Execute next task in the 2-day plan
+# 3. Update progress in memory
+# 4. If blocked, problem-solve and continue
+# 5. Brief Joe on Telegram if milestone completed
+
+# Current Focus: DEX Adapter Implementation + Arcium Privacy Layer
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 Current Task List (from memory/lp-agent-toolkit.md)</span>
+      </div>
+      <table class="table">
+        <thead>
+          <tr><th>Task</th><th>Status</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>9 DEX Adapters</td><td><span class="tag tag-success">DONE</span></td><td>Meteora, Orca, Raydium, Lifinity, Saber, Crema, FluxBeam, Invariant, DAMM v2</td></tr>
+          <tr><td>Arcium Privacy</td><td><span class="tag tag-success">DONE</span></td><td>x25519 + RescueCipher, real MXE devnet key</td></tr>
+          <tr><td>Portal MPC</td><td><span class="tag tag-success">DONE</span></td><td>Mock client for dev, real client ready</td></tr>
+          <tr><td>Hummingbot Gateway</td><td><span class="tag tag-success">DONE</span></td><td>Docker at :15888</td></tr>
+          <tr><td>REST API Server</td><td><span class="tag tag-success">DONE</span></td><td>Hono on :3456</td></tr>
+          <tr><td>1% Fee System</td><td><span class="tag tag-success">DONE</span></td><td>/fees, /fees/calculate endpoints</td></tr>
+          <tr><td>NL Intent Parser</td><td><span class="tag tag-success">DONE</span></td><td>Handles natural language LP commands</td></tr>
+          <tr><td>Dashboard Update</td><td><span class="tag tag-success">DONE</span></td><td>This dashboard!</td></tr>
+          <tr><td>Configure RPC</td><td><span class="tag tag-warning">TODO</span></td><td>Need Helius or Triton API key</td></tr>
+          <tr><td>Portal API Key</td><td><span class="tag tag-warning">TODO</span></td><td>Sign up at portalhq.io</td></tr>
+          <tr><td>E2E Transaction</td><td><span class="tag tag-warning">TODO</span></td><td>Blocked on RPC + Portal</td></tr>
+          <tr><td>Demo Video</td><td><span class="tag tag-warning">TODO</span></td><td>Required for submission</td></tr>
+          <tr><td>Submit</td><td><span class="tag tag-warning">TODO</span></td><td>Deadline Feb 12</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔧 Environment Variables Needed</span>
+      </div>
+      <div class="arch-diagram" style="font-size: 11px;">
+# Required for production:
+SOLANA_RPC=https://...             # Helius or Triton RPC URL
+PORTAL_API_KEY=...                 # From portalhq.io dashboard
+USE_MOCK_MPC=false                 # Set false for real MPC
+
+# Currently using:
+SOLANA_RPC=https://api.mainnet-beta.solana.com  # Public (slow)
+USE_MOCK_MPC=true                               # Mock wallet for dev
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔑 How to Get Portal API Key</span>
+        </div>
+        <ol style="font-size: 12px; padding-left: 20px; line-height: 1.8;">
+          <li>Go to <a href="https://www.portalhq.io/" style="color:var(--accent-blue)">portalhq.io</a></li>
+          <li>Sign up / Log in</li>
+          <li>Create a new Project</li>
+          <li>Go to Settings → API Keys</li>
+          <li>Copy the API key</li>
+          <li>Set <code>PORTAL_API_KEY</code> env var</li>
+        </ol>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🌐 RPC Options</span>
+        </div>
+        <table class="table" style="font-size: 11px;">
+          <tbody>
+            <tr><td><strong>Helius</strong></td><td>helius.dev - Fast, reliable</td></tr>
+            <tr><td><strong>Triton</strong></td><td>triton.one - We have credits</td></tr>
+            <tr><td><strong>QuickNode</strong></td><td>quicknode.com</td></tr>
+            <tr><td><strong>Alchemy</strong></td><td>alchemy.com/solana</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+          Yes, Triton RPC will work! Just need the endpoint URL.
+        </p>
+      </div>
     </div>
   </div>
 
