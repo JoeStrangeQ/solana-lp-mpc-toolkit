@@ -17,13 +17,14 @@ Both Meteora (`@meteora-ag/dlmm`) and Orca (`@orca-so/whirlpools-sdk`) have ESM/
 
 ## Phase 4: Documentation & Polish (Current Focus)
 
-- [ ] Add JSDoc to all API functions
+- [x] Add JSDoc to all API functions
 - [x] Fix remaining TypeScript warnings in src/api/
 - [x] Clean up unused imports
 - [ ] Update README with final architecture
 - [x] Create NIGHT_SPRINT_REPORT.md for Joe
 - [x] Test API server end-to-end
 - [x] Fix formatPoolsForChat null handling bug
+- [x] Add OpenAPI docs at /v1/docs
 
 ## What's Working Well
 
