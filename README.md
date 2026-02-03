@@ -10,10 +10,10 @@ Built for the [Colosseum Agent Hackathon](https://www.colosseum.org/) (Feb 2-12,
 
 A toolkit that enables AI agents to manage LP positions and execute swaps through natural language, with:
 
-- **🔐 MPC Custody** - Threshold signatures via Portal/Privy. Neither the agent nor the service holds the full private key.
+- **🔐 Privy Embedded Wallets** - Secure wallet creation and signing for agents. No private keys exposed.
 - **🛡️ Arcium Privacy** - Strategy parameters encrypted until execution. No front-running your LP strategy.
 - **🔄 Jupiter Swaps** - Best-route token swaps across Solana.
-- **🌊 Meteora DLMM** - Concentrated liquidity positions via Hummingbot Gateway.
+- **🌊 Meteora DLMM** - Concentrated liquidity positions on Solana's top DEX.
 
 ---
 
@@ -22,7 +22,7 @@ A toolkit that enables AI agents to manage LP positions and execute swaps throug
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Natural Language                          │
-│         "swap 1 SOL to USDC" / "add liquidity"              │
+│         "swap 1 SOL to USDC" / "LP into SOL-USDC"           │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -30,22 +30,22 @@ A toolkit that enables AI agents to manage LP positions and execute swaps throug
 │                  LP Agent Toolkit API                        │
 │                                                              │
 │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐           │
-│  │   Intent    │ │   Arcium    │ │ Portal/Privy│           │
-│  │   Parser    │ │   Privacy   │ │     MPC     │           │
+│  │   Intent    │ │   Arcium    │ │    Privy    │           │
+│  │   Parser    │ │   Privacy   │ │   Wallets   │           │
 │  └─────────────┘ └─────────────┘ └─────────────┘           │
 └─────────────────────────────────────────────────────────────┘
                     │                   │
          ┌──────────┘                   └──────────┐
          ▼                                         ▼
 ┌─────────────────┐                     ┌─────────────────┐
-│     Jupiter     │                     │    Hummingbot   │
-│   Swap Router   │                     │     Gateway     │
+│     Jupiter     │                     │  Meteora DLMM   │
+│   Swap Router   │                     │    (Direct)     │
 └─────────────────┘                     └─────────────────┘
          │                                         │
          ▼                                         ▼
 ┌─────────────────┐                     ┌─────────────────┐
-│   Best Route    │                     │  Meteora DLMM   │
-│    Execution    │                     │   Positions     │
+│   Best Route    │                     │  Concentrated   │
+│    Execution    │                     │   Liquidity     │
 └─────────────────┘                     └─────────────────┘
 ```
 
@@ -56,7 +56,6 @@ A toolkit that enables AI agents to manage LP positions and execute swaps throug
 ### Prerequisites
 
 - **Node.js 20+**
-- **Docker** (for Hummingbot Gateway, optional for swap-only usage)
 
 ### Install & Run
 
@@ -82,18 +81,13 @@ pnpm start
 # Required
 SOLANA_RPC=https://api.mainnet-beta.solana.com
 
-# Wallet Provider (pick one)
-PORTAL_API_KEY=your_portal_api_key      # Portal MPC
-PRIVY_APP_ID=your_privy_app_id          # OR Privy embedded wallet
+# Wallet Provider (Privy)
+PRIVY_APP_ID=your_privy_app_id
 PRIVY_APP_SECRET=your_privy_secret
-USE_MOCK_MPC=true                        # OR mock for dev
+USE_MOCK_MPC=true                        # Use mock wallet for dev
 
 # Swaps
 JUPITER_API_KEY=your_jupiter_api_key    # Optional, improves rate limits
-
-# LP (optional, for Meteora positions)
-GATEWAY_URL=http://localhost:15888
-SOLANA_NETWORK=mainnet-beta
 
 # Privacy
 ARCIUM_CLUSTER=456
@@ -147,13 +141,7 @@ POST /wallet/create
 # Load existing wallet
 POST /wallet/load
 {
-  "walletId": "privy_wallet_id"      # For Privy
-}
-# OR
-{
-  "address": "7xKXt...",
-  "share": "<encrypted_key_share>",  # For Portal
-  "id": "wallet_id"
+  "walletId": "privy_wallet_id"
 }
 ```
 
@@ -212,11 +200,11 @@ The `/chat` endpoint understands:
 
 ## 🔐 Security Model
 
-### MPC Custody
+### Privy Embedded Wallets
 
-- **Portal**: 2-of-2 threshold signing via AWS Nitro Enclave
-- **Privy**: Embedded wallet with server-side signing
-- **No Full Key Exposure**: Private key never reconstructed in cleartext
+- **Server-side signing**: Secure key management via Privy infrastructure
+- **No key exposure**: Agent never sees raw private keys
+- **Per-agent wallets**: Each agent gets isolated wallet custody
 
 ### Arcium Privacy
 
@@ -235,8 +223,9 @@ src/
 │   └── intent.ts    # Natural language parser
 ├── swap/            # Jupiter integration
 │   └── jupiter.ts   # Quote & swap execution
-├── gateway/         # Hummingbot Gateway client
-├── mpc/             # Portal & Privy wallet clients
+├── dex/             # Meteora DLMM integration
+│   └── meteora.ts   # LP operations
+├── mpc/             # Privy wallet client
 ├── privacy/         # Arcium encryption layer
 ├── fees/            # Protocol fee calculation
 └── config/          # Environment config
@@ -254,10 +243,9 @@ MIT
 
 - [Jupiter](https://jup.ag/) - Swap aggregator
 - [Meteora](https://meteora.ag/) - DLMM pools
-- [Portal](https://www.portalhq.io/) - MPC custody
 - [Privy](https://privy.io/) - Embedded wallets
 - [Arcium](https://www.arcium.com/) - Privacy layer
-- [Hummingbot Gateway](https://github.com/hummingbot/gateway) - DEX interface
+- [Colosseum Hackathon](https://www.colosseum.org/)
 
 ---
 
