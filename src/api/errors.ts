@@ -174,7 +174,7 @@ export const ERRORS = {
  */
 export function formatErrorResponse(
   error: AgentError,
-  statusCode: number = 400,
+  _statusCode: number = 400, // Reserved for future HTTP status mapping
 ) {
   return {
     success: false,

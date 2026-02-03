@@ -9,7 +9,8 @@
  * - APY change tracking
  */
 
-import { Connection, PublicKey } from "@solana/web3.js";
+// Connection and PublicKey reserved for future on-chain monitoring
+// import { Connection, PublicKey } from "@solana/web3.js";
 
 // ============ Types ============
 

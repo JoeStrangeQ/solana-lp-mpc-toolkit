@@ -1,15 +1,34 @@
-- Feb 3 01:15 - Joe went to bed, started night sprint for polish
-- **01:15 - 02:45: BLOCKER - Meteora SDK Investigation**
-  - **Goal:** Implement real TX building for "zero failure rates".
-  - **Problem:** The `@meteora-ag/dlmm` SDK has a critical dependency issue with `@coral-xyz/anchor`'s `BN` export in an ESM environment.
-  - **Attempts to Fix (all failed):**
-    1.  `patch-package` to fix imports in `dist` files.
-    2.  `patch-package` to fix imports in `src` files.
-    3.  Custom `pre-test` script to forcefully patch `node_modules`.
-    4.  `npm overrides` to force compatible dependency versions.
-    5.  Compiling with `tsc` instead of `tsx`, which revealed broken type definitions in the SDK.
-  - **Conclusion:** The SDK is fundamentally incompatible with our modern TypeScript/ESM stack. It is currently **unusable** for building transactions. This is a major blocker for achieving "zero failure rates" for Meteora.
-- **Next Steps:**
-  1.  Reverted `txBuilder.ts` to the safe, placeholder-based version.
-  2.  Will investigate Orca SDK (`@orca-so/whirlpools-sdk`) as an alternative for real TX building. It is generally more stable.
-  3.  Continuing with other polishing tasks from the night sprint plan.
+# Night Sprint Log - Feb 3, 2026
+
+## Timeline
+
+- **01:15** - Joe went to bed, started night sprint for polish
+- **01:15 - 02:45** - BLOCKER: Meteora SDK Investigation (see details below)
+- **02:45 - 03:00** - Attempted Orca SDK, same issues
+- **03:00+** - Pivoting to Phase 4: Documentation & Final Polish
+
+## SDK Blocker Summary
+
+Both Meteora (`@meteora-ag/dlmm`) and Orca (`@orca-so/whirlpools-sdk`) have ESM/CJS compatibility issues in our modern TypeScript stack:
+- Meteora: `BN` export error from `@coral-xyz/anchor`
+- Orca: `this.ctx.fetcher.getPool is not a function`
+
+**Decision:** Keep placeholder TX builder (which works reliably). The placeholder builds valid, signable transactions with memo instructions. For a hackathon demo, this is sufficient to show the full flow.
+
+## Phase 4: Documentation & Polish (Current Focus)
+
+- [ ] Add JSDoc to all API functions
+- [ ] Fix remaining TypeScript warnings
+- [ ] Clean up unused imports
+- [ ] Update README with final architecture
+- [ ] Create NIGHT_SPRINT_REPORT.md for Joe
+
+## What's Working Well
+
+1. ✅ API server starts and responds
+2. ✅ Pool scanning via external APIs (Meteora, Orca)
+3. ✅ Position monitoring with health checks
+4. ✅ Intent parsing from natural language
+5. ✅ Arcium privacy encryption (devnet)
+6. ✅ Rate limiting & security middleware
+7. ✅ Placeholder TX building (valid, just needs real instructions)

@@ -9,11 +9,12 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 import { Connection, PublicKey } from "@solana/web3.js";
-import { ArciumPrivacyService, ARCIUM_DEVNET_CONFIG } from "../lp-toolkit/services/arciumPrivacy";
-import { parseIntent, AddLiquidityIntent } from "../lp-toolkit/api/intentParser";
-import { LPPool, formatPoolsForChat } from "../lp-toolkit/adapters/types";
+import { ArciumPrivacyService } from "../lp-toolkit/services/arciumPrivacy";
+import { parseIntent } from "../lp-toolkit/api/intentParser";
+import type { AddLiquidityIntent } from "../lp-toolkit/adapters/types";
+import { LPPool, DEXVenue, formatPoolsForChat } from "../lp-toolkit/adapters/types";
 import { buildAddLiquidityTx, buildRemoveLiquidityTx, describeTx } from "./txBuilder";
-import { checkPositionHealth, checkPoolHealth, formatHealthReport, formatPoolReport } from './monitoring';
+import { checkPositionHealth, formatHealthReport } from './monitoring';
 import { validateAddLiquidityRequest, validateEncryptRequest } from './validation';
 import { safeFetch } from './fetch';
 import { standardLimit, txLimit, readLimit, getRateLimitStats } from './rateLimit';
@@ -88,7 +89,7 @@ app.get("/v1/pools/scan", readLimit, async (c) => {
     const result = await safeFetch<MeteoraApiPool[]>("https://dlmm-api.meteora.ag/pair/all");
     if (result.success && result.data) {
       pools.push(...result.data.filter(p => p.name.toUpperCase().includes(tokenA.toUpperCase()) && p.name.toUpperCase().includes(tokenB.toUpperCase())).slice(0, 20).map(p => ({
-        venue: 'meteora', address: p.address, name: p.name, apy: p.apr, apy7d: p.apr_7d, tvl: p.liquidity, volume24h: p.trade_volume_24h, fee: p.base_fee_percentage, tokenA: { mint: p.mint_x, symbol: '', decimals: 0 }, tokenB: { mint: p.mint_y, symbol: '', decimals: 0 }
+        venue: 'meteora' as DEXVenue, address: p.address, name: p.name, apy: p.apr, apy7d: p.apr_7d, tvl: p.liquidity, volume24h: p.trade_volume_24h, fee: p.base_fee_percentage, tokenA: { mint: p.mint_x, symbol: '', decimals: 0 }, tokenB: { mint: p.mint_y, symbol: '', decimals: 0 }
       })));
     }
   }
@@ -98,7 +99,7 @@ app.get("/v1/pools/scan", readLimit, async (c) => {
     const result = await safeFetch<{whirlpools: OrcaApiWhirlpool[]}>("https://api.mainnet.orca.so/v1/whirlpool/list");
     if (result.success && result.data?.whirlpools) {
        pools.push(...result.data.whirlpools.filter(p => `${p.tokenA.symbol}-${p.tokenB.symbol}`.toUpperCase().includes(tokenA.toUpperCase()) && `${p.tokenA.symbol}-${p.tokenB.symbol}`.toUpperCase().includes(tokenB.toUpperCase())).slice(0, 20).map(p => ({
-        venue: 'orca', address: p.address, name: `${p.tokenA.symbol}-${p.tokenB.symbol}`, apy: p.feeApr, apy7d: p.feeApr, tvl: p.tvl, volume24h: p.volume.day, fee: p.lpFeeRate * 100, tokenA: p.tokenA, tokenB: p.tokenB
+        venue: 'orca' as DEXVenue, address: p.address, name: `${p.tokenA.symbol}-${p.tokenB.symbol}`, apy: p.feeApr, apy7d: p.feeApr, tvl: p.tvl, volume24h: p.volume.day, fee: p.lpFeeRate * 100, tokenA: p.tokenA, tokenB: p.tokenB
       })));
     }
   }
@@ -117,14 +118,14 @@ app.get("/v1/pools/scan", readLimit, async (c) => {
 
 // ============ Intent & Encryption ============
 
-app.post("/v1/intent/parse", strictLimit, async (c) => {
+app.post("/v1/intent/parse", txLimit, async (c) => {
   const { text } = await c.req.json<{text: string}>();
   if (!text) return c.json({ success: false, error: "Missing text" }, 400);
   const intent = parseIntent(text);
   return c.json({ success: true, intent });
 });
 
-app.post("/v1/encrypt/strategy", strictLimit, async (c) => {
+app.post("/v1/encrypt/strategy", txLimit, async (c) => {
   const validation = validateEncryptRequest(await c.req.json());
   if (!validation.valid) return c.json({ success: false, error: validation.error }, 400);
 
@@ -149,7 +150,7 @@ app.get("/v1/positions/:wallet", readLimit, async (c) => {
   return c.json({ success: true, positions });
 });
 
-app.get("/v1/monitor/positions/:wallet", strictLimit, async (c) => {
+app.get("/v1/monitor/positions/:wallet", txLimit, async (c) => {
   const wallet = c.req.param("wallet");
   const result = await safeFetch<MeteoraApiPosition[]>(`https://dlmm-api.meteora.ag/position/${wallet}`);
   if(!result.success || !result.data) return c.json({ success: false, error: result.error}, 500);
@@ -175,7 +176,7 @@ app.post("/v1/tx/remove-liquidity", txLimit, async (c) => {
   return c.json(result);
 });
 
-app.post("/v1/tx/describe", strictLimit, async (c) => {
+app.post("/v1/tx/describe", txLimit, async (c) => {
   const { serializedTx } = await c.req.json<{serializedTx: string}>();
   const description = describeTx(serializedTx);
   return c.json({ success: true, description });

@@ -36,7 +36,7 @@ const startTime = Date.now();
  * Check Solana RPC connectivity
  */
 async function checkSolanaRpc(): Promise<HealthCheck> {
-  const start = Date.now();
+  const start = Date.now(); 
 
   try {
     const connection = new Connection(
@@ -65,8 +65,6 @@ async function checkSolanaRpc(): Promise<HealthCheck> {
  * Check Meteora API
  */
 async function checkMeteoraApi(): Promise<HealthCheck> {
-  const start = Date.now();
-
   const result = await safeFetch(`${config.dex.meteora.apiUrl}/pair/all`, {
     timeout: 5000,
     retries: 0,
