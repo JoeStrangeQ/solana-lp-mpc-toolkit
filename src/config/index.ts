@@ -9,11 +9,18 @@ export const config = {
     network: process.env.SOLANA_NETWORK || 'mainnet-beta',
   },
 
-  // Portal MPC
+  // Portal MPC (legacy)
   portal: {
     apiUrl: process.env.PORTAL_API_URL || 'https://mpc-client.portalhq.io',
     apiKey: process.env.PORTAL_API_KEY || '',
     useMock: process.env.USE_MOCK_MPC === 'true',
+  },
+
+  // Privy Embedded Wallets (preferred)
+  privy: {
+    appId: process.env.PRIVY_APP_ID || '',
+    appSecret: process.env.PRIVY_APP_SECRET || '',
+    enabled: !!(process.env.PRIVY_APP_ID && process.env.PRIVY_APP_SECRET),
   },
 
   // Arcium Privacy

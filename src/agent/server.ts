@@ -14,6 +14,7 @@ import { config } from '../config';
 import { GatewayClient } from '../gateway';
 import { MPCClient } from '../mpc';
 import { MockMPCClient } from '../mpc/mockClient';
+import { PrivyWalletClient } from '../mpc/privyClient';
 import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
 import { calculateFee, createFeeBreakdown, FEE_CONFIG } from '../fees';
@@ -24,8 +25,9 @@ const app = new Hono();
 // Middleware
 app.use('*', cors());
 
-// State
+// State - supports multiple wallet providers
 let mpcClient: MPCClient | MockMPCClient | null = null;
+let privyClient: PrivyWalletClient | null = null;
 let gatewayClient: GatewayClient | null = null;
 let connection: Connection;
 
@@ -82,15 +84,24 @@ app.get('/fees/calculate', (c) => {
 
 app.get('/health', async (c) => {
   const gatewayOk = gatewayClient ? await gatewayClient.healthCheck() : false;
-  const mpcOk = mpcClient?.isWalletLoaded() ?? false;
+  const walletOk = privyClient?.isWalletLoaded() || mpcClient?.isWalletLoaded() || false;
   const arciumOk = arciumPrivacy.isInitialized();
 
+  const walletProvider = privyClient?.isWalletLoaded() ? 'privy' : 
+                        mpcClient?.isWalletLoaded() ? (config.portal.useMock ? 'mock' : 'portal') : 
+                        'none';
+
   return c.json({
-    status: gatewayOk && mpcOk ? 'healthy' : 'degraded',
+    status: gatewayOk && walletOk ? 'healthy' : 'degraded',
     components: {
       gateway: gatewayOk ? 'connected' : 'disconnected',
-      mpc: mpcOk ? 'wallet_loaded' : 'no_wallet',
+      wallet: walletOk ? `loaded (${walletProvider})` : 'no_wallet',
       arcium: arciumOk ? 'initialized' : 'not_initialized',
+    },
+    walletProviders: {
+      privy: config.privy.enabled ? 'configured' : 'not_configured',
+      portal: config.portal.apiKey ? 'configured' : 'not_configured',
+      mock: config.portal.useMock ? 'enabled' : 'disabled',
     },
     timestamp: new Date().toISOString(),
   });
@@ -101,20 +112,46 @@ app.get('/health', async (c) => {
 app.post('/wallet/create', async (c) => {
   try {
     console.log('[/wallet/create] Received request');
-    if (config.portal.useMock) {
+    
+    // Priority: Privy > Portal > Mock
+    if (config.privy.enabled) {
+      // Use Privy embedded wallet
+      console.log('[/wallet/create] Using Privy embedded wallet');
+      privyClient = new PrivyWalletClient({
+        appId: config.privy.appId,
+        appSecret: config.privy.appSecret,
+      });
+      
+      const wallet = await privyClient.generateWallet();
+      console.log('[/wallet/create] Privy wallet generated:', wallet.addresses.solana);
+      
+      gatewayClient = new GatewayClient(wallet.addresses.solana);
+      
+      return c.json<AgentResponse>({
+        success: true,
+        message: 'Privy embedded wallet created. Fund this address to start LPing.',
+        data: {
+          address: wallet.addresses.solana,
+          walletId: wallet.id,
+          userId: wallet.userId,
+          provider: 'privy',
+        },
+      });
+    } else if (config.portal.useMock) {
+      // Use mock wallet for dev
       mpcClient = new MockMPCClient();
-    } else {
-      if (!config.portal.apiKey) {
-        throw new Error('Portal API key is not configured.');
-      }
+      console.log('[/wallet/create] Using Mock MPC client');
+    } else if (config.portal.apiKey) {
+      // Use Portal MPC
       mpcClient = new MPCClient();
+      console.log('[/wallet/create] Using Portal MPC client');
+    } else {
+      throw new Error('No wallet provider configured. Set PRIVY_APP_ID/PRIVY_APP_SECRET or PORTAL_API_KEY or USE_MOCK_MPC=true');
     }
-    console.log('[/wallet/create] MPC client initialized');
     
     const wallet = await mpcClient.generateWallet();
     console.log('[/wallet/create] Wallet generated:', wallet.addresses.solana);
     
-    // Initialize gateway with new wallet address
     gatewayClient = new GatewayClient(wallet.addresses.solana);
     console.log('[/wallet/create] Gateway client initialized');
 
@@ -123,8 +160,8 @@ app.post('/wallet/create', async (c) => {
       message: 'MPC wallet created. Fund this address to start LPing.',
       data: {
         address: wallet.addresses.solana,
-        // Don't expose key share in response - store it securely
         walletId: wallet.id,
+        provider: config.portal.useMock ? 'mock' : 'portal',
       },
     });
   } catch (error) {
