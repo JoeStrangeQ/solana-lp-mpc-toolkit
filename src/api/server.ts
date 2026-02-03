@@ -20,6 +20,7 @@ import { validatePublicKey, validateAddLiquidityRequest, validateEncryptRequest 
 import { safeFetch } from './fetch';
 import { standardLimit, strictLimit, txLimit, readLimit, getRateLimitStats } from './rateLimit';
 import * as log from './logger';
+import { requestId, serverTiming, errorHandler, securityHeaders } from './middleware';
 
 // ============ Configuration ============
 
@@ -32,12 +33,17 @@ const connection = new Connection(SOLANA_RPC, 'confirmed');
 // ============ Middleware ============
 
 app.use('*', cors());
+app.use('*', requestId());
+app.use('*', serverTiming());
+app.use('*', errorHandler());
+app.use('*', securityHeaders());
 
 // Request logging
 app.use('*', async (c, next) => {
   const start = Date.now();
   await next();
   const ms = Date.now() - start;
+  const reqId = c.get('requestId') || '';
   log.request(c.req.method, c.req.path, c.res.status, ms);
 });
 
