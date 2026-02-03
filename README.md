@@ -1,4 +1,4 @@
-# 🦐 Solana LP MPC Toolkit
+# 🦀 Solana LP MPC Toolkit
 
 **Privacy-Preserving Liquidity Provision for AI Agents**
 
@@ -346,4 +346,4 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
-Built with 🦐 by the MnM team for the Colosseum Agent Hackathon 2026.
+Built with 🦀 by the MnM team for the Colosseum Agent Hackathon 2026.
