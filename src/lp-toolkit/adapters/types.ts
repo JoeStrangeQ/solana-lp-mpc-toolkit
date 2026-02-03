@@ -190,15 +190,19 @@ export function formatPoolsForChat(
   const { compact = false, maxItems = 5 } = options || {};
 
   const display = pools.slice(0, maxItems).map((pool, i) => {
+    const apy = pool.apy ?? 0;
+    const apy7d = pool.apy7d ?? apy;
+    const fee = pool.fee ?? 0;
+    
     if (compact) {
-      return `${i + 1}. **${pool.name}** (${pool.venue}) - ${pool.apy.toFixed(1)}% APY`;
+      return `${i + 1}. **${pool.name}** (${pool.venue}) - ${apy.toFixed(1)}% APY`;
     }
     return `
 **${i + 1}. ${pool.name}** [${pool.venue}]
-├ APY: ${pool.apy.toFixed(1)}% (24h) / ${pool.apy7d.toFixed(1)}% (7d)
-├ TVL: $${formatNumber(pool.tvl)}
-├ Volume: $${formatNumber(pool.volume24h)} (24h)
-└ Fee: ${pool.fee}%`;
+├ APY: ${apy.toFixed(1)}% (24h) / ${apy7d.toFixed(1)}% (7d)
+├ TVL: $${formatNumber(pool.tvl ?? 0)}
+├ Volume: $${formatNumber(pool.volume24h ?? 0)} (24h)
+└ Fee: ${fee}%`;
   });
 
   return display.join("\n");
@@ -242,11 +246,13 @@ ${rangeStatus} **${pos.poolName}** [${pos.venue}]
 ${display.join("\n")}`;
 }
 
-function formatNumber(num: number): string {
-  if (num >= 1e9) return `${(num / 1e9).toFixed(2)}B`;
-  if (num >= 1e6) return `${(num / 1e6).toFixed(2)}M`;
-  if (num >= 1e3) return `${(num / 1e3).toFixed(2)}K`;
-  return num.toFixed(2);
+function formatNumber(num: number | string | undefined | null): string {
+  const n = typeof num === 'string' ? parseFloat(num) : (num ?? 0);
+  if (isNaN(n)) return '0';
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(2)}K`;
+  return n.toFixed(2);
 }
 
 export default {
