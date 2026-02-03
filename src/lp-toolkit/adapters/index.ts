@@ -14,6 +14,8 @@ export { raydiumAdapter, RaydiumAdapter } from './raydium';
 export { lifinityAdapter, LifinityAdapter } from './lifinity';
 export { saberAdapter, SaberAdapter } from './saber';
 export { cremaAdapter, CremaAdapter } from './crema';
+export { fluxbeamAdapter, FluxBeamAdapter } from './fluxbeam';
+export { invariantAdapter, InvariantAdapter } from './invariant';
 
 // Adapter registry
 import { meteoraAdapter } from './meteora';
@@ -23,6 +25,8 @@ import { raydiumAdapter } from './raydium';
 import { lifinityAdapter } from './lifinity';
 import { saberAdapter } from './saber';
 import { cremaAdapter } from './crema';
+import { fluxbeamAdapter } from './fluxbeam';
+import { invariantAdapter } from './invariant';
 import { DEXAdapter, DEXVenue } from './types';
 
 // Primary adapters (one per venue)
@@ -34,6 +38,8 @@ export const adapters: Record<DEXVenue, DEXAdapter | null> = {
   lifinity: lifinityAdapter,         // Oracle-based, reduced IL
   saber: saberAdapter,               // Stable swaps
   crema: cremaAdapter,               // CLMM (concentrated)
+  fluxbeam: fluxbeamAdapter,         // CLMM
+  invariant: invariantAdapter,       // CLMM with custom ticks
   phoenix: null,                     // CLOB - skipped per Joe
 };
 
@@ -46,6 +52,8 @@ export const allAdapters: DEXAdapter[] = [
   lifinityAdapter,     // Lifinity (oracle-based)
   saberAdapter,        // Saber (stable swaps)
   cremaAdapter,        // Crema (concentrated)
+  fluxbeamAdapter,     // FluxBeam
+  invariantAdapter,    // Invariant
 ];
 
 export function getAdapter(venue: DEXVenue): DEXAdapter | null {
