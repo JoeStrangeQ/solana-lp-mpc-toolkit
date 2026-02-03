@@ -10,6 +10,7 @@
     "test:dex": "tsx scripts/test-dex-apis.ts",
     "example": "tsx examples/agent-client.ts",
     "test:e2e": "tsx scripts/e2e-test.ts",
+    "validate": "tsx scripts/validate-api.ts",
     "dev": "vite --port 3000",
     "start": "vite --port 3000",
     "build": "vite build && tsc",
