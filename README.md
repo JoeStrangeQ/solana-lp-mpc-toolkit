@@ -166,9 +166,25 @@ cd solana-lp-mpc-toolkit
 
 # Install dependencies
 npm install
+```
 
-# Run tests
-npm test
+### For AI Agents (HTTP API)
+
+```bash
+# Start the API server
+npm run api
+
+# Server runs on http://localhost:3456
+```
+
+### Available Scripts
+
+```bash
+npm run api          # Start REST API server
+npm run api:dev      # Start with hot reload
+npm run test:arcium  # Test Arcium encryption
+npm run test:dex     # Test DEX API connectivity
+npm run example      # Run agent client demo
 ```
 
 ### Test Arcium Encryption
@@ -192,6 +208,55 @@ Expected output:
 ```bash
 npx tsx scripts/fetch-mxe-key.ts
 ```
+
+---
+
+## 🤖 HTTP API for Agents
+
+Start the server: `npm run api`
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/v1/health` | Service health check |
+| GET | `/v1/pools/scan` | Find best LP pools |
+| POST | `/v1/intent/parse` | Parse natural language |
+| POST | `/v1/encrypt/strategy` | Encrypt with Arcium |
+| GET | `/v1/positions/:wallet` | Get wallet positions |
+| GET | `/v1/docs` | Full API documentation |
+
+### Example: Find Best Pool
+
+```bash
+curl "http://localhost:3456/v1/pools/scan?tokenA=SOL&tokenB=USDC&limit=5"
+```
+
+### Example: Parse Intent
+
+```bash
+curl -X POST "http://localhost:3456/v1/intent/parse" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Add $500 to the best SOL-USDC pool"}'
+```
+
+### Example: Encrypt Strategy
+
+```bash
+curl -X POST "http://localhost:3456/v1/encrypt/strategy" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ownerPubkey": "YourWalletPubkey",
+    "strategy": {
+      "tokenA": "SOL",
+      "tokenB": "USDC",
+      "totalValueUSD": 500,
+      "strategy": "concentrated"
+    }
+  }'
+```
+
+All responses include `chatDisplay` - pre-formatted text ready for Telegram/Discord.
 
 ---
 
