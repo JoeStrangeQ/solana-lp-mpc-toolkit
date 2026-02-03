@@ -17,6 +17,9 @@ const DEX_ALIASES: Record<string, DEX> = {
   ray: 'raydium',
 };
 
+// Supported token symbols for swap parsing
+const TOKEN_SYMBOLS = ['SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'RAY'];
+
 const PAIR_PATTERNS = [
   // USDC-SOL, BONK/WIF, etc.
   /\b([A-Z]{2,6})[-\/]([A-Z]{2,6})\b/gi,
@@ -27,13 +30,49 @@ const AMOUNT_PATTERNS = [
   /([\d,]+(?:\.\d+)?)\s*(?:SOL|USDC|USDT)/i,
 ];
 
+// Swap patterns: "swap 1 SOL to USDC", "convert 100 USDC into SOL", "exchange 5 SOL for USDC"
+const SWAP_PATTERNS = [
+  /swap\s+([\d.]+)\s*(\w+)\s+(?:to|for|into)\s+(\w+)/i,
+  /convert\s+([\d.]+)\s*(\w+)\s+(?:to|for|into)\s+(\w+)/i,
+  /exchange\s+([\d.]+)\s*(\w+)\s+(?:to|for|into)\s+(\w+)/i,
+  /([\d.]+)\s*(\w+)\s+(?:to|->|=>)\s+(\w+)/i,
+];
+
 export function parseIntent(text: string): LPIntent {
   const lower = text.toLowerCase();
+
+  // Check for swap intent first (specific patterns)
+  for (const pattern of SWAP_PATTERNS) {
+    const match = text.match(pattern);
+    if (match) {
+      const [, amountStr, inputToken, outputToken] = match;
+      return {
+        action: 'swap',
+        amount: parseFloat(amountStr),
+        inputToken: inputToken.toUpperCase(),
+        outputToken: outputToken.toUpperCase(),
+      };
+    }
+  }
+
+  // Extract amount first (needed for action detection)
+  let amount: number | undefined;
+  let match = text.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:dollars?|usd)/i);
+  if (match) {
+    amount = parseFloat(match[1].replace(/,/g, ''));
+  } else {
+    match = text.match(/(?<![-\/])\b([\d,]+(?:\.\d+)?)\b(?![-/]|%)/);
+    if (match) {
+      amount = parseFloat(match[1].replace(/,/g, ''));
+    }
+  }
 
   // Determine action
   let action: LPIntent['action'] = 'positions';
   
-  if (/\b(scan|search|find|best|top|opportunities?|show me)\b/.test(lower)) {
+  if (/\b(swap|convert|exchange)\b/.test(lower)) {
+    action = 'swap';
+  } else if (/\b(scan|search|find|best|top|opportunities?|show me)\b/.test(lower)) {
     action = 'scan';
   } else if (/\b(add|put|deposit|lp|provide|open|invest)\b/.test(lower) && (/\b(liquidity|position)\b/.test(lower) || amount)) {
     action = 'open';
@@ -61,24 +100,10 @@ export function parseIntent(text: string): LPIntent {
   // Extract pair
   let pair: string | undefined;
   for (const pattern of PAIR_PATTERNS) {
-    const match = text.match(pattern);
-    if (match) {
-      pair = match[0].toUpperCase().replace('/', '-');
+    const pairMatch = text.match(pattern);
+    if (pairMatch) {
+      pair = pairMatch[0].toUpperCase().replace('/', '-');
       break;
-    }
-  }
-
-  // Extract amount
-  let amount: number | undefined;
-  // Look for explicit dollar amounts first
-  let match = text.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:dollars?|usd)/i);
-  if (match) {
-    amount = parseFloat(match[1].replace(/,/g, ''));
-  } else {
-    // Look for numbers that aren't part of a pair or percentage
-    match = text.match(/(?<![-\/])\b([\d,]+(?:\.\d+)?)\b(?![-/]|%)/);
-    if (match) {
-      amount = parseFloat(match[1].replace(/,/g, ''));
     }
   }
 
@@ -124,6 +149,13 @@ export function describeIntent(intent: LPIntent): string {
   const parts: string[] = [];
 
   switch (intent.action) {
+    case 'swap':
+      parts.push('Swap');
+      if (intent.amount) parts.push(`${intent.amount}`);
+      if (intent.inputToken) parts.push(intent.inputToken);
+      if (intent.outputToken) parts.push(`to ${intent.outputToken}`);
+      break;
+
     case 'scan':
       parts.push('Scan for LP opportunities');
       if (intent.pair) parts.push(`for ${intent.pair}`);

@@ -18,6 +18,7 @@ import { PrivyWalletClient } from '../mpc/privyClient';
 import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
 import { calculateFee, createFeeBreakdown, FEE_CONFIG } from '../fees';
+import { jupiterClient, TOKENS } from '../swap';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types';
 
 const app = new Hono();
@@ -271,6 +272,9 @@ app.post('/chat', async (c) => {
     let result: AgentResponse;
 
     switch (intent.action) {
+      case 'swap':
+        result = await handleSwap(intent);
+        break;
       case 'scan':
         result = await handleScan(intent);
         break;
@@ -342,6 +346,63 @@ app.post('/position/collect-fees', async (c) => {
   const { positionId, dex } = await c.req.json();
   const result = await handleCollectFees({ action: 'collect', positionId, dex });
   return c.json(result);
+});
+
+// ============ Swap Endpoint ============
+
+app.post('/swap', async (c) => {
+  const body = await c.req.json();
+  const result = await handleSwap({
+    action: 'swap',
+    inputToken: body.inputMint || body.inputToken,
+    outputToken: body.outputMint || body.outputToken,
+    amount: body.amount,
+  });
+  return c.json(result);
+});
+
+app.get('/swap/quote', async (c) => {
+  const inputToken = c.req.query('inputMint') || c.req.query('inputToken');
+  const outputToken = c.req.query('outputMint') || c.req.query('outputToken');
+  const amount = c.req.query('amount');
+
+  if (!inputToken || !outputToken || !amount) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Missing inputMint/inputToken, outputMint/outputToken, or amount',
+    }, 400);
+  }
+
+  try {
+    const inputMint = jupiterClient.resolveTokenMint(inputToken);
+    const outputMint = jupiterClient.resolveTokenMint(outputToken);
+    const quote = await jupiterClient.getQuote(inputMint, outputMint, amount);
+
+    return c.json<AgentResponse>({
+      success: true,
+      message: `Quote: ${quote.inAmount} ${inputToken} -> ${quote.outAmount} ${outputToken}`,
+      data: {
+        quote,
+        inputMint,
+        outputMint,
+        priceImpact: quote.priceImpactPct,
+        route: quote.routePlan.map(r => r.swapInfo.label).join(' -> '),
+      },
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to get quote',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+app.get('/swap/tokens', (c) => {
+  return c.json({
+    tokens: TOKENS,
+    description: 'Well-known token mints. Use symbol (SOL, USDC) or full mint address.',
+  });
 });
 
 // ============ Handlers ============
@@ -422,6 +483,76 @@ async function handleGetPositions(): Promise<AgentResponse> {
     return {
       success: false,
       message: 'Failed to fetch positions',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+async function handleSwap(intent: LPIntent): Promise<AgentResponse> {
+  const walletClient = getWalletClient();
+  if (!walletClient) {
+    return { success: false, message: 'No wallet loaded. Create or load a wallet first.' };
+  }
+
+  if (!intent.inputToken || !intent.outputToken || !intent.amount) {
+    return { 
+      success: false, 
+      message: 'Missing inputToken, outputToken, or amount. Example: "swap 1 SOL to USDC"',
+    };
+  }
+
+  try {
+    // Resolve token symbols to mint addresses
+    const inputMint = jupiterClient.resolveTokenMint(intent.inputToken);
+    const outputMint = jupiterClient.resolveTokenMint(intent.outputToken);
+
+    // Convert amount to base units (lamports for SOL = 9 decimals, USDC = 6 decimals)
+    // For simplicity, we assume SOL has 9 decimals, stablecoins 6
+    const inputDecimals = intent.inputToken.toUpperCase() === 'SOL' ? 9 : 6;
+    const amountBaseUnits = Math.floor(intent.amount * Math.pow(10, inputDecimals));
+
+    // Get the user's wallet address
+    const userPublicKey = walletClient.getAddress();
+
+    // Get quote
+    const quote = await jupiterClient.getQuote(inputMint, outputMint, amountBaseUnits);
+    
+    // Build swap transaction
+    const swapResult = await jupiterClient.swap(quote, userPublicKey);
+
+    // Sign the transaction
+    const signedTx = await walletClient.signTransaction(swapResult.swapTransaction);
+
+    // Broadcast
+    const txid = await broadcastTransaction(signedTx);
+
+    // Format output amount
+    const outputDecimals = intent.outputToken.toUpperCase() === 'SOL' ? 9 : 6;
+    const outputAmount = parseInt(quote.outAmount) / Math.pow(10, outputDecimals);
+
+    return {
+      success: true,
+      message: `Swapped ${intent.amount} ${intent.inputToken} for ${outputAmount.toFixed(6)} ${intent.outputToken}`,
+      data: {
+        inputToken: intent.inputToken,
+        inputMint,
+        inputAmount: intent.amount,
+        outputToken: intent.outputToken,
+        outputMint,
+        outputAmount,
+        priceImpact: quote.priceImpactPct,
+        route: quote.routePlan.map(r => r.swapInfo.label).join(' -> '),
+      },
+      transaction: {
+        unsigned: swapResult.swapTransaction,
+        signed: signedTx,
+        txid,
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'Swap failed',
       error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
