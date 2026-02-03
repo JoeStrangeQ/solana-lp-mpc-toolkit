@@ -19,6 +19,7 @@ import { checkPositionHealth, checkPoolHealth, formatHealthReport, formatPoolRep
 import { validatePublicKey, validateAddLiquidityRequest, validateEncryptRequest } from './validation';
 import { safeFetch } from './fetch';
 import { standardLimit, strictLimit, txLimit, readLimit, getRateLimitStats } from './rateLimit';
+import * as log from './logger';
 
 // ============ Configuration ============
 
@@ -37,7 +38,7 @@ app.use('*', async (c, next) => {
   const start = Date.now();
   await next();
   const ms = Date.now() - start;
-  console.log(`${c.req.method} ${c.req.path} - ${c.res.status} (${ms}ms)`);
+  log.request(c.req.method, c.req.path, c.res.status, ms);
 });
 
 // ============ Health & Info ============
@@ -138,8 +139,8 @@ app.get('/v1/pools/scan', async (c) => {
             }));
           pools.push(...filtered);
         }
-      } catch (e) {
-        console.warn('Orca API error:', e);
+      } catch (e: any) {
+        log.warn('Orca API error', { error: e?.message });
       }
     }
 
