@@ -19,6 +19,7 @@ import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
 import { calculateFee, createFeeBreakdown, FEE_CONFIG } from '../fees';
 import { jupiterClient, TOKENS } from '../swap';
+import { lpPipeline, METEORA_POOLS } from '../lp';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types';
 
 const app = new Hono();
@@ -271,6 +272,9 @@ app.post('/chat', async (c) => {
     let result: AgentResponse;
 
     switch (intent.action) {
+      case 'lp':
+        result = await handleLp(intent);
+        break;
       case 'swap':
         result = await handleSwap(intent);
         break;
@@ -404,7 +408,190 @@ app.get('/swap/tokens', (c) => {
   });
 });
 
+// ============ LP Pipeline Endpoints ============
+
+app.get('/lp/pools', (c) => {
+  return c.json({
+    pools: METEORA_POOLS,
+    description: 'Supported Meteora DLMM pools for LP pipeline',
+  });
+});
+
+app.post('/lp/prepare', async (c) => {
+  const walletClient = getWalletClient();
+  if (!walletClient) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'No wallet loaded. Create or load a wallet first.',
+    }, 400);
+  }
+
+  try {
+    const { tokenA, tokenB, amount } = await c.req.json();
+
+    if (!tokenA || !tokenB || !amount) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: 'Missing tokenA, tokenB, or amount. Example: { "tokenA": "SOL", "tokenB": "USDC", "amount": 500 }',
+      }, 400);
+    }
+
+    const walletAddress = walletClient.getAddress();
+    const result = await lpPipeline.prepareLiquidity(walletAddress, tokenA, tokenB, amount);
+
+    return c.json<AgentResponse>({
+      success: result.ready,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to prepare liquidity',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+app.post('/lp/execute', async (c) => {
+  const walletClient = getWalletClient();
+  if (!walletClient) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'No wallet loaded. Create or load a wallet first.',
+    }, 400);
+  }
+
+  try {
+    const { tokenA, tokenB, amount } = await c.req.json();
+
+    if (!tokenA || !tokenB || !amount) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: 'Missing tokenA, tokenB, or amount. Example: { "tokenA": "SOL", "tokenB": "USDC", "amount": 500 }',
+      }, 400);
+    }
+
+    const walletAddress = walletClient.getAddress();
+    const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
+
+    const result = await lpPipeline.execute(walletAddress, tokenA, tokenB, amount, signTransaction);
+
+    return c.json<AgentResponse>({
+      success: result.success,
+      message: result.message,
+      data: {
+        swapTxid: result.swapTxid,
+        lpTxid: result.lpTxid,
+        positionAddress: result.positionAddress,
+        binRange: result.binRange,
+      },
+      transaction: result.lpTxid ? { unsigned: '', txid: result.lpTxid } : undefined,
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to execute LP',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
 // ============ Handlers ============
+
+async function handleLp(intent: LPIntent): Promise<AgentResponse> {
+  const walletClient = getWalletClient();
+  if (!walletClient) {
+    return { success: false, message: 'No wallet loaded. Create or load a wallet first.' };
+  }
+
+  if (!intent.pair) {
+    return { 
+      success: false, 
+      message: 'Missing token pair. Example: "LP $500 into SOL-USDC"',
+    };
+  }
+
+  const [tokenA, tokenB] = intent.pair.split('-');
+  if (!tokenA || !tokenB) {
+    return { 
+      success: false, 
+      message: 'Invalid pair format. Use TOKEN-TOKEN format like SOL-USDC',
+    };
+  }
+
+  const walletAddress = walletClient.getAddress();
+
+  // If no amount specified, just prepare and return what's needed
+  if (!intent.amount) {
+    try {
+      const prep = await lpPipeline.prepareLiquidity(walletAddress, tokenA, tokenB, 0);
+      return {
+        success: true,
+        message: `To LP into ${intent.pair}, specify an amount. Example: "LP $500 into ${intent.pair}"`,
+        data: {
+          poolInfo: prep.poolInfo,
+          currentBalances: prep.currentBalances,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: 'Failed to get pool info',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  // First, prepare to see what's needed
+  try {
+    const prep = await lpPipeline.prepareLiquidity(walletAddress, tokenA, tokenB, intent.amount);
+
+    if (!prep.ready) {
+      return {
+        success: false,
+        message: prep.message,
+        data: {
+          currentBalances: prep.currentBalances,
+          targetAmounts: prep.targetAmounts,
+          poolInfo: prep.poolInfo,
+        },
+      };
+    }
+
+    // Execute the full pipeline (swap if needed + LP)
+    const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
+    const result = await lpPipeline.execute(walletAddress, tokenA, tokenB, intent.amount, signTransaction);
+
+    // Calculate 1% protocol fee
+    const feeBreakdown = createFeeBreakdown(intent.amount);
+
+    return {
+      success: result.success,
+      message: result.message,
+      data: {
+        swapTxid: result.swapTxid,
+        lpTxid: result.lpTxid,
+        positionAddress: result.positionAddress,
+        binRange: result.binRange,
+        fees: {
+          protocolFee: feeBreakdown.protocol.amount,
+          protocolFeeBps: feeBreakdown.protocol.bps,
+          treasury: feeBreakdown.protocol.recipient,
+          netAmount: feeBreakdown.total.netAmount,
+          grossAmount: feeBreakdown.total.grossAmount,
+        },
+      },
+      transaction: result.lpTxid ? { unsigned: '', txid: result.lpTxid } : undefined,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: 'LP operation failed',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
 
 async function handleScan(intent: LPIntent): Promise<AgentResponse> {
   if (!gatewayClient) {

@@ -20,6 +20,22 @@ const DEX_ALIASES: Record<string, DEX> = {
 // Supported token symbols for swap parsing
 const TOKEN_SYMBOLS = ['SOL', 'USDC', 'USDT', 'BONK', 'WIF', 'JUP', 'RAY'];
 
+// LP-specific patterns
+const LP_PATTERNS = [
+  // "LP $500 into SOL-USDC"
+  /lp\s+\$?([\d,]+(?:\.\d+)?)\s+(?:into|in|to)\s+([A-Z]{2,6})[-\/]([A-Z]{2,6})/i,
+  // "add liquidity to SOL-USDC pool"
+  /add\s+(?:liquidity|liq)\s+(?:to|into)\s+([A-Z]{2,6})[-\/]([A-Z]{2,6})\s*(?:pool)?/i,
+  // "put $1000 in the SOL-USDC pool"
+  /put\s+\$?([\d,]+(?:\.\d+)?)\s+(?:in|into)\s+(?:the\s+)?([A-Z]{2,6})[-\/]([A-Z]{2,6})\s*(?:pool)?/i,
+  // "add $500 liquidity to SOL-USDC"
+  /add\s+\$?([\d,]+(?:\.\d+)?)\s+(?:liquidity|liq)\s+(?:to|into)\s+([A-Z]{2,6})[-\/]([A-Z]{2,6})/i,
+  // "provide liquidity for SOL-USDC with $500"
+  /provide\s+(?:liquidity|liq)\s+(?:for|to)\s+([A-Z]{2,6})[-\/]([A-Z]{2,6})\s+(?:with\s+)?\$?([\d,]+(?:\.\d+)?)/i,
+  // "invest $500 in SOL pool"
+  /invest\s+\$?([\d,]+(?:\.\d+)?)\s+(?:in|into)\s+(?:the\s+)?([A-Z]{2,6})\s*(?:pool)?/i,
+];
+
 const PAIR_PATTERNS = [
   // USDC-SOL, BONK/WIF, etc.
   /\b([A-Z]{2,6})[-\/]([A-Z]{2,6})\b/gi,
@@ -41,7 +57,65 @@ const SWAP_PATTERNS = [
 export function parseIntent(text: string): LPIntent {
   const lower = text.toLowerCase();
 
-  // Check for swap intent first (specific patterns)
+  // Check for LP-specific patterns first (most specific)
+  // "LP $500 into SOL-USDC"
+  let lpMatch = text.match(/lp\s+\$?([\d,]+(?:\.\d+)?)\s+(?:into|in|to)\s+([A-Z]{2,6})[-\/]([A-Z]{2,6})/i);
+  if (lpMatch) {
+    return {
+      action: 'lp',
+      amount: parseFloat(lpMatch[1].replace(/,/g, '')),
+      pair: `${lpMatch[2].toUpperCase()}-${lpMatch[3].toUpperCase()}`,
+      dex: 'meteora', // Default to Meteora DLMM
+    };
+  }
+
+  // "add liquidity to SOL-USDC pool" or "add $500 liquidity to SOL-USDC"
+  lpMatch = text.match(/add\s+(?:\$?([\d,]+(?:\.\d+)?)\s+)?(?:liquidity|liq)\s+(?:to|into)\s+([A-Z]{2,6})[-\/]([A-Z]{2,6})/i);
+  if (lpMatch) {
+    return {
+      action: 'lp',
+      amount: lpMatch[1] ? parseFloat(lpMatch[1].replace(/,/g, '')) : undefined,
+      pair: `${lpMatch[2].toUpperCase()}-${lpMatch[3].toUpperCase()}`,
+      dex: 'meteora',
+    };
+  }
+
+  // "put $1000 in the SOL-USDC pool"
+  lpMatch = text.match(/put\s+\$?([\d,]+(?:\.\d+)?)\s+(?:in|into)\s+(?:the\s+)?([A-Z]{2,6})[-\/]([A-Z]{2,6})/i);
+  if (lpMatch) {
+    return {
+      action: 'lp',
+      amount: parseFloat(lpMatch[1].replace(/,/g, '')),
+      pair: `${lpMatch[2].toUpperCase()}-${lpMatch[3].toUpperCase()}`,
+      dex: 'meteora',
+    };
+  }
+
+  // "provide liquidity for SOL-USDC with $500"
+  lpMatch = text.match(/provide\s+(?:liquidity|liq)\s+(?:for|to)\s+([A-Z]{2,6})[-\/]([A-Z]{2,6})(?:\s+(?:with\s+)?\$?([\d,]+(?:\.\d+)?))?/i);
+  if (lpMatch) {
+    return {
+      action: 'lp',
+      amount: lpMatch[3] ? parseFloat(lpMatch[3].replace(/,/g, '')) : undefined,
+      pair: `${lpMatch[1].toUpperCase()}-${lpMatch[2].toUpperCase()}`,
+      dex: 'meteora',
+    };
+  }
+
+  // "invest $500 in SOL-USDC pool" or "invest $500 in SOL pool"
+  lpMatch = text.match(/invest\s+\$?([\d,]+(?:\.\d+)?)\s+(?:in|into)\s+(?:the\s+)?([A-Z]{2,6})(?:[-\/]([A-Z]{2,6}))?\s*(?:pool)?/i);
+  if (lpMatch) {
+    const tokenA = lpMatch[2].toUpperCase();
+    const tokenB = lpMatch[3] ? lpMatch[3].toUpperCase() : 'USDC'; // Default to USDC pair
+    return {
+      action: 'lp',
+      amount: parseFloat(lpMatch[1].replace(/,/g, '')),
+      pair: `${tokenA}-${tokenB}`,
+      dex: 'meteora',
+    };
+  }
+
+  // Check for swap intent (specific patterns)
   for (const pattern of SWAP_PATTERNS) {
     const match = text.match(pattern);
     if (match) {
@@ -149,6 +223,13 @@ export function describeIntent(intent: LPIntent): string {
   const parts: string[] = [];
 
   switch (intent.action) {
+    case 'lp':
+      parts.push('Add liquidity');
+      if (intent.amount) parts.push(`($${intent.amount})`);
+      if (intent.pair) parts.push(`to ${intent.pair}`);
+      if (intent.dex) parts.push(`on ${intent.dex}`);
+      break;
+
     case 'swap':
       parts.push('Swap');
       if (intent.amount) parts.push(`${intent.amount}`);
