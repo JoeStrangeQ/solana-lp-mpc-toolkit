@@ -16,6 +16,7 @@ import { MPCClient } from '../mpc';
 import { MockMPCClient } from '../mpc/mockClient';
 import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
+import { calculateFee, createFeeBreakdown, FEE_CONFIG } from '../fees';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types';
 
 const app = new Hono();
@@ -35,7 +36,49 @@ app.get('/', (c) => c.json({
   version: '2.0.0',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
+  fees: {
+    protocol: `${FEE_CONFIG.FEE_BPS / 100}%`,
+    description: '1% protocol fee on every transaction',
+    treasury: FEE_CONFIG.TREASURY_ADDRESS.toBase58(),
+  },
 }));
+
+// ============ Fee Info ============
+
+app.get('/fees', (c) => {
+  return c.json({
+    protocolFee: {
+      bps: FEE_CONFIG.FEE_BPS,
+      percentage: `${FEE_CONFIG.FEE_BPS / 100}%`,
+      description: '1% fee deducted from every LP transaction',
+    },
+    treasury: FEE_CONFIG.TREASURY_ADDRESS.toBase58(),
+    minFee: {
+      lamports: FEE_CONFIG.MIN_FEE_LAMPORTS,
+      description: 'Minimum fee threshold to avoid dust',
+    },
+    exemptThreshold: {
+      usd: FEE_CONFIG.EXEMPT_THRESHOLD_USD,
+      description: 'Transactions below this USD value are fee-exempt',
+    },
+    calculate: '/fees/calculate?amount=1000 - Calculate fee for specific amount',
+  });
+});
+
+app.get('/fees/calculate', (c) => {
+  const amount = parseFloat(c.req.query('amount') || '0');
+  if (amount <= 0) {
+    return c.json({ error: 'Provide a positive amount query parameter' }, 400);
+  }
+  
+  const breakdown = createFeeBreakdown(amount);
+  return c.json({
+    input: amount,
+    fee: breakdown.protocol,
+    output: breakdown.total.netAmount,
+    message: `${breakdown.protocol.amount} (${breakdown.protocol.bps / 100}%) goes to protocol treasury`,
+  });
+});
 
 app.get('/health', async (c) => {
   const gatewayOk = gatewayClient ? await gatewayClient.healthCheck() : false;
@@ -393,12 +436,22 @@ async function handleOpenPosition(intent: LPIntent): Promise<AgentResponse> {
     // Broadcast
     const txid = await broadcastTransaction(signedTx);
 
+    // Calculate 1% protocol fee
+    const feeBreakdown = createFeeBreakdown(intent.amount);
+
     return {
       success: true,
       message: `Position opened on ${intent.dex}`,
       data: {
         positionId: result.positionAddress,
         encryptedStrategy: encryptedStrategy.ciphertext.slice(0, 20) + '...',
+        fees: {
+          protocolFee: feeBreakdown.protocol.amount,
+          protocolFeeBps: feeBreakdown.protocol.bps,
+          treasury: feeBreakdown.protocol.recipient,
+          netAmount: feeBreakdown.total.netAmount,
+          grossAmount: feeBreakdown.total.grossAmount,
+        },
       },
       transaction: {
         unsigned: result.transaction,
