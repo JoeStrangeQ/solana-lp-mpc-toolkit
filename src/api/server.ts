@@ -21,6 +21,7 @@ import { safeFetch } from './fetch';
 import { standardLimit, strictLimit, txLimit, readLimit, getRateLimitStats } from './rateLimit';
 import * as log from './logger';
 import { requestId, serverTiming, errorHandler, securityHeaders } from './middleware';
+import { runHealthChecks, quickHealthCheck } from './health';
 
 // ============ Configuration ============
 
@@ -73,10 +74,11 @@ app.get('/', (c) => {
 // Apply rate limiting to all /v1 routes
 app.use('/v1/*', standardLimit);
 
+// Quick health check (no external calls)
 app.get('/v1/health', (c) => {
+  const health = quickHealthCheck();
   return c.json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
+    ...health,
     arcium: {
       cluster: ARCIUM_DEVNET_CONFIG.clusterOffset,
       mxeKey: ARCIUM_DEVNET_CONFIG.mxePublicKeyHex.slice(0, 16) + '...',
@@ -84,6 +86,13 @@ app.get('/v1/health', (c) => {
     dexes: ['meteora', 'orca', 'raydium', 'saber', 'lifinity', 'crema', 'fluxbeam', 'invariant'],
     rateLimit: getRateLimitStats(),
   });
+});
+
+// Deep health check (tests all dependencies)
+app.get('/v1/health/deep', async (c) => {
+  const health = await runHealthChecks();
+  const statusCode = health.status === 'healthy' ? 200 : health.status === 'degraded' ? 200 : 503;
+  return c.json(health, statusCode);
 });
 
 // ============ Pool Discovery ============
