@@ -176,12 +176,31 @@ app.post('/wallet/create', async (c) => {
 
 app.post('/wallet/load', async (c) => {
   try {
-    const { address, share, id } = await c.req.json();
+    const { address, share, id, walletId, provider } = await c.req.json();
 
+    // Support Privy wallet loading by walletId
+    if (config.privy.enabled && walletId) {
+      console.log('[/wallet/load] Loading Privy wallet:', walletId);
+      privyClient = new PrivyWalletClient({
+        appId: config.privy.appId,
+        appSecret: config.privy.appSecret,
+      });
+      
+      const wallet = await privyClient.loadWallet(walletId);
+      gatewayClient = new GatewayClient(wallet.address);
+      
+      return c.json<AgentResponse>({
+        success: true,
+        message: 'Privy wallet loaded',
+        data: { address: wallet.address, walletId: wallet.id, provider: 'privy' },
+      });
+    }
+
+    // Legacy Portal/Mock wallet loading
     if (!address || !share) {
       return c.json<AgentResponse>({
         success: false,
-        message: 'Missing address or share',
+        message: 'Missing address or share (or walletId for Privy)',
       }, 400);
     }
 
@@ -408,8 +427,16 @@ async function handleGetPositions(): Promise<AgentResponse> {
   }
 }
 
+// Helper to get active wallet client (Privy or MPC)
+function getWalletClient() {
+  if (privyClient?.isWalletLoaded()) return privyClient;
+  if (mpcClient?.isWalletLoaded()) return mpcClient;
+  return null;
+}
+
 async function handleOpenPosition(intent: LPIntent): Promise<AgentResponse> {
-  if (!gatewayClient || !mpcClient) {
+  const walletClient = getWalletClient();
+  if (!gatewayClient || !walletClient) {
     return { success: false, message: 'Wallet not initialized' };
   }
 
@@ -467,8 +494,8 @@ async function handleOpenPosition(intent: LPIntent): Promise<AgentResponse> {
       tokenBAmount: intent.amount / 2,
     });
 
-    // Sign with MPC
-    const signedTx = await mpcClient.signTransaction(result.transaction);
+    // Sign with wallet client (Privy or MPC)
+    const signedTx = await walletClient.signTransaction(result.transaction);
 
     // Broadcast
     const txid = await broadcastTransaction(signedTx);
@@ -506,7 +533,8 @@ async function handleOpenPosition(intent: LPIntent): Promise<AgentResponse> {
 }
 
 async function handleClosePosition(intent: LPIntent): Promise<AgentResponse> {
-  if (!gatewayClient || !mpcClient) {
+  const walletClient = getWalletClient();
+  if (!gatewayClient || !walletClient) {
     return { success: false, message: 'Wallet not initialized' };
   }
 
@@ -520,7 +548,7 @@ async function handleClosePosition(intent: LPIntent): Promise<AgentResponse> {
       positionId: intent.positionId,
     });
 
-    const signedTx = await mpcClient.signTransaction(result.transaction);
+    const signedTx = await walletClient.signTransaction(result.transaction);
     const txid = await broadcastTransaction(signedTx);
 
     return {
@@ -538,7 +566,8 @@ async function handleClosePosition(intent: LPIntent): Promise<AgentResponse> {
 }
 
 async function handleCollectFees(intent: LPIntent): Promise<AgentResponse> {
-  if (!gatewayClient || !mpcClient) {
+  const walletClient = getWalletClient();
+  if (!gatewayClient || !walletClient) {
     return { success: false, message: 'Wallet not initialized' };
   }
 
@@ -552,7 +581,7 @@ async function handleCollectFees(intent: LPIntent): Promise<AgentResponse> {
       positionId: intent.positionId,
     });
 
-    const signedTx = await mpcClient.signTransaction(result.transaction);
+    const signedTx = await walletClient.signTransaction(result.transaction);
     const txid = await broadcastTransaction(signedTx);
 
     return {
