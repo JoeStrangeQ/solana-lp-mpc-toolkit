@@ -11,6 +11,7 @@
     "example": "tsx examples/agent-client.ts",
     "test:e2e": "tsx scripts/e2e-test.ts",
     "validate": "tsx scripts/validate-api.ts",
+    "test:tx": "tsx scripts/test-tx-builder.ts",
     "dev": "vite --port 3000",
     "start": "vite --port 3000",
     "build": "vite build && tsc",
@@ -18,7 +19,8 @@
     "test": "vitest run",
     "lint": "eslint",
     "format": "prettier",
-    "check": "prettier --write . && eslint --fix"
+    "check": "prettier --write . && eslint --fix",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@arcium-hq/client": "^0.7.0",
@@ -44,6 +46,7 @@
     "hono": "^4.11.7",
     "lucide-react": "^0.553.0",
     "motion": "^12.23.24",
+    "patch-package": "^8.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-error-boundary": "^6.0.0",
