@@ -3,6 +3,7 @@ import { Infer, v } from "convex/values";
 import { vPosition } from "./schema/positions";
 import { vActivity } from "./schema/activities";
 import { vOrder } from "./schema/limitOrders";
+import { vLPPosition, vLPOperation } from "./schema/lpPositions";
 
 export const vLinkedAccountType = v.union(
   v.literal("email"),
@@ -32,6 +33,19 @@ export default defineSchema({
   orders: defineTable(vOrder)
     .index("by_market_direction_price", ["market", "direction", "triggerPrice"])
     .index("by_position_pk", ["positionPubkey"])
-    .index("by_user", ["userId"])
-
+    .index("by_user", ["userId"]),
+  
+  // LP Toolkit tables
+  lpPositions: defineTable(vLPPosition)
+    .index("by_owner", ["ownerAddress"])
+    .index("by_owner_active", ["ownerAddress", "isActive"])
+    .index("by_venue", ["venue"])
+    .index("by_position_id", ["positionId"])
+    .index("by_pool", ["poolAddress"]),
+  
+  lpOperations: defineTable(vLPOperation)
+    .index("by_owner", ["ownerAddress"])
+    .index("by_position", ["positionId"])
+    .index("by_status", ["status"])
+    .index("by_timestamp", ["timestamp"]),
 });
