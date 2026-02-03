@@ -13,6 +13,7 @@ export { orcaAdapter, OrcaAdapter } from './orca';
 export { raydiumAdapter, RaydiumAdapter } from './raydium';
 export { lifinityAdapter, LifinityAdapter } from './lifinity';
 export { saberAdapter, SaberAdapter } from './saber';
+export { cremaAdapter, CremaAdapter } from './crema';
 
 // Adapter registry
 import { meteoraAdapter } from './meteora';
@@ -21,6 +22,7 @@ import { orcaAdapter } from './orca';
 import { raydiumAdapter } from './raydium';
 import { lifinityAdapter } from './lifinity';
 import { saberAdapter } from './saber';
+import { cremaAdapter } from './crema';
 import { DEXAdapter, DEXVenue } from './types';
 
 // Primary adapters (one per venue)
@@ -31,6 +33,7 @@ export const adapters: Record<DEXVenue, DEXAdapter | null> = {
   raydium: raydiumAdapter,           // CLMM (concentrated)
   lifinity: lifinityAdapter,         // Oracle-based, reduced IL
   saber: saberAdapter,               // Stable swaps
+  crema: cremaAdapter,               // CLMM (concentrated)
   phoenix: null,                     // CLOB - skipped per Joe
 };
 
@@ -42,6 +45,7 @@ export const allAdapters: DEXAdapter[] = [
   raydiumAdapter,      // Raydium CLMM
   lifinityAdapter,     // Lifinity (oracle-based)
   saberAdapter,        // Saber (stable swaps)
+  cremaAdapter,        // Crema (concentrated)
 ];
 
 export function getAdapter(venue: DEXVenue): DEXAdapter | null {
