@@ -1,10 +1,15 @@
 {
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "convex/**/*.ts",
     "eslint.config.js",
     "prettier.config.cjs",
     "vite.config.mjs"
+  ],
+  "exclude": [
+    "tests/**/*",
+    "node_modules"
   ],
 
   "compilerOptions": {
