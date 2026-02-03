@@ -4,8 +4,8 @@
   "description": "AI-native liquidity provision across Solana DEXs with MPC custody and Arcium privacy",
   "main": "dist/index.js",
   "scripts": {
-    "start": "tsx --env-file=.env src/index.ts",
-    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "dev": "tsx --env-file=.env watch src/index.ts",
     "build": "tsc",
     "test": "jest",
     "lint": "eslint src/",
