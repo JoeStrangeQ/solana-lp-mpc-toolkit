@@ -33,7 +33,7 @@ const DAMM_V2_POOLS = {
 };
 
 export class MeteoraDAMMAdapter implements DEXAdapter {
-  venue: DEXVenue = 'meteora'; // Same venue, different pool type
+  venue: DEXVenue = 'meteora-damm'; // Same venue, different pool type
 
   /**
    * Get all DAMM v2 pools

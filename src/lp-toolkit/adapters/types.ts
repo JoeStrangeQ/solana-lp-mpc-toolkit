@@ -7,7 +7,14 @@ import { Connection, PublicKey, Transaction, Keypair } from '@solana/web3.js';
 
 // ============ Common Types ============
 
-export type DEXVenue = 'meteora' | 'orca' | 'raydium' | 'phoenix' | 'lifinity';
+export type DEXVenue = 
+  | 'meteora'      // DLMM concentrated liquidity
+  | 'meteora-damm' // DAMM v2 full range
+  | 'orca'         // Whirlpool concentrated
+  | 'raydium'      // CLMM concentrated
+  | 'lifinity'     // Oracle-based, reduced IL
+  | 'saber'        // Stable swaps
+  | 'phoenix';     // CLOB (not implemented)
 
 export interface LPPool {
   venue: DEXVenue;
