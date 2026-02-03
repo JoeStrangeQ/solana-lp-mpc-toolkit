@@ -1,6 +1,10 @@
 import { v } from "convex/values";
 import { internalMutation, mutation } from "../../_generated/server";
-import { vLimitOrderInput, vOrderDirection, vSupportedMarket } from "../../schema/limitOrders";
+import {
+  vLimitOrderInput,
+  vOrderDirection,
+  vSupportedMarket,
+} from "../../schema/limitOrders";
 
 export const createOrder = mutation({
   args: {
@@ -82,7 +86,9 @@ export const cancelOrdersForPosition = internalMutation({
     // Find all pending orders for this position
     const ordersToClose = await ctx.db
       .query("orders")
-      .withIndex("by_position_pk", (q) => q.eq("positionPubkey", positionPubkey))
+      .withIndex("by_position_pk", (q) =>
+        q.eq("positionPubkey", positionPubkey),
+      )
       .filter((q) => q.eq(q.field("status"), "pending"))
       .collect();
 
@@ -92,8 +98,8 @@ export const cancelOrdersForPosition = internalMutation({
           ctx.db.patch(o._id, {
             status: "canceled",
             errorMsg: "Position Closed",
-          })
-        )
+          }),
+        ),
       );
     }
   },

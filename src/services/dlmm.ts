@@ -46,7 +46,11 @@ const zMeteoraDlmmPoolsWithPaginationResponse = z.object({
 export type MeteoraPoolTimeframes = z.infer<typeof zMeteoraPoolTimeframes>;
 export type MeteoraDlmmPool = z.infer<typeof zMeteoraDlmmPool>;
 
-export async function getMeteoraDlmmPool({ poolAddress }: { poolAddress: Address }) {
+export async function getMeteoraDlmmPool({
+  poolAddress,
+}: {
+  poolAddress: Address;
+}) {
   const response = await fetch(`${METEORA_DLMM_API_URL}/pair/${poolAddress}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch pool ${poolAddress}: ${response.ok}`);
@@ -81,7 +85,9 @@ export async function getMeteoraPoolsWithPagination({
     params.append("include_token_mints", includeTokenMints.join(","));
   }
 
-  const response = await fetch(`${METEORA_DLMM_API_URL}/pair/all_with_pagination?${params}`);
+  const response = await fetch(
+    `${METEORA_DLMM_API_URL}/pair/all_with_pagination?${params}`,
+  );
   if (!response.ok) {
     throw new Error("Failed to fetch pool with pagination");
   }

@@ -1,37 +1,37 @@
 /**
  * MnM DLMM Service
  * Meteora DLMM integration for creating and managing LP positions
- * 
+ *
  * INSTALLATION REQUIRED:
  * pnpm add @meteora-ag/dlmm @solana/web3.js bn.js
  */
 
-import DLMM, { StrategyType } from '@meteora-ag/dlmm';
-import { 
-  Connection, 
-  PublicKey, 
+import DLMM, { StrategyType } from "@meteora-ag/dlmm";
+import {
+  Connection,
+  PublicKey,
   Keypair,
   Transaction,
   sendAndConfirmTransaction,
-} from '@solana/web3.js';
-import BN from 'bn.js';
+} from "@solana/web3.js";
+import BN from "bn.js";
 
 // ============ Pool Addresses (Mainnet) ============
 
 export const DLMM_POOLS = {
   // SOL/USDC - Most liquid
-  SOL_USDC: new PublicKey('5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6'),
+  SOL_USDC: new PublicKey("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6"),
   // USDC/USDT - Stablecoin pair
-  USDC_USDT: new PublicKey('ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq'),
+  USDC_USDT: new PublicKey("ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq"),
   // SOL/USDT
-  SOL_USDT: new PublicKey('Gf8YTgnugSZgdGBYYMpMi6v1bPgjCgX7BrrLzH6FNCvz'),
+  SOL_USDT: new PublicKey("Gf8YTgnugSZgdGBYYMpMi6v1bPgjCgX7BrrLzH6FNCvz"),
 };
 
 // Token mints
 export const TOKEN_MINTS = {
-  SOL: new PublicKey('So11111111111111111111111111111111111111112'),
-  USDC: new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
-  USDT: new PublicKey('Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'),
+  SOL: new PublicKey("So11111111111111111111111111111111111111112"),
+  USDC: new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"),
+  USDT: new PublicKey("Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"),
 };
 
 // ============ Types ============
@@ -101,7 +101,7 @@ export interface LPTokenValue {
  */
 export async function createDLMMPool(
   connection: Connection,
-  poolAddress: PublicKey
+  poolAddress: PublicKey,
 ): Promise<DLMM> {
   return await DLMM.create(connection, poolAddress);
 }
@@ -111,23 +111,29 @@ export async function createDLMMPool(
  */
 export async function getPoolInfo(
   connection: Connection,
-  poolAddress: PublicKey
+  poolAddress: PublicKey,
 ): Promise<DLMMPoolInfo> {
   const dlmmPool = await DLMM.create(connection, poolAddress);
   const activeBin = await dlmmPool.getActiveBin();
-  
+
   return {
     address: poolAddress,
     tokenX: {
       mint: dlmmPool.tokenX.publicKey,
-      symbol: dlmmPool.tokenX.publicKey.equals(TOKEN_MINTS.SOL) ? 'SOL' :
-              dlmmPool.tokenX.publicKey.equals(TOKEN_MINTS.USDC) ? 'USDC' : 'USDT',
+      symbol: dlmmPool.tokenX.publicKey.equals(TOKEN_MINTS.SOL)
+        ? "SOL"
+        : dlmmPool.tokenX.publicKey.equals(TOKEN_MINTS.USDC)
+          ? "USDC"
+          : "USDT",
       decimals: dlmmPool.tokenX.decimal,
     },
     tokenY: {
       mint: dlmmPool.tokenY.publicKey,
-      symbol: dlmmPool.tokenY.publicKey.equals(TOKEN_MINTS.SOL) ? 'SOL' :
-              dlmmPool.tokenY.publicKey.equals(TOKEN_MINTS.USDC) ? 'USDC' : 'USDT',
+      symbol: dlmmPool.tokenY.publicKey.equals(TOKEN_MINTS.SOL)
+        ? "SOL"
+        : dlmmPool.tokenY.publicKey.equals(TOKEN_MINTS.USDC)
+          ? "USDC"
+          : "USDT",
       decimals: dlmmPool.tokenY.decimal,
     },
     activeBin: {
@@ -143,15 +149,17 @@ export async function getPoolInfo(
 /**
  * Get all available DLMM pools
  */
-export async function getAvailablePools(): Promise<{
-  name: string;
-  address: PublicKey;
-  pair: string;
-}[]> {
+export async function getAvailablePools(): Promise<
+  {
+    name: string;
+    address: PublicKey;
+    pair: string;
+  }[]
+> {
   return [
-    { name: 'SOL/USDC', address: DLMM_POOLS.SOL_USDC, pair: 'SOL-USDC' },
-    { name: 'USDC/USDT', address: DLMM_POOLS.USDC_USDT, pair: 'USDC-USDT' },
-    { name: 'SOL/USDT', address: DLMM_POOLS.SOL_USDT, pair: 'SOL-USDT' },
+    { name: "SOL/USDC", address: DLMM_POOLS.SOL_USDC, pair: "SOL-USDC" },
+    { name: "USDC/USDT", address: DLMM_POOLS.USDC_USDT, pair: "USDC-USDT" },
+    { name: "SOL/USDT", address: DLMM_POOLS.SOL_USDT, pair: "SOL-USDT" },
   ];
 }
 
@@ -161,29 +169,27 @@ export async function getAvailablePools(): Promise<{
  * Create a new DLMM position
  * This is the core function for opening a position on Meteora
  */
-export async function createPosition(
-  params: CreatePositionParams
-): Promise<{
+export async function createPosition(params: CreatePositionParams): Promise<{
   transaction: Transaction;
   positionKeypair: Keypair;
   positionAddress: PublicKey;
 }> {
-  const { 
-    connection, 
-    user, 
-    poolAddress, 
-    tokenXAmount, 
-    tokenYAmount, 
+  const {
+    connection,
+    user,
+    poolAddress,
+    tokenXAmount,
+    tokenYAmount,
     binRange,
-    strategyType = StrategyType.Spot 
+    strategyType = StrategyType.Spot,
   } = params;
 
   // Create DLMM pool instance
   const dlmmPool = await DLMM.create(connection, poolAddress);
-  
+
   // Get active bin to center the position
   const activeBin = await dlmmPool.getActiveBin();
-  
+
   // Calculate bin range
   const minBinId = activeBin.binId - binRange;
   const maxBinId = activeBin.binId + binRange;
@@ -192,17 +198,18 @@ export async function createPosition(
   const positionKeypair = new Keypair();
 
   // Create position and add liquidity
-  const createPositionTx = await dlmmPool.initializePositionAndAddLiquidityByStrategy({
-    positionPubKey: positionKeypair.publicKey,
-    user: user.publicKey,
-    totalXAmount: tokenXAmount,
-    totalYAmount: tokenYAmount,
-    strategy: {
-      maxBinId,
-      minBinId,
-      strategyType,
-    },
-  });
+  const createPositionTx =
+    await dlmmPool.initializePositionAndAddLiquidityByStrategy({
+      positionPubKey: positionKeypair.publicKey,
+      user: user.publicKey,
+      totalXAmount: tokenXAmount,
+      totalYAmount: tokenYAmount,
+      strategy: {
+        maxBinId,
+        minBinId,
+        strategyType,
+      },
+    });
 
   return {
     transaction: createPositionTx,
@@ -217,12 +224,12 @@ export async function createPosition(
 export async function getUserPositions(
   connection: Connection,
   poolAddress: PublicKey,
-  userAddress: PublicKey
+  userAddress: PublicKey,
 ): Promise<DLMMPosition[]> {
   const dlmmPool = await DLMM.create(connection, poolAddress);
   const positions = await dlmmPool.getPositionsByUserAndLbPair(userAddress);
-  
-  return positions.userPositions.map(pos => ({
+
+  return positions.userPositions.map((pos) => ({
     publicKey: pos.publicKey,
     owner: userAddress,
     poolAddress,
@@ -243,20 +250,24 @@ export async function getUserPositions(
  */
 export async function getAllUserPositions(
   connection: Connection,
-  userAddress: PublicKey
+  userAddress: PublicKey,
 ): Promise<DLMMPosition[]> {
   const allPositions: DLMMPosition[] = [];
-  
+
   for (const [, poolAddress] of Object.entries(DLMM_POOLS)) {
     try {
-      const positions = await getUserPositions(connection, poolAddress, userAddress);
+      const positions = await getUserPositions(
+        connection,
+        poolAddress,
+        userAddress,
+      );
       allPositions.push(...positions);
     } catch (e) {
       // Pool might not have any positions, continue
       console.log(`No positions found in pool ${poolAddress.toBase58()}`);
     }
   }
-  
+
   return allPositions;
 }
 
@@ -270,30 +281,30 @@ export async function getPositionValue(
   connection: Connection,
   poolAddress: PublicKey,
   positionAddress: PublicKey,
-  prices: { tokenXPriceUSD: number; tokenYPriceUSD: number }
+  prices: { tokenXPriceUSD: number; tokenYPriceUSD: number },
 ): Promise<LPTokenValue> {
   const dlmmPool = await DLMM.create(connection, poolAddress);
-  
+
   // Get position bin data
   const positions = await dlmmPool.getPosition(positionAddress);
-  
+
   if (!positions) {
-    throw new Error('Position not found');
+    throw new Error("Position not found");
   }
 
   // Calculate token amounts from position bins
   // This is simplified - actual implementation would iterate through bins
   const positionData = positions.positionData;
-  
+
   // Get the bin array for this position's range
   const binData = await dlmmPool.getBinsBetweenLowerAndUpperBound(
     positionData.lowerBinId,
-    positionData.upperBinId
+    positionData.upperBinId,
   );
-  
+
   let totalTokenX = new BN(0);
   let totalTokenY = new BN(0);
-  
+
   // Sum up liquidity across bins (simplified)
   for (const bin of binData) {
     totalTokenX = totalTokenX.add(new BN(bin.xAmount));
@@ -303,10 +314,12 @@ export async function getPositionValue(
   // Convert to decimals for USD calculation
   const tokenXDecimals = dlmmPool.tokenX.decimal;
   const tokenYDecimals = dlmmPool.tokenY.decimal;
-  
-  const tokenXAmountDecimal = totalTokenX.toNumber() / Math.pow(10, tokenXDecimals);
-  const tokenYAmountDecimal = totalTokenY.toNumber() / Math.pow(10, tokenYDecimals);
-  
+
+  const tokenXAmountDecimal =
+    totalTokenX.toNumber() / Math.pow(10, tokenXDecimals);
+  const tokenYAmountDecimal =
+    totalTokenY.toNumber() / Math.pow(10, tokenYDecimals);
+
   const tokenXValueUSD = tokenXAmountDecimal * prices.tokenXPriceUSD;
   const tokenYValueUSD = tokenYAmountDecimal * prices.tokenYPriceUSD;
   const totalValueUSD = tokenXValueUSD + tokenYValueUSD;
@@ -339,13 +352,13 @@ export async function addLiquidity(
   poolAddress: PublicKey,
   positionAddress: PublicKey,
   tokenXAmount: BN,
-  tokenYAmount: BN
+  tokenYAmount: BN,
 ): Promise<Transaction> {
   const dlmmPool = await DLMM.create(connection, poolAddress);
   const position = await dlmmPool.getPosition(positionAddress);
-  
+
   if (!position) {
-    throw new Error('Position not found');
+    throw new Error("Position not found");
   }
 
   // Add liquidity to existing position
@@ -372,18 +385,22 @@ export async function removeLiquidity(
   user: Keypair,
   poolAddress: PublicKey,
   positionAddress: PublicKey,
-  bps: number // Basis points to remove (10000 = 100%)
+  bps: number, // Basis points to remove (10000 = 100%)
 ): Promise<Transaction> {
   const dlmmPool = await DLMM.create(connection, poolAddress);
   const position = await dlmmPool.getPosition(positionAddress);
-  
+
   if (!position) {
-    throw new Error('Position not found');
+    throw new Error("Position not found");
   }
 
   // Get bin IDs for this position
   const binIds = [];
-  for (let i = position.positionData.lowerBinId; i <= position.positionData.upperBinId; i++) {
+  for (
+    let i = position.positionData.lowerBinId;
+    i <= position.positionData.upperBinId;
+    i++
+  ) {
     binIds.push(i);
   }
 
@@ -406,10 +423,10 @@ export async function claimFees(
   connection: Connection,
   user: Keypair,
   poolAddress: PublicKey,
-  positionAddress: PublicKey
+  positionAddress: PublicKey,
 ): Promise<Transaction> {
   const dlmmPool = await DLMM.create(connection, poolAddress);
-  
+
   const claimFeeTx = await dlmmPool.claimSwapFee({
     owner: user.publicKey,
     position: positionAddress,
@@ -424,16 +441,16 @@ export async function claimFees(
  * Calculate optimal bin range based on volatility
  */
 export function calculateOptimalBinRange(
-  volatility: 'low' | 'medium' | 'high',
-  binStep: number
+  volatility: "low" | "medium" | "high",
+  binStep: number,
 ): number {
   // Returns number of bins on each side of active bin
   switch (volatility) {
-    case 'low':
+    case "low":
       return Math.floor(50 / binStep); // ~5% range
-    case 'medium':
-      return Math.floor(100 / binStep); // ~10% range  
-    case 'high':
+    case "medium":
+      return Math.floor(100 / binStep); // ~10% range
+    case "high":
       return Math.floor(200 / binStep); // ~20% range
     default:
       return 10;
@@ -445,11 +462,11 @@ export function calculateOptimalBinRange(
  */
 export function estimateImpermanentLoss(
   entryPrice: number,
-  currentPrice: number
+  currentPrice: number,
 ): number {
   const priceRatio = currentPrice / entryPrice;
   const sqrtPriceRatio = Math.sqrt(priceRatio);
-  const il = 2 * sqrtPriceRatio / (1 + priceRatio) - 1;
+  const il = (2 * sqrtPriceRatio) / (1 + priceRatio) - 1;
   return Math.abs(il) * 100; // Return as percentage
 }
 
@@ -457,14 +474,14 @@ export function estimateImpermanentLoss(
  * Get recommended strategy type based on market conditions
  */
 export function getRecommendedStrategy(
-  marketCondition: 'bullish' | 'bearish' | 'neutral'
+  marketCondition: "bullish" | "bearish" | "neutral",
 ): StrategyType {
   switch (marketCondition) {
-    case 'bullish':
+    case "bullish":
       return StrategyType.BidAsk; // More liquidity on ask side
-    case 'bearish':
+    case "bearish":
       return StrategyType.BidAsk; // More liquidity on bid side
-    case 'neutral':
+    case "neutral":
     default:
       return StrategyType.Spot; // Balanced distribution
   }
@@ -477,25 +494,25 @@ export default {
   createDLMMPool,
   getPoolInfo,
   getAvailablePools,
-  
+
   // Position management
   createPosition,
   getUserPositions,
   getAllUserPositions,
-  
+
   // Valuation
   getPositionValue,
-  
+
   // Liquidity operations
   addLiquidity,
   removeLiquidity,
   claimFees,
-  
+
   // Helpers
   calculateOptimalBinRange,
   estimateImpermanentLoss,
   getRecommendedStrategy,
-  
+
   // Constants
   DLMM_POOLS,
   TOKEN_MINTS,

@@ -4,7 +4,9 @@ import { Address } from "../../../convex/utils/solana";
 import { create } from "zustand";
 import { SerializedBinLiquidity } from "../../../convex/services/meteora";
 import { useEffect, useRef, useState } from "react";
-import BinRangeSelector, { BinRangeSelectorSkeleton } from "../BinRangeSelector";
+import BinRangeSelector, {
+  BinRangeSelectorSkeleton,
+} from "../BinRangeSelector";
 import { RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "~/utils/cn";
 import { Skeleton } from "../ui/Skeleton";
@@ -14,7 +16,10 @@ import { useRouterState } from "@tanstack/react-router";
 interface BinRangeState {
   lowerBin: SerializedBinLiquidity | null;
   upperBin: SerializedBinLiquidity | null;
-  updateUpperLowerBins: (p: { newLower?: SerializedBinLiquidity; newUpper?: SerializedBinLiquidity }) => void;
+  updateUpperLowerBins: (p: {
+    newLower?: SerializedBinLiquidity;
+    newUpper?: SerializedBinLiquidity;
+  }) => void;
 }
 
 export const useCreatePositionRangeStore = create<BinRangeState>((set) => ({
@@ -33,7 +38,8 @@ const MAX_SIDE = 120;
 const BUFFER = 4;
 
 export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
-  const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
+  const { lowerBin, upperBin, updateUpperLowerBins } =
+    useCreatePositionRangeStore();
   const initRef = useRef(false);
   const { binRange, initialBins } = useBinsAroundActiveBin({
     poolAddress,
@@ -86,14 +92,16 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
       <Row fullWidth>
         <Row justify="start" className="gap-1 items-baseline">
           <div className="text-text text-sm">Select range</div>
-          <div className="text-textSecondary text-xs">{upperBin.binId - lowerBin.binId} Bins</div>
+          <div className="text-textSecondary text-xs">
+            {upperBin.binId - lowerBin.binId} Bins
+          </div>
         </Row>
 
         <Row>
           {/* RESET RANGE */}
           <button
             className={cn(
-              "flex rounded-full inner-white px-2 py-1 mr-2 bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95"
+              "flex rounded-full inner-white px-2 py-1 mr-2 bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95",
             )}
             onClick={() => {
               updateUpperLowerBins({
@@ -110,7 +118,9 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
           <button
             className={cn(
               "flex rounded-full rounded-r-none inner-white px-2 py-1",
-              canZoomOut ? "bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95" : "bg-white/5 opacity-40"
+              canZoomOut
+                ? "bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95"
+                : "bg-white/5 opacity-40",
             )}
             disabled={!canZoomOut}
             onClick={() => setSideBins((v) => Math.max(MIN_SIDE, v - 10))}
@@ -122,7 +132,9 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
           <button
             className={cn(
               "flex rounded-full rounded-l-none inner-white px-2 py-1",
-              canZoomIn ? "bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95" : "bg-white/5 opacity-40"
+              canZoomIn
+                ? "bg-white/2 cursor-pointer hover:bg-white/5 active:scale-95"
+                : "bg-white/5 opacity-40",
             )}
             disabled={!canZoomIn}
             onClick={() => setSideBins((v) => Math.min(MAX_SIDE, v + 10))}
@@ -143,7 +155,8 @@ export function RangeSelectorPanel({ poolAddress }: { poolAddress: Address }) {
           maxBarHeight={64}
           poolAddress={poolAddress}
           onRangeChange={(lower, upper) => {
-            const { lower: clampedLower, upper: clampedUpper } = clampSelectedRange(lower, upper, binRange.bins);
+            const { lower: clampedLower, upper: clampedUpper } =
+              clampSelectedRange(lower, upper, binRange.bins);
 
             updateUpperLowerBins({
               newLower: clampedLower,
@@ -167,19 +180,28 @@ export function RangeSelectorPanelSkeleton() {
 
         <Row>
           {/* RESET RANGE */}
-          <button className={cn("flex rounded-full inner-white px-2 py-1 mr-2 bg-white/2 opacity-20")} disabled>
+          <button
+            className={cn(
+              "flex rounded-full inner-white px-2 py-1 mr-2 bg-white/2 opacity-20",
+            )}
+            disabled
+          >
             <RotateCcw className="w-3 h-3 text-text" />
           </button>
 
           <button
-            className={cn("flex rounded-full rounded-r-none inner-white px-2 py-1 bg-white/2 opacity-20")}
+            className={cn(
+              "flex rounded-full rounded-r-none inner-white px-2 py-1 bg-white/2 opacity-20",
+            )}
             disabled={true}
           >
             <ZoomIn className="w-3 h-3 text-text" />
           </button>
 
           <button
-            className={cn("flex rounded-full rounded-l-none inner-white px-2 py-1 bg-white/2 opacity-20")}
+            className={cn(
+              "flex rounded-full rounded-l-none inner-white px-2 py-1 bg-white/2 opacity-20",
+            )}
             disabled={true}
           >
             <ZoomOut className="w-3 h-3 text-text" />
@@ -194,7 +216,7 @@ export function RangeSelectorPanelSkeleton() {
 function clampSelectedRange(
   lower: SerializedBinLiquidity,
   upper: SerializedBinLiquidity,
-  bins: SerializedBinLiquidity[]
+  bins: SerializedBinLiquidity[],
 ) {
   const MAX = 70;
 

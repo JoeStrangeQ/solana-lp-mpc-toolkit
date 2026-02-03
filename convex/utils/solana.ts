@@ -48,7 +48,7 @@ export const zAddress = Base58Z({
       return false;
     }
   },
-  { message: "Invalid Solana address" }
+  { message: "Invalid Solana address" },
 );
 export type Address = z.infer<typeof zAddress>;
 
@@ -57,12 +57,14 @@ export function toAddress(value: string) {
 }
 
 export function isVersionedTransaction(
-  transaction: Transaction | VersionedTransaction
+  transaction: Transaction | VersionedTransaction,
 ): transaction is VersionedTransaction {
   return "version" in transaction;
 }
 
-export function toVersioned(tx: Transaction | VersionedTransaction): VersionedTransaction {
+export function toVersioned(
+  tx: Transaction | VersionedTransaction,
+): VersionedTransaction {
   if (isVersionedTransaction(tx)) {
     return tx;
   }
@@ -74,7 +76,9 @@ export function isAtaCreation(ix: TransactionInstruction): boolean {
 }
 
 export function isTokenClose(ix: TransactionInstruction): boolean {
-  const isTokenProgram = ix.programId.equals(TOKEN_PROGRAM_ID) || ix.programId.equals(TOKEN_2022_PROGRAM_ID);
+  const isTokenProgram =
+    ix.programId.equals(TOKEN_PROGRAM_ID) ||
+    ix.programId.equals(TOKEN_2022_PROGRAM_ID);
   if (!isTokenProgram) return false;
 
   const instruction = ix.data[0];
@@ -82,14 +86,20 @@ export function isTokenClose(ix: TransactionInstruction): boolean {
   return instruction === 9;
 }
 
-export function getCuInstructions({ limit = 1_200_000, price = 1_200_000 } = {}) {
+export function getCuInstructions({
+  limit = 1_200_000,
+  price = 1_200_000,
+} = {}) {
   return [
     ComputeBudgetProgram.setComputeUnitLimit({ units: limit }),
     ComputeBudgetProgram.setComputeUnitPrice({ microLamports: price }),
   ];
 }
 
-export async function fastTransactionConfirm(signatures: string[], timeoutMs = 1500) {
+export async function fastTransactionConfirm(
+  signatures: string[],
+  timeoutMs = 1500,
+) {
   const start = Date.now();
   let latestStatuses = new Array(signatures.length).fill(null);
 
@@ -112,7 +122,11 @@ export async function fastTransactionConfirm(signatures: string[], timeoutMs = 1
         anyPending = true;
         continue;
       }
-      if (!status.err && status.confirmationStatus !== "confirmed" && status.confirmationStatus !== "finalized") {
+      if (
+        !status.err &&
+        status.confirmationStatus !== "confirmed" &&
+        status.confirmationStatus !== "finalized"
+      ) {
         anyPending = true;
       }
     }
@@ -133,14 +147,24 @@ export async function fastTransactionConfirm(signatures: string[], timeoutMs = 1
     if (
       timedOut &&
       (!status ||
-        (!status.err && status.confirmationStatus !== "confirmed" && status.confirmationStatus !== "finalized"))
+        (!status.err &&
+          status.confirmationStatus !== "confirmed" &&
+          status.confirmationStatus !== "finalized"))
     ) {
-      return { signature: sig, status: "failed" as const, err: status?.err ?? "Timeout reached" };
+      return {
+        signature: sig,
+        status: "failed" as const,
+        err: status?.err ?? "Timeout reached",
+      };
     }
 
     if (!status) return { signature: sig, status: "pending" as const };
-    if (status.err) return { signature: sig, status: "failed" as const, err: status.err };
-    if (status.confirmationStatus === "confirmed" || status.confirmationStatus === "finalized") {
+    if (status.err)
+      return { signature: sig, status: "failed" as const, err: status.err };
+    if (
+      status.confirmationStatus === "confirmed" ||
+      status.confirmationStatus === "finalized"
+    ) {
       return { signature: sig, status: "confirmed" as const };
     }
 
@@ -162,21 +186,29 @@ export function buildWrapSolInstructions({
   const userPubkey = new PublicKey(userAddress);
 
   // Compute ATA for WSOL
-  const wsolAta = getAssociatedTokenAddressSync(NATIVE_MINT, userPubkey, false, TOKEN_PROGRAM_ID);
+  const wsolAta = getAssociatedTokenAddressSync(
+    NATIVE_MINT,
+    userPubkey,
+    false,
+    TOKEN_PROGRAM_ID,
+  );
   const ixCreateAta = createAssociatedTokenAccountIdempotentInstruction(
     userPubkey, // payer
     wsolAta, // ATA to create
     userPubkey, // owner of ATA
     NATIVE_MINT,
     TOKEN_PROGRAM_ID,
-    ASSOCIATED_TOKEN_PROGRAM_ID
+    ASSOCIATED_TOKEN_PROGRAM_ID,
   );
 
   // Send SOL into the WSOL ATA
   const ixTransfer = SystemProgram.transfer({
     fromPubkey: userPubkey,
     toPubkey: wsolAta,
-    lamports: typeof lamports === "number" ? lamports : safeBigIntToNumber(lamports, "Wrap sol lamports"),
+    lamports:
+      typeof lamports === "number"
+        ? lamports
+        : safeBigIntToNumber(lamports, "Wrap sol lamports"),
   });
 
   // Convert native lamports → WSOL SPL balance
@@ -193,7 +225,13 @@ export const mints = {
   met: toAddress("METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL"),
 } as const;
 
-export type BaseTokenMetadata = { address: Address; name: string; symbol: string; icon: string; decimals: number };
+export type BaseTokenMetadata = {
+  address: Address;
+  name: string;
+  symbol: string;
+  icon: string;
+  decimals: number;
+};
 export const tokensMetadata: Record<Address | string, BaseTokenMetadata> = {
   [mints.sol]: {
     address: mints.sol,
@@ -218,11 +256,15 @@ export const tokensMetadata: Record<Address | string, BaseTokenMetadata> = {
   },
 };
 
-export function getMarketFromMints(mintX: string, mintY: string): SupportedMarket {
+export function getMarketFromMints(
+  mintX: string,
+  mintY: string,
+): SupportedMarket {
   const symX = tokensMetadata[mintX]?.symbol?.toUpperCase();
   const symY = tokensMetadata[mintY]?.symbol?.toUpperCase();
 
-  if (!symX || !symY) throw new Error(`There is no avaliable market for ${mintX} and ${mintY}`);
+  if (!symX || !symY)
+    throw new Error(`There is no avaliable market for ${mintX} and ${mintY}`);
 
   // Normalize order (SOL-USDC should match USDC-SOL)
   const pair = [symX, symY].sort().join("/");

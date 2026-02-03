@@ -44,7 +44,7 @@ export async function buildTitanSwapTransaction({
       }),
       ComputeBudgetProgram.setComputeUnitPrice({
         microLamports: options.cuPriceMicroLamports ?? 1_000_000,
-      })
+      }),
     );
   }
 
@@ -52,7 +52,8 @@ export async function buildTitanSwapTransaction({
     const programId = new PublicKey(ix.program);
     const keys = ix.accounts
       .map((acc) => {
-        if (options?.removeJitoFrontRun && acc.pubkey === TITAN_JITO_FRONT_RUN) return null;
+        if (options?.removeJitoFrontRun && acc.pubkey === TITAN_JITO_FRONT_RUN)
+          return null;
         return {
           pubkey: new PublicKey(acc.pubkey),
           isSigner: acc.s,
@@ -73,7 +74,7 @@ export async function buildTitanSwapTransaction({
         fromPubkey: new PublicKey(userAddress),
         toPubkey: new PublicKey(getRandomNozomiTipPubkey()),
         lamports: 1_050_000,
-      })
+      }),
     );
   }
 
@@ -82,14 +83,20 @@ export async function buildTitanSwapTransaction({
   }
 
   // const a = ixList.filter((_, i) => i !== 2);
-  const altAccounts = await Promise.all(lookupTables.map((lt) => getCachedALT(lt)));
+  const altAccounts = await Promise.all(
+    lookupTables.map((lt) => getCachedALT(lt)),
+  );
 
   // Filter null values (missing ALTs)
-  const alts = altAccounts.filter((a): a is AddressLookupTableAccount => a !== null);
+  const alts = altAccounts.filter(
+    (a): a is AddressLookupTableAccount => a !== null,
+  );
 
   const message = new TransactionMessage({
     payerKey: new PublicKey(userAddress),
-    recentBlockhash: options?.recentBlockhash ?? (await connection.getLatestBlockhash()).blockhash,
+    recentBlockhash:
+      options?.recentBlockhash ??
+      (await connection.getLatestBlockhash()).blockhash,
     instructions: ixList,
   }).compileToV0Message(alts);
 

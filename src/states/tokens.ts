@@ -4,8 +4,16 @@ import { api } from "../../convex/_generated/api";
 import { MS_1M } from "../../convex/utils/timeframe";
 import { Address, mints, tokensMetadata } from "../../convex/utils/solana";
 
-export function useToken({ mint, forceFetch = false }: { mint: Address; forceFetch?: boolean }) {
-  const fetchTokenMetadata = useAction(api.actions.fetch.tokenMetadata.getTokenMetadataAction);
+export function useToken({
+  mint,
+  forceFetch = false,
+}: {
+  mint: Address;
+  forceFetch?: boolean;
+}) {
+  const fetchTokenMetadata = useAction(
+    api.actions.fetch.tokenMetadata.getTokenMetadataAction,
+  );
 
   const staticMetadata = tokensMetadata[mint];
   const shouldUseStatic = staticMetadata && !forceFetch;
@@ -23,7 +31,9 @@ export function useToken({ mint, forceFetch = false }: { mint: Address; forceFet
 }
 
 export function useTokenPrice({ mint }: { mint: Address }): number {
-  const getTokenPrices = useAction(api.actions.fetch.tokenPrices.getJupiterTokenPriceAction);
+  const getTokenPrices = useAction(
+    api.actions.fetch.tokenPrices.getJupiterTokenPriceAction,
+  );
   // const { usdPrice } = useToken({ mint });
 
   const { data } = useSuspenseQuery({

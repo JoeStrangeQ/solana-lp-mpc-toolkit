@@ -8,7 +8,12 @@ import {
 } from "@solana/web3.js";
 
 import { privy, privyAuthContext, PrivyWallet } from "../privy";
-import { getJitoBundleStatus, getJitoInflightBundleStatus, getJitoTipInfo, sendJitoBundle } from "../services/jito";
+import {
+  getJitoBundleStatus,
+  getJitoInflightBundleStatus,
+  getJitoTipInfo,
+  sendJitoBundle,
+} from "../services/jito";
 import { toVersioned } from "../utils/solana";
 import bs58 from "bs58";
 
@@ -42,7 +47,8 @@ export async function signAndSendJitoBundle({
 }) {
   const versionedTransactions = transactions.map((tx) => {
     const versionedTx = toVersioned(tx);
-    if (overwriteBlockHash) versionedTx.message.recentBlockhash = overwriteBlockHash;
+    if (overwriteBlockHash)
+      versionedTx.message.recentBlockhash = overwriteBlockHash;
     return versionedTx;
   });
   const signTransactions = versionedTransactions.map((tx) =>
@@ -54,12 +60,14 @@ export async function signAndSendJitoBundle({
         authorization_context: privyAuthContext,
         transaction: tx.serialize(),
       })
-      .then((r) => r.signed_transaction)
+      .then((r) => r.signed_transaction),
   );
   const bundleBase64Txs = await Promise.all(signTransactions);
 
   const txIds = bundleBase64Txs.map((txnBase64) => {
-    const signedTx = VersionedTransaction.deserialize(Buffer.from(txnBase64, "base64"));
+    const signedTx = VersionedTransaction.deserialize(
+      Buffer.from(txnBase64, "base64"),
+    );
     const signature = bs58.encode(signedTx.signatures[0]);
 
     return signature;
@@ -94,7 +102,9 @@ export async function confirmInflightBundle({
     } else if (inflight.status === "Failed") {
       throw new Error(`❌ Bundle ${bundleId} failed before landing`);
     } else if (inflight.status === "Landed") {
-      console.log(`✅ Bundle ${bundleId} landed in slot ${inflight.landed_slot}`);
+      console.log(
+        `✅ Bundle ${bundleId} landed in slot ${inflight.landed_slot}`,
+      );
       // 🔁 Once landed, confirm finalized
       const finalStatus = await getJitoBundleStatus(bundleId);
       return finalStatus;
@@ -103,7 +113,9 @@ export async function confirmInflightBundle({
     await new Promise((r) => setTimeout(r, intervalMs));
   }
 
-  throw new Error(`Timeout: Bundle ${bundleId} did not land within ${timeoutMs / 1000}s`);
+  throw new Error(
+    `Timeout: Bundle ${bundleId} did not land within ${timeoutMs / 1000}s`,
+  );
 }
 
 export async function buildTipTx({
@@ -144,7 +156,8 @@ export async function buildTipTx({
 export async function getTipLamportsForSpeed(speed: TipSpeed): Promise<number> {
   const jitoTipInformation = await getJitoTipInfo();
 
-  const toLamports = (sol: number) => Math.max(Math.floor(sol * LAMPORTS_PER_SOL), 5_000);
+  const toLamports = (sol: number) =>
+    Math.max(Math.floor(sol * LAMPORTS_PER_SOL), 5_000);
 
   // --- Map percentile to execution speed ---
   switch (speed) {
@@ -174,10 +187,15 @@ function cuPriceFromTip(tipLamports: number, cuUnits = CU_LIMIT) {
   const cuFeeLamports = (cuRatio / (1 - cuRatio)) * tipLamports;
   return {
     cuLimit: cuUnits,
-    cuPriceMicroLamports: Math.max(1, Math.round((cuFeeLamports * 1_000_000) / cuUnits)),
+    cuPriceMicroLamports: Math.max(
+      1,
+      Math.round((cuFeeLamports * 1_000_000) / cuUnits),
+    ),
   };
 }
 
 export function getRandomJitoTipAccount(): string {
-  return JITO_TIP_ACCOUNTS[Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length)];
+  return JITO_TIP_ACCOUNTS[
+    Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length)
+  ];
 }

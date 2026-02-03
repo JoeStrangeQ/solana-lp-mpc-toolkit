@@ -1,11 +1,11 @@
 /**
  * Raydium CLMM (Concentrated Liquidity) DEX Adapter
- * 
+ *
  * SDK: @raydium-io/raydium-sdk-v2
  * Docs: https://docs.raydium.io/
  */
 
-import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js';
+import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
 import {
   DEXAdapter,
   DEXVenue,
@@ -13,34 +13,38 @@ import {
   LPPosition,
   AddLiquidityIntent,
   RemoveLiquidityIntent,
-} from './types';
+} from "./types";
 
 // Raydium Program IDs
-const RAYDIUM_CLMM_PROGRAM_ID = new PublicKey('CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK');
-const RAYDIUM_AMM_V4_PROGRAM_ID = new PublicKey('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8');
+const RAYDIUM_CLMM_PROGRAM_ID = new PublicKey(
+  "CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK",
+);
+const RAYDIUM_AMM_V4_PROGRAM_ID = new PublicKey(
+  "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8",
+);
 
 // Common CLMM Pool Addresses
 const CLMM_POOLS = {
-  'SOL-USDC': new PublicKey('2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv'),
-  'SOL-USDT': new PublicKey('CYbD9RaToYMtWKA7QZyoLahnHdWq553Vm62Lh6qWtuxq'),
-  'mSOL-SOL': new PublicKey('8HoQnePLqPj4M7PUDzfw8e3Ymdwgc7NLGnaTUapubyvu'),
-  'RAY-SOL': new PublicKey('AVs9TA4nWDzfPJE9monGFdCF1ydNhtLaX3U2Z8PbQqe7'),
-  'BONK-SOL': new PublicKey('BvMrHdgcmZcPRGzCBYhpJR6q6AfQsMVvsBQ4LQNVGSMQ'),
-  'JTO-SOL': new PublicKey('HFm9fKTmD9X4WpL8CXi6DoMaT4n7V7dLPJ8e7GYKQVXZ'),
-  'JUP-USDC': new PublicKey('CbnU6a8MDbXJbMJJVnG9rRTj7QLmT9ydJMPQCvPF6pFS'),
-  'WIF-SOL': new PublicKey('EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMy'),
+  "SOL-USDC": new PublicKey("2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv"),
+  "SOL-USDT": new PublicKey("CYbD9RaToYMtWKA7QZyoLahnHdWq553Vm62Lh6qWtuxq"),
+  "mSOL-SOL": new PublicKey("8HoQnePLqPj4M7PUDzfw8e3Ymdwgc7NLGnaTUapubyvu"),
+  "RAY-SOL": new PublicKey("AVs9TA4nWDzfPJE9monGFdCF1ydNhtLaX3U2Z8PbQqe7"),
+  "BONK-SOL": new PublicKey("BvMrHdgcmZcPRGzCBYhpJR6q6AfQsMVvsBQ4LQNVGSMQ"),
+  "JTO-SOL": new PublicKey("HFm9fKTmD9X4WpL8CXi6DoMaT4n7V7dLPJ8e7GYKQVXZ"),
+  "JUP-USDC": new PublicKey("CbnU6a8MDbXJbMJJVnG9rRTj7QLmT9ydJMPQCvPF6pFS"),
+  "WIF-SOL": new PublicKey("EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMy"),
 };
 
 // Fee tiers available on Raydium CLMM
 const FEE_TIERS = {
-  '100': 0.01,    // 1 bps - stable pairs
-  '500': 0.05,    // 5 bps - correlated pairs
-  '2500': 0.25,   // 25 bps - standard pairs
-  '10000': 1.00,  // 100 bps - exotic pairs
+  "100": 0.01, // 1 bps - stable pairs
+  "500": 0.05, // 5 bps - correlated pairs
+  "2500": 0.25, // 25 bps - standard pairs
+  "10000": 1.0, // 100 bps - exotic pairs
 };
 
 export class RaydiumAdapter implements DEXAdapter {
-  venue: DEXVenue = 'raydium';
+  venue: DEXVenue = "raydium";
 
   /**
    * Get all available CLMM pools
@@ -48,30 +52,31 @@ export class RaydiumAdapter implements DEXAdapter {
    */
   async getPools(connection: Connection): Promise<LPPool[]> {
     const endpoints = [
-      'https://api-v3.raydium.io/pools/info/list?poolType=concentrated&sort=tvl&order=desc&pageSize=50',
-      'https://api.raydium.io/v2/main/pairs',
-      'https://raydium.io/api/pools',
+      "https://api-v3.raydium.io/pools/info/list?poolType=concentrated&sort=tvl&order=desc&pageSize=50",
+      "https://api.raydium.io/v2/main/pairs",
+      "https://raydium.io/api/pools",
     ];
 
     for (const endpoint of endpoints) {
       try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
-        
-        const response = await fetch(endpoint, { 
+
+        const response = await fetch(endpoint, {
           signal: controller.signal,
-          headers: { 'Accept': 'application/json' }
+          headers: { Accept: "application/json" },
         });
         clearTimeout(timeout);
-        
+
         if (!response.ok) continue;
-        
+
         const data = await response.json();
         const pools: LPPool[] = [];
-        
+
         // Handle different response formats
-        const poolData = data.data?.data || data.data || data.pairs || data || [];
-        
+        const poolData =
+          data.data?.data || data.data || data.pairs || data || [];
+
         if (Array.isArray(poolData)) {
           for (const pool of poolData.slice(0, 100)) {
             const parsed = this.parsePoolData(pool);
@@ -80,7 +85,7 @@ export class RaydiumAdapter implements DEXAdapter {
             }
           }
         }
-        
+
         if (pools.length > 0) {
           return pools.sort((a, b) => b.tvl - a.tvl);
         }
@@ -89,25 +94,30 @@ export class RaydiumAdapter implements DEXAdapter {
         continue;
       }
     }
-    
-    console.warn('All Raydium endpoints failed, using hardcoded data');
+
+    console.warn("All Raydium endpoints failed, using hardcoded data");
     return this.getHardcodedPools();
   }
 
   /**
    * Get specific pool by address
    */
-  async getPool(connection: Connection, address: string): Promise<LPPool | null> {
+  async getPool(
+    connection: Connection,
+    address: string,
+  ): Promise<LPPool | null> {
     try {
-      const response = await fetch(`https://api-v3.raydium.io/pools/info/ids?ids=${address}`);
+      const response = await fetch(
+        `https://api-v3.raydium.io/pools/info/ids?ids=${address}`,
+      );
       const data = await response.json();
-      
+
       if (data.success && data.data?.[0]) {
         return this.parsePoolData(data.data[0]);
       }
       return null;
     } catch (error) {
-      console.error('Failed to fetch Raydium pool:', error);
+      console.error("Failed to fetch Raydium pool:", error);
       return null;
     }
   }
@@ -115,47 +125,54 @@ export class RaydiumAdapter implements DEXAdapter {
   /**
    * Get user's CLMM positions
    */
-  async getPositions(connection: Connection, user: PublicKey): Promise<LPPosition[]> {
+  async getPositions(
+    connection: Connection,
+    user: PublicKey,
+  ): Promise<LPPosition[]> {
     try {
       const positions: LPPosition[] = [];
-      
+
       // Raydium API for positions
       const response = await fetch(
-        `https://api-v3.raydium.io/position/list?owner=${user.toBase58()}&type=concentrated`
+        `https://api-v3.raydium.io/position/list?owner=${user.toBase58()}&type=concentrated`,
       );
       const data = await response.json();
-      
+
       if (data.success && data.data) {
         for (const pos of data.data) {
           positions.push({
-            venue: 'raydium',
-            positionId: pos.nftMint || pos.positionId || '',
-            poolAddress: pos.poolId || '',
-            poolName: pos.mintA?.symbol && pos.mintB?.symbol
-              ? `${pos.mintA.symbol}-${pos.mintB.symbol}`
-              : 'Unknown Pool',
+            venue: "raydium",
+            positionId: pos.nftMint || pos.positionId || "",
+            poolAddress: pos.poolId || "",
+            poolName:
+              pos.mintA?.symbol && pos.mintB?.symbol
+                ? `${pos.mintA.symbol}-${pos.mintB.symbol}`
+                : "Unknown Pool",
             owner: user.toBase58(),
-            tokenAAmount: pos.amountA?.toString() || '0',
-            tokenBAmount: pos.amountB?.toString() || '0',
+            tokenAAmount: pos.amountA?.toString() || "0",
+            tokenBAmount: pos.amountB?.toString() || "0",
             valueUSD: pos.totalValueUsd || 0,
             unclaimedFees: {
-              tokenA: pos.pendingFeeA?.toString() || '0',
-              tokenB: pos.pendingFeeB?.toString() || '0',
+              tokenA: pos.pendingFeeA?.toString() || "0",
+              tokenB: pos.pendingFeeB?.toString() || "0",
               totalUSD: (pos.pendingFeeUsdA || 0) + (pos.pendingFeeUsdB || 0),
             },
-            priceRange: pos.priceLower && pos.priceUpper ? {
-              lower: pos.priceLower,
-              upper: pos.priceUpper,
-            } : undefined,
+            priceRange:
+              pos.priceLower && pos.priceUpper
+                ? {
+                    lower: pos.priceLower,
+                    upper: pos.priceUpper,
+                  }
+                : undefined,
             inRange: pos.inRange ?? true,
             createdAt: pos.openTime ? pos.openTime * 1000 : undefined,
           });
         }
       }
-      
+
       return positions;
     } catch (error) {
-      console.error('Failed to fetch Raydium positions:', error);
+      console.error("Failed to fetch Raydium positions:", error);
       return [];
     }
   }
@@ -163,39 +180,48 @@ export class RaydiumAdapter implements DEXAdapter {
   /**
    * Get specific position
    */
-  async getPosition(connection: Connection, positionId: string): Promise<LPPosition | null> {
+  async getPosition(
+    connection: Connection,
+    positionId: string,
+  ): Promise<LPPosition | null> {
     try {
-      const response = await fetch(`https://api-v3.raydium.io/position/info?id=${positionId}`);
+      const response = await fetch(
+        `https://api-v3.raydium.io/position/info?id=${positionId}`,
+      );
       const data = await response.json();
-      
+
       if (data.success && data.data) {
         const pos = data.data;
         return {
-          venue: 'raydium',
-          positionId: pos.nftMint || pos.positionId || '',
-          poolAddress: pos.poolId || '',
-          poolName: pos.mintA?.symbol && pos.mintB?.symbol
-            ? `${pos.mintA.symbol}-${pos.mintB.symbol}`
-            : 'Unknown Pool',
-          owner: pos.owner || '',
-          tokenAAmount: pos.amountA?.toString() || '0',
-          tokenBAmount: pos.amountB?.toString() || '0',
+          venue: "raydium",
+          positionId: pos.nftMint || pos.positionId || "",
+          poolAddress: pos.poolId || "",
+          poolName:
+            pos.mintA?.symbol && pos.mintB?.symbol
+              ? `${pos.mintA.symbol}-${pos.mintB.symbol}`
+              : "Unknown Pool",
+          owner: pos.owner || "",
+          tokenAAmount: pos.amountA?.toString() || "0",
+          tokenBAmount: pos.amountB?.toString() || "0",
           valueUSD: pos.totalValueUsd || 0,
           unclaimedFees: {
-            tokenA: pos.pendingFeeA?.toString() || '0',
-            tokenB: pos.pendingFeeB?.toString() || '0',
+            tokenA: pos.pendingFeeA?.toString() || "0",
+            tokenB: pos.pendingFeeB?.toString() || "0",
             totalUSD: (pos.pendingFeeUsdA || 0) + (pos.pendingFeeUsdB || 0),
           },
-          priceRange: pos.priceLower && pos.priceUpper ? {
-            lower: pos.priceLower,
-            upper: pos.priceUpper,
-          } : undefined,
+          priceRange:
+            pos.priceLower && pos.priceUpper
+              ? {
+                  lower: pos.priceLower,
+                  upper: pos.priceUpper,
+                }
+              : undefined,
           inRange: pos.inRange ?? true,
         };
       }
       return null;
     } catch (error) {
-      console.error('Failed to fetch position:', error);
+      console.error("Failed to fetch position:", error);
       return null;
     }
   }
@@ -206,7 +232,7 @@ export class RaydiumAdapter implements DEXAdapter {
   async addLiquidity(
     connection: Connection,
     user: Keypair,
-    params: AddLiquidityIntent
+    params: AddLiquidityIntent,
   ): Promise<{ transaction: Transaction; positionId: string }> {
     const {
       poolAddress,
@@ -215,7 +241,7 @@ export class RaydiumAdapter implements DEXAdapter {
       amountA,
       amountB,
       totalValueUSD,
-      strategy = 'balanced',
+      strategy = "balanced",
       slippageBps = 100,
     } = params;
 
@@ -237,7 +263,7 @@ export class RaydiumAdapter implements DEXAdapter {
     // Build transaction using SDK
     // In production: use Raydium SDK
     const transaction = new Transaction();
-    
+
     // 1. Create position (mint NFT)
     // const { execute, extInfo } = await Clmm.openPositionFromLiquidity({
     //   poolInfo,
@@ -247,12 +273,14 @@ export class RaydiumAdapter implements DEXAdapter {
     //   liquidity: new BN(liquidityAmount),
     //   slippage: slippageBps / 10000,
     // });
-    
+
     const positionId = `raydium_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    
+
     console.log(`[Raydium] Creating CLMM position in pool ${targetPool}`);
-    console.log(`[Raydium] Strategy: ${strategy}, Tick range: ${tickLower} - ${tickUpper}`);
-    
+    console.log(
+      `[Raydium] Strategy: ${strategy}, Tick range: ${tickLower} - ${tickUpper}`,
+    );
+
     return {
       transaction,
       positionId,
@@ -265,12 +293,12 @@ export class RaydiumAdapter implements DEXAdapter {
   async removeLiquidity(
     connection: Connection,
     user: Keypair,
-    params: RemoveLiquidityIntent
+    params: RemoveLiquidityIntent,
   ): Promise<Transaction> {
     const { positionId, percentage = 100, claimFees = true } = params;
-    
+
     const transaction = new Transaction();
-    
+
     // In production: use Raydium SDK
     // const { execute } = await Clmm.decreaseLiquidity({
     //   poolInfo,
@@ -279,19 +307,21 @@ export class RaydiumAdapter implements DEXAdapter {
     //   liquidity: position.liquidity * BigInt(percentage) / 100n,
     //   slippage: 0.01,
     // });
-    
+
     if (claimFees) {
       // Harvest pending fees
       // await Clmm.harvestAllRewards({...});
     }
-    
+
     if (percentage === 100) {
       // Close position and burn NFT
       // await Clmm.closePosition({...});
     }
-    
-    console.log(`[Raydium] Removing ${percentage}% liquidity from position ${positionId}`);
-    
+
+    console.log(
+      `[Raydium] Removing ${percentage}% liquidity from position ${positionId}`,
+    );
+
     return transaction;
   }
 
@@ -301,17 +331,17 @@ export class RaydiumAdapter implements DEXAdapter {
   async claimFees(
     connection: Connection,
     user: Keypair,
-    positionId: string
+    positionId: string,
   ): Promise<Transaction> {
     const transaction = new Transaction();
-    
+
     // const { execute } = await Clmm.harvestAllRewards({
     //   ownerInfo: { wallet: user.publicKey },
     //   positions: [position],
     // });
-    
+
     console.log(`[Raydium] Claiming fees for position ${positionId}`);
-    
+
     return transaction;
   }
 
@@ -329,7 +359,7 @@ export class RaydiumAdapter implements DEXAdapter {
   estimateIL(pool: LPPool, priceChange: number): number {
     const ratio = 1 + priceChange;
     if (ratio <= 0) return -1;
-    
+
     const il = (2 * Math.sqrt(ratio)) / (1 + ratio) - 1;
     return Math.abs(il);
   }
@@ -338,23 +368,24 @@ export class RaydiumAdapter implements DEXAdapter {
 
   private parsePoolData(pool: any): LPPool | null {
     if (!pool) return null;
-    
+
     try {
       return {
-        venue: 'raydium',
-        address: pool.id || pool.poolId || '',
-        name: pool.mintA?.symbol && pool.mintB?.symbol
-          ? `${pool.mintA.symbol}-${pool.mintB.symbol}`
-          : 'Unknown',
+        venue: "raydium",
+        address: pool.id || pool.poolId || "",
+        name:
+          pool.mintA?.symbol && pool.mintB?.symbol
+            ? `${pool.mintA.symbol}-${pool.mintB.symbol}`
+            : "Unknown",
         tokenA: {
-          mint: pool.mintA?.address || pool.mintA?.mint || '',
-          symbol: pool.mintA?.symbol || 'UNKNOWN',
+          mint: pool.mintA?.address || pool.mintA?.mint || "",
+          symbol: pool.mintA?.symbol || "UNKNOWN",
           decimals: pool.mintA?.decimals || 9,
           logoURI: pool.mintA?.logoURI,
         },
         tokenB: {
-          mint: pool.mintB?.address || pool.mintB?.mint || '',
-          symbol: pool.mintB?.symbol || 'UNKNOWN',
+          mint: pool.mintB?.address || pool.mintB?.mint || "",
+          symbol: pool.mintB?.symbol || "UNKNOWN",
           decimals: pool.mintB?.decimals || 6,
           logoURI: pool.mintB?.logoURI,
         },
@@ -363,38 +394,48 @@ export class RaydiumAdapter implements DEXAdapter {
         apy: pool.apr?.total || pool.apy || 0,
         apy7d: pool.apr7d?.total || pool.apr?.total || 0,
         volume24h: pool.day?.volume || pool.volume24h || 0,
-        priceRange: pool.price ? {
-          lower: 0,
-          upper: Infinity,
-          current: pool.price,
-        } : undefined,
+        priceRange: pool.price
+          ? {
+              lower: 0,
+              upper: Infinity,
+              current: pool.price,
+            }
+          : undefined,
       };
     } catch {
       return null;
     }
   }
 
-  private calculateTickRange(strategy: string): { tickLower: number; tickUpper: number } {
+  private calculateTickRange(strategy: string): {
+    tickLower: number;
+    tickUpper: number;
+  } {
     // Raydium uses different tick spacing per fee tier
     // Using 60 as default (for 0.25% fee)
     const tickSpacing = 60;
     const currentTick = 0; // Would come from pool data
-    
+
     switch (strategy) {
-      case 'concentrated':
+      case "concentrated":
         return {
-          tickLower: Math.floor((currentTick - 600) / tickSpacing) * tickSpacing,
+          tickLower:
+            Math.floor((currentTick - 600) / tickSpacing) * tickSpacing,
           tickUpper: Math.ceil((currentTick + 600) / tickSpacing) * tickSpacing,
         };
-      case 'balanced':
+      case "balanced":
         return {
-          tickLower: Math.floor((currentTick - 2400) / tickSpacing) * tickSpacing,
-          tickUpper: Math.ceil((currentTick + 2400) / tickSpacing) * tickSpacing,
+          tickLower:
+            Math.floor((currentTick - 2400) / tickSpacing) * tickSpacing,
+          tickUpper:
+            Math.ceil((currentTick + 2400) / tickSpacing) * tickSpacing,
         };
-      case 'yield-max':
+      case "yield-max":
         return {
-          tickLower: Math.floor((currentTick - 6000) / tickSpacing) * tickSpacing,
-          tickUpper: Math.ceil((currentTick + 6000) / tickSpacing) * tickSpacing,
+          tickLower:
+            Math.floor((currentTick - 6000) / tickSpacing) * tickSpacing,
+          tickUpper:
+            Math.ceil((currentTick + 6000) / tickSpacing) * tickSpacing,
         };
       default:
         return {
@@ -407,11 +448,19 @@ export class RaydiumAdapter implements DEXAdapter {
   private getHardcodedPools(): LPPool[] {
     return [
       {
-        venue: 'raydium',
-        address: '2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv',
-        name: 'SOL-USDC',
-        tokenA: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
-        tokenB: { mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', symbol: 'USDC', decimals: 6 },
+        venue: "raydium",
+        address: "2QdhepnKRTLjjSqPL1PtKNwqrUkoLee5Gqs8bvZhRdMv",
+        name: "SOL-USDC",
+        tokenA: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
+        tokenB: {
+          mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          symbol: "USDC",
+          decimals: 6,
+        },
         fee: 0.25,
         tvl: 38000000,
         apy: 48.2,
@@ -419,11 +468,19 @@ export class RaydiumAdapter implements DEXAdapter {
         volume24h: 18000000,
       },
       {
-        venue: 'raydium',
-        address: 'CYbD9RaToYMtWKA7QZyoLahnHdWq553Vm62Lh6qWtuxq',
-        name: 'SOL-USDT',
-        tokenA: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
-        tokenB: { mint: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', symbol: 'USDT', decimals: 6 },
+        venue: "raydium",
+        address: "CYbD9RaToYMtWKA7QZyoLahnHdWq553Vm62Lh6qWtuxq",
+        name: "SOL-USDT",
+        tokenA: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
+        tokenB: {
+          mint: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+          symbol: "USDT",
+          decimals: 6,
+        },
         fee: 0.25,
         tvl: 22000000,
         apy: 35.6,
@@ -431,11 +488,19 @@ export class RaydiumAdapter implements DEXAdapter {
         volume24h: 9000000,
       },
       {
-        venue: 'raydium',
-        address: 'AVs9TA4nWDzfPJE9monGFdCF1ydNhtLaX3U2Z8PbQqe7',
-        name: 'RAY-SOL',
-        tokenA: { mint: '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', symbol: 'RAY', decimals: 6 },
-        tokenB: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
+        venue: "raydium",
+        address: "AVs9TA4nWDzfPJE9monGFdCF1ydNhtLaX3U2Z8PbQqe7",
+        name: "RAY-SOL",
+        tokenA: {
+          mint: "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R",
+          symbol: "RAY",
+          decimals: 6,
+        },
+        tokenB: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
         fee: 0.25,
         tvl: 15000000,
         apy: 85.4,
@@ -443,23 +508,39 @@ export class RaydiumAdapter implements DEXAdapter {
         volume24h: 12000000,
       },
       {
-        venue: 'raydium',
-        address: 'BvMrHdgcmZcPRGzCBYhpJR6q6AfQsMVvsBQ4LQNVGSMQ',
-        name: 'BONK-SOL',
-        tokenA: { mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', symbol: 'BONK', decimals: 5 },
-        tokenB: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
-        fee: 1.00,
+        venue: "raydium",
+        address: "BvMrHdgcmZcPRGzCBYhpJR6q6AfQsMVvsBQ4LQNVGSMQ",
+        name: "BONK-SOL",
+        tokenA: {
+          mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+          symbol: "BONK",
+          decimals: 5,
+        },
+        tokenB: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
+        fee: 1.0,
         tvl: 6500000,
         apy: 178.5,
         apy7d: 162.3,
         volume24h: 28000000,
       },
       {
-        venue: 'raydium',
-        address: 'HFm9fKTmD9X4WpL8CXi6DoMaT4n7V7dLPJ8e7GYKQVXZ',
-        name: 'JTO-SOL',
-        tokenA: { mint: 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL', symbol: 'JTO', decimals: 9 },
-        tokenB: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
+        venue: "raydium",
+        address: "HFm9fKTmD9X4WpL8CXi6DoMaT4n7V7dLPJ8e7GYKQVXZ",
+        name: "JTO-SOL",
+        tokenA: {
+          mint: "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+          symbol: "JTO",
+          decimals: 9,
+        },
+        tokenB: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
         fee: 0.25,
         tvl: 9000000,
         apy: 72.3,
@@ -467,12 +548,20 @@ export class RaydiumAdapter implements DEXAdapter {
         volume24h: 7500000,
       },
       {
-        venue: 'raydium',
-        address: 'EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMy',
-        name: 'WIF-SOL',
-        tokenA: { mint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', symbol: 'WIF', decimals: 6 },
-        tokenB: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
-        fee: 1.00,
+        venue: "raydium",
+        address: "EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMy",
+        name: "WIF-SOL",
+        tokenA: {
+          mint: "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm",
+          symbol: "WIF",
+          decimals: 6,
+        },
+        tokenB: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
+        fee: 1.0,
         tvl: 5200000,
         apy: 245.8,
         apy7d: 218.4,

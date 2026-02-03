@@ -7,19 +7,23 @@
 ### What Works Well for Agents
 
 1. **Natural Language Intent Parsing**
+
    ```typescript
    const intent = parseIntent("Add $500 to the best SOL-USDC pool");
    // Returns structured AddLiquidityIntent
    ```
+
    - Any agent that can form a sentence can use this
    - No need to know specific pool addresses or DEX quirks
 
 2. **Unified Interface**
+
    ```typescript
    // One interface for 9 DEXs
    const pools = await yieldScanner.findBestPool('SOL', 'USDC');
    const result = await adapters[pools.venue].addLiquidity(...);
    ```
+
    - Agent doesn't need to know Meteora vs Orca internals
    - Automatic venue selection based on yield
 
@@ -65,29 +69,40 @@
 ### How An Agent Would Actually Use This
 
 **Current Flow (Requires Code Integration):**
+
 ```typescript
-import { ArciumPrivacyService, yieldScanner, adapters } from 'solana-lp-mpc-toolkit';
+import {
+  ArciumPrivacyService,
+  yieldScanner,
+  adapters,
+} from "solana-lp-mpc-toolkit";
 
 // 1. Initialize privacy
 const privacy = new ArciumPrivacyService(walletPubkey);
 await privacy.initializeDevnet();
 
 // 2. Find best pool
-const pools = await yieldScanner.scanAllVenues(connection, 'SOL', 'USDC');
+const pools = await yieldScanner.scanAllVenues(connection, "SOL", "USDC");
 const best = pools[0];
 
 // 3. Encrypt strategy
 const encrypted = privacy.encryptStrategy({
-  tokenA: 'SOL', tokenB: 'USDC',
+  tokenA: "SOL",
+  tokenB: "USDC",
   totalValueUSD: 500,
-  strategy: 'concentrated'
+  strategy: "concentrated",
 });
 
 // 4. Execute (need wallet keypair)
-const result = await adapters[best.venue].addLiquidity(connection, keypair, intent);
+const result = await adapters[best.venue].addLiquidity(
+  connection,
+  keypair,
+  intent,
+);
 ```
 
 **Ideal Flow (REST API):**
+
 ```bash
 curl -X POST https://lp-toolkit.api/v1/positions \
   -H "X-API-Key: agent_xxx" \
@@ -103,22 +118,24 @@ curl -X POST https://lp-toolkit.api/v1/positions \
 
 ### Competitive Analysis
 
-| Feature | Our Toolkit | Jupiter API | Orca SDK |
-|---------|-------------|-------------|----------|
-| Multi-DEX | ✅ 9 DEXs | ✅ Aggregator | ❌ Orca only |
-| Privacy | ✅ Arcium MPC | ❌ | ❌ |
-| Agent-Native | ✅ NL parsing | ❌ | ❌ |
-| REST API | ❌ TODO | ✅ | ❌ |
-| LP Focus | ✅ | ❌ Swaps | ✅ |
+| Feature      | Our Toolkit   | Jupiter API   | Orca SDK     |
+| ------------ | ------------- | ------------- | ------------ |
+| Multi-DEX    | ✅ 9 DEXs     | ✅ Aggregator | ❌ Orca only |
+| Privacy      | ✅ Arcium MPC | ❌            | ❌           |
+| Agent-Native | ✅ NL parsing | ❌            | ❌           |
+| REST API     | ❌ TODO       | ✅            | ❌           |
+| LP Focus     | ✅            | ❌ Swaps      | ✅           |
 
 ### Verdict
 
 **For a hackathon demo: READY** ✅
+
 - Shows the vision clearly
 - Arcium integration works
 - Multi-DEX aggregation works
 
 **For real agent-agent production: NEEDS WORK** ⚠️
+
 - Need REST API layer
 - Need better error handling
 - Need wallet abstraction
@@ -126,6 +143,7 @@ curl -X POST https://lp-toolkit.api/v1/positions \
 ### Sprint Plan to Fix This
 
 **Next 3 iterations (30 min):**
+
 1. Create minimal REST API server
 2. Add `/v1/pools/scan` endpoint
 3. Add `/v1/positions/add` endpoint (unsigned TX mode)

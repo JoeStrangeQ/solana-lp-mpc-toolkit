@@ -26,13 +26,34 @@ export function LabelValue({
   const isRow = variant === "row";
 
   return (
-    <div className={cn("flex items-center", isRow ? "justify-between w-full" : "gap-0.5", className)}>
-      <div className={cn(isRow ? "text-sm text-textSecondary" : "text-sm text-textSecondary", labelClassName)}>
+    <div
+      className={cn(
+        "flex items-center",
+        isRow ? "justify-between w-full" : "gap-0.5",
+        className,
+      )}
+    >
+      <div
+        className={cn(
+          isRow ? "text-sm text-textSecondary" : "text-sm text-textSecondary",
+          labelClassName,
+        )}
+      >
         {label}
       </div>
 
-      <div className={cn(isRow ? "text-xs text-text" : "text-sm text-text", "truncate", valueClassName)}>
-        {isLoading ? <Skeleton className={cn("w-12 h-4 rounded-md", valueClassName)} /> : value}
+      <div
+        className={cn(
+          isRow ? "text-xs text-text" : "text-sm text-text",
+          "truncate",
+          valueClassName,
+        )}
+      >
+        {isLoading ? (
+          <Skeleton className={cn("w-12 h-4 rounded-md", valueClassName)} />
+        ) : (
+          value
+        )}
       </div>
     </div>
   );

@@ -20,12 +20,20 @@ export function useSwapQuote({
   const [streamKey] = useState(`${convexUser?._id}:${randomUUID()}`);
   const [swapQuote, setSwapQuote] = useState<SwapQuotes | null>(null);
 
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [status, setStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!inputMint || !outputMint || inputMint === outputMint || inputRawAmount <= 0) return;
+    if (
+      !inputMint ||
+      !outputMint ||
+      inputMint === outputMint ||
+      inputRawAmount <= 0
+    )
+      return;
 
     let active = true;
     setStatus("loading");

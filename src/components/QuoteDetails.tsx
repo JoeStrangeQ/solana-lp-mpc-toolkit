@@ -10,7 +10,13 @@ import { LabelValue } from "./ui/labelValueRow";
 import { Row } from "./ui/Row";
 import { Skeleton } from "./ui/Skeleton";
 
-export function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; txIndex: number }) {
+export function QuoteDetails({
+  swapQuote,
+  txIndex,
+}: {
+  swapQuote: SwapQuotes;
+  txIndex: number;
+}) {
   const providers = Object.keys(swapQuote.quotes);
   if (providers.length === 0) return null;
 
@@ -33,7 +39,7 @@ export function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; tx
 
   const inverseRate = `1 ${outputToken.symbol} ≈ ${formatTokenAmount(
     inverseRateValue,
-    undefined
+    undefined,
   )} ${inputToken.symbol}`;
   return (
     <div className="flex flex-col">
@@ -45,7 +51,10 @@ export function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; tx
         <div className="flex flex-row items-center">
           {/* Input token */}
           <div className="flex flex-row items-center gap-1.5">
-            <TokenIcon className="w-7 h-7 rounded-full" icon={inputToken.icon} />
+            <TokenIcon
+              className="w-7 h-7 rounded-full"
+              icon={inputToken.icon}
+            />
             <div className="text-text">
               {formatTokenAmount(inUiAmount, inputToken.symbol, {
                 minimumFractionDigits: 4,
@@ -57,7 +66,10 @@ export function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; tx
 
           {/* Output token */}
           <div className="flex flex-row items-center gap-1.5">
-            <TokenIcon className="w-7 h-7 rounded-full" icon={outputToken.icon} />
+            <TokenIcon
+              className="w-7 h-7 rounded-full"
+              icon={outputToken.icon}
+            />
             <div className="text-text">
               {formatTokenAmount(outUiAmount, outputToken.symbol, {
                 minimumFractionDigits: 4,
@@ -83,11 +95,16 @@ export function QuoteDetails({ swapQuote, txIndex }: { swapQuote: SwapQuotes; tx
           value={
             <Row className="gap-1">
               <div className="flex flex-row items-center px-1 py-0.5 rounded-md bg-white/5 border border-white/10 gap-0.5">
-                <div className="text-text text-[10px]">{quote.steps.length}</div>
+                <div className="text-text text-[10px]">
+                  {quote.steps.length}
+                </div>
                 <Route className="h-2.5 w-2.5" />
               </div>
               <div className="text-textSecondary text-[10px]">Via</div>
-              <div className="text-text text-xs"> {quote.steps.map((step) => step.label).join(", ")}</div>
+              <div className="text-text text-xs">
+                {" "}
+                {quote.steps.map((step) => step.label).join(", ")}
+              </div>
             </Row>
           }
         />

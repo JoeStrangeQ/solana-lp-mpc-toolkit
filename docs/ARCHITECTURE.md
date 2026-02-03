@@ -575,4 +575,4 @@ USDC Pool: 4xY7aB1cD3eF5gH7iJ9kL0mN2oP3qR5sT7uV8wX1yZ2
 
 ---
 
-*For usage examples, see [DLMM_LEVERAGE.md](./DLMM_LEVERAGE.md)*
+_For usage examples, see [DLMM_LEVERAGE.md](./DLMM_LEVERAGE.md)_

@@ -13,18 +13,34 @@ export const getOrdersToTrigger = query({
       return await ctx.db
         .query("orders")
         .withIndex("by_market_direction_price", (q) =>
-          q.eq("market", market).eq("direction", direction).gte("triggerPrice", currentPrice)
+          q
+            .eq("market", market)
+            .eq("direction", direction)
+            .gte("triggerPrice", currentPrice),
         )
-        .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "failed")))
+        .filter((q) =>
+          q.or(
+            q.eq(q.field("status"), "pending"),
+            q.eq(q.field("status"), "failed"),
+          ),
+        )
         .collect();
     }
 
     return await ctx.db
       .query("orders")
       .withIndex("by_market_direction_price", (q) =>
-        q.eq("market", market).eq("direction", direction).lte("triggerPrice", currentPrice)
+        q
+          .eq("market", market)
+          .eq("direction", direction)
+          .lte("triggerPrice", currentPrice),
       )
-      .filter((q) => q.or(q.eq(q.field("status"), "pending"), q.eq(q.field("status"), "failed")))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("status"), "pending"),
+          q.eq(q.field("status"), "failed"),
+        ),
+      )
       .collect();
   },
 });
@@ -34,8 +50,15 @@ export const getOrdersByPosition = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("orders")
-      .withIndex("by_position_pk", (q) => q.eq("positionPubkey", args.positionPubkey))
-      .filter((q) => q.and(q.neq(q.field("status"), "canceled"), q.neq(q.field("status"), "executed")))
+      .withIndex("by_position_pk", (q) =>
+        q.eq("positionPubkey", args.positionPubkey),
+      )
+      .filter((q) =>
+        q.and(
+          q.neq(q.field("status"), "canceled"),
+          q.neq(q.field("status"), "executed"),
+        ),
+      )
       .collect();
   },
 });

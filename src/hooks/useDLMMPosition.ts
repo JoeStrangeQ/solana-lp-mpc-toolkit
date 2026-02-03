@@ -3,14 +3,14 @@
  * Manages DLMM position state and real-time updates
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { useConnection, useWallet } from '@solana/wallet-adapter-react';
-import { PublicKey } from '@solana/web3.js';
+import { useState, useEffect, useCallback } from "react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
 
-import { 
-  getUserLeveragedPositions, 
-  PositionStatus 
-} from '../services/leverageService';
+import {
+  getUserLeveragedPositions,
+  PositionStatus,
+} from "../services/leverageService";
 
 interface UseDLMMPositionOptions {
   refreshInterval?: number; // ms
@@ -33,10 +33,10 @@ const DEFAULT_PRICES = {
 };
 
 export function useDLMMPosition(
-  options: UseDLMMPositionOptions = {}
+  options: UseDLMMPositionOptions = {},
 ): UseDLMMPositionReturn {
   const { refreshInterval = 30000, autoRefresh = true } = options;
-  
+
   const { connection } = useConnection();
   const { publicKey } = useWallet();
 
@@ -57,12 +57,12 @@ export function useDLMMPosition(
       const userPositions = await getUserLeveragedPositions(
         connection,
         publicKey,
-        DEFAULT_PRICES
+        DEFAULT_PRICES,
       );
       setPositions(userPositions);
     } catch (e) {
-      console.error('Failed to fetch positions:', e);
-      setError(e instanceof Error ? e.message : 'Failed to fetch positions');
+      console.error("Failed to fetch positions:", e);
+      setError(e instanceof Error ? e.message : "Failed to fetch positions");
     } finally {
       setIsLoading(false);
     }
@@ -83,7 +83,7 @@ export function useDLMMPosition(
 
   const getPosition = useCallback(
     (id: string) => positions.find((p) => p.collateralPositionId === id),
-    [positions]
+    [positions],
   );
 
   return {

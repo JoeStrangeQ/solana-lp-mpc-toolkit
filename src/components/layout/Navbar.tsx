@@ -2,7 +2,11 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { ConnectButton } from "./ConnectButton";
 import { MnMIcon } from "../icons/MnMIcon";
 import { cn } from "~/utils/cn";
-import { DEFAULT_DLMM_POOL, PairSelector, PairSelectorSkeleton } from "./PairSelector";
+import {
+  DEFAULT_DLMM_POOL,
+  PairSelector,
+  PairSelectorSkeleton,
+} from "./PairSelector";
 import { toAddress } from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { Protocol } from "~/providers/useLastVisitedPool";
@@ -21,7 +25,11 @@ const routes: {
     route: "Lend",
     redirect: "/lend",
   },
-  { route: "Docs", redirect: "https://app.gitbook.com/o/LzCjQh0w4YjhqMfm9UE3/s/NHzKLkCz9k8MfmFpBS32/" },
+  {
+    route: "Docs",
+    redirect:
+      "https://app.gitbook.com/o/LzCjQh0w4YjhqMfm9UE3/s/NHzKLkCz9k8MfmFpBS32/",
+  },
 ];
 export function Navbar() {
   const navigate = useNavigate();
@@ -41,7 +49,10 @@ export function Navbar() {
   return (
     <div className="relative flex flex-row h-min w-full items-center justify-between">
       <div className="flex flex-row items-center gap-7">
-        <button onClick={() => navigate({ to: "/" })} className="flex flex-row items-center cursor-pointer z-10">
+        <button
+          onClick={() => navigate({ to: "/" })}
+          className="flex flex-row items-center cursor-pointer z-10"
+        >
           <MnMIcon className="h-9 w-9" />
         </button>
 
@@ -60,7 +71,9 @@ export function Navbar() {
               <span
                 className={cn(
                   "text-base hover-effect",
-                  route === currentRoute ? "text-text" : "text-textSecondary hover:text-text"
+                  route === currentRoute
+                    ? "text-text"
+                    : "text-textSecondary hover:text-text",
                 )}
               >
                 {route}
@@ -73,7 +86,9 @@ export function Navbar() {
       {currentRoute === "Trade" && (
         <MnMSuspense fallback={<PairSelectorSkeleton />}>
           <PairSelector
-            currentPoolAddress={toAddress(poolInfo?.poolAddress ?? DEFAULT_DLMM_POOL)}
+            currentPoolAddress={toAddress(
+              poolInfo?.poolAddress ?? DEFAULT_DLMM_POOL,
+            )}
             protocol={poolInfo?.protocol ?? "dlmm"}
           />
         </MnMSuspense>

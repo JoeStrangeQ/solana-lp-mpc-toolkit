@@ -10,7 +10,11 @@ import { MnMSuspense } from "./MnMSuspense";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
 
-export function AvailablePairPools({ currentPool }: { currentPool: MeteoraDlmmPool }) {
+export function AvailablePairPools({
+  currentPool,
+}: {
+  currentPool: MeteoraDlmmPool;
+}) {
   const navigate = useNavigate();
   const { data, isLoading } = useMeteoraPoolsSearch({
     searchTerm: currentPool.name,
@@ -63,16 +67,35 @@ export function AvailablePairPools({ currentPool }: { currentPool: MeteoraDlmmPo
   );
 }
 
-export function DlmmPoolRow({ pool, onClick }: { pool: MeteoraDlmmPool; onClick: () => void }) {
+export function DlmmPoolRow({
+  pool,
+  onClick,
+}: {
+  pool: MeteoraDlmmPool;
+  onClick: () => void;
+}) {
   const tokenX = useToken({ mint: pool.mint_x });
   const tokenY = useToken({ mint: pool.mint_y });
 
   return (
-    <Row className="items-center p-2 rounded-lg hover:bg-white/3 select-none cursor-pointer" onClick={onClick}>
-      <PoolTokenIcons xIcon={tokenX.icon} yIcon={tokenY.icon} size={28} dex="Meteora" />
+    <Row
+      className="items-center p-2 rounded-lg hover:bg-white/3 select-none cursor-pointer"
+      onClick={onClick}
+    >
+      <PoolTokenIcons
+        xIcon={tokenX.icon}
+        yIcon={tokenY.icon}
+        size={28}
+        dex="Meteora"
+      />
       <div className="flex flex-col -space-y-0.5 ml-2">
         <div className="text-text text-xs">{pool.name}</div>
-        <LabelValue label={"Bin Step"} value={pool.bin_step} valueClassName="text-xs" labelClassName="text-xs" />
+        <LabelValue
+          label={"Bin Step"}
+          value={pool.bin_step}
+          valueClassName="text-xs"
+          labelClassName="text-xs"
+        />
       </div>
 
       <div className="flex px-2 py-1 bg-backgroundQuaternary rounded-full ml-1.5 text-text text-[10px]">
@@ -107,13 +130,25 @@ function DlmmPoolRowSkeleton() {
       <PoolTokenIcons isLoading size={28} />
       <div className="flex flex-col space-y-0.5 ml-2">
         <Skeleton className="w-16 h-4" />
-        <LabelValue label={"Bin Step"} value={0} valueClassName="text-xs  w-8 h-3" labelClassName="text-xs" isLoading />
+        <LabelValue
+          label={"Bin Step"}
+          value={0}
+          valueClassName="text-xs  w-8 h-3"
+          labelClassName="text-xs"
+          isLoading
+        />
       </div>
 
       <Skeleton className="w-12 h-5 rounded-full ml-2" />
 
       <div className="flex flex-row items-center gap-2.5 ml-28">
-        <LabelValue isLoading label={"TVL"} value={""} valueClassName="text-xs  h-3" labelClassName="text-xs" />
+        <LabelValue
+          isLoading
+          label={"TVL"}
+          value={""}
+          valueClassName="text-xs  h-3"
+          labelClassName="text-xs"
+        />
         <LabelValue
           isLoading
           label={"Fees 24h"}

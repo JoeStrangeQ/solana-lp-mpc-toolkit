@@ -3,14 +3,14 @@
  * Agent-native output formatting - speaks money, not crypto
  */
 
-import { LPPool, LPPosition, DEXVenue } from '../adapters/types';
+import { LPPool, LPPosition, DEXVenue } from "../adapters/types";
 
 // ============ Types ============
 
 export interface DisplayOptions {
   compact?: boolean;
   showLinks?: boolean;
-  platform?: 'telegram' | 'discord' | 'whatsapp' | 'generic';
+  platform?: "telegram" | "discord" | "whatsapp" | "generic";
 }
 
 // ============ Formatters ============
@@ -31,7 +31,7 @@ export function formatUSD(amount: number): string {
  * Format daily earnings estimate
  */
 export function formatDailyEarnings(pool: LPPool, amountUSD: number): string {
-  const daily = (amountUSD * pool.apy / 365 / 100);
+  const daily = (amountUSD * pool.apy) / 365 / 100;
   return `~${formatUSD(daily)}/day`;
 }
 
@@ -39,12 +39,12 @@ export function formatDailyEarnings(pool: LPPool, amountUSD: number): string {
  * Format APY in human terms
  */
 export function describeAPY(apy: number): string {
-  if (apy >= 200) return '🔥 Very High Risk';
-  if (apy >= 100) return '⚡ High';
-  if (apy >= 50) return '📈 Good';
-  if (apy >= 20) return '📊 Moderate';
-  if (apy >= 5) return '🏦 Stable';
-  return '💤 Low';
+  if (apy >= 200) return "🔥 Very High Risk";
+  if (apy >= 100) return "⚡ High";
+  if (apy >= 50) return "📈 Good";
+  if (apy >= 20) return "📊 Moderate";
+  if (apy >= 5) return "🏦 Stable";
+  return "💤 Low";
 }
 
 /**
@@ -52,10 +52,10 @@ export function describeAPY(apy: number): string {
  */
 export function formatVenue(venue: DEXVenue): string {
   const names: Record<DEXVenue, string> = {
-    meteora: 'Meteora',
-    orca: 'Orca',
-    raydium: 'Raydium',
-    phoenix: 'Phoenix',
+    meteora: "Meteora",
+    orca: "Orca",
+    raydium: "Raydium",
+    phoenix: "Phoenix",
   };
   return names[venue] || venue;
 }
@@ -64,21 +64,21 @@ export function formatVenue(venue: DEXVenue): string {
  * Format a pool for chat - agent native (shows money, not just %)
  */
 export function formatPoolForAgent(
-  pool: LPPool, 
+  pool: LPPool,
   amountUSD?: number,
-  options: DisplayOptions = {}
+  options: DisplayOptions = {},
 ): string {
   const { compact = false } = options;
-  
-  const dailyEst = amountUSD ? formatDailyEarnings(pool, amountUSD) : '';
+
+  const dailyEst = amountUSD ? formatDailyEarnings(pool, amountUSD) : "";
   const apyDesc = describeAPY(pool.apy);
-  
+
   if (compact) {
-    return `**${pool.name}** [${formatVenue(pool.venue)}] - ${pool.apy.toFixed(1)}% APY${dailyEst ? ` (${dailyEst})` : ''}`;
+    return `**${pool.name}** [${formatVenue(pool.venue)}] - ${pool.apy.toFixed(1)}% APY${dailyEst ? ` (${dailyEst})` : ""}`;
   }
-  
+
   return `**${pool.name}** [${formatVenue(pool.venue)}]
-├ APY: ${pool.apy.toFixed(1)}% ${apyDesc}${dailyEst ? ` → ${dailyEst}` : ''}
+├ APY: ${pool.apy.toFixed(1)}% ${apyDesc}${dailyEst ? ` → ${dailyEst}` : ""}
 ├ TVL: ${formatUSD(pool.tvl)}
 ├ Volume: ${formatUSD(pool.volume24h)}/day
 └ Fee: ${pool.fee}%`;
@@ -90,41 +90,41 @@ export function formatPoolForAgent(
 export function formatPoolRecommendation(
   pools: LPPool[],
   amountUSD?: number,
-  options: DisplayOptions = {}
+  options: DisplayOptions = {},
 ): string {
   if (pools.length === 0) {
-    return '🔍 No pools found matching your criteria.';
+    return "🔍 No pools found matching your criteria.";
   }
-  
-  const { platform = 'generic' } = options;
+
+  const { platform = "generic" } = options;
   const top = pools[0];
-  
-  let output = '🏊 **Best LP Opportunities**\n\n';
-  
+
+  let output = "🏊 **Best LP Opportunities**\n\n";
+
   // Top recommendation with more detail
   const dailyEst = amountUSD ? formatDailyEarnings(top, amountUSD) : null;
-  
+
   output += `🥇 **${top.name}** [${formatVenue(top.venue)}]\n`;
   output += `   ${top.apy.toFixed(1)}% APY`;
   if (dailyEst) output += ` → ${dailyEst}`;
   output += `\n   ${formatUSD(top.tvl)} TVL\n\n`;
-  
+
   // Runners up (compact)
   if (pools.length > 1) {
-    output += 'Also good:\n';
+    output += "Also good:\n";
     pools.slice(1, 4).forEach((p, i) => {
-      const emoji = ['🥈', '🥉', '4️⃣'][i];
+      const emoji = ["🥈", "🥉", "4️⃣"][i];
       output += `${emoji} ${p.name} [${formatVenue(p.venue)}] - ${p.apy.toFixed(1)}%\n`;
     });
   }
-  
+
   // Action prompt
   if (amountUSD) {
     output += `\n💡 Ready to add ${formatUSD(amountUSD)} to ${top.name}?`;
   } else {
     output += `\n💡 Tell me how much you want to add!`;
   }
-  
+
   return output;
 }
 
@@ -133,22 +133,22 @@ export function formatPoolRecommendation(
  */
 export function formatPositionForAgent(
   position: LPPosition,
-  options: DisplayOptions = {}
+  options: DisplayOptions = {},
 ): string {
   const { compact = false } = options;
-  
-  const rangeStatus = position.inRange ? '🟢' : '🔴 Out of range!';
+
+  const rangeStatus = position.inRange ? "🟢" : "🔴 Out of range!";
   const fees = position.unclaimedFees.totalUSD;
-  const feesStr = fees > 0.01 ? ` (+${formatUSD(fees)} to claim)` : '';
-  
+  const feesStr = fees > 0.01 ? ` (+${formatUSD(fees)} to claim)` : "";
+
   if (compact) {
-    return `${position.inRange ? '🟢' : '🔴'} **${position.poolName}** - ${formatUSD(position.valueUSD)}${feesStr}`;
+    return `${position.inRange ? "🟢" : "🔴"} **${position.poolName}** - ${formatUSD(position.valueUSD)}${feesStr}`;
   }
-  
+
   return `${rangeStatus} **${position.poolName}** [${formatVenue(position.venue)}]
 ├ Value: ${formatUSD(position.valueUSD)}
 ├ Unclaimed: ${formatUSD(fees)}
-├ Range: ${position.priceRange ? `${position.priceRange.lower.toFixed(4)} - ${position.priceRange.upper.toFixed(4)}` : 'Full range'}
+├ Range: ${position.priceRange ? `${position.priceRange.lower.toFixed(4)} - ${position.priceRange.upper.toFixed(4)}` : "Full range"}
 └ ID: \`${position.positionId.slice(0, 8)}...\``;
 }
 
@@ -157,7 +157,7 @@ export function formatPositionForAgent(
  */
 export function formatPortfolioSummary(
   positions: LPPosition[],
-  options: DisplayOptions = {}
+  options: DisplayOptions = {},
 ): string {
   if (positions.length === 0) {
     return `📭 **No LP Positions**
@@ -166,27 +166,30 @@ You don't have any active LP positions yet.
 
 Want me to find some opportunities? Just say "find best LP" or tell me how much you want to put to work.`;
   }
-  
+
   const totalValue = positions.reduce((sum, p) => sum + p.valueUSD, 0);
-  const totalFees = positions.reduce((sum, p) => sum + p.unclaimedFees.totalUSD, 0);
-  const inRange = positions.filter(p => p.inRange).length;
+  const totalFees = positions.reduce(
+    (sum, p) => sum + p.unclaimedFees.totalUSD,
+    0,
+  );
+  const inRange = positions.filter((p) => p.inRange).length;
   const outOfRange = positions.length - inRange;
-  
+
   let output = `📊 **Your LP Portfolio**\n\n`;
   output += `💰 Total Value: **${formatUSD(totalValue)}**\n`;
   output += `🎁 Unclaimed Fees: **${formatUSD(totalFees)}**\n`;
-  
+
   if (outOfRange > 0) {
-    output += `⚠️ ${outOfRange} position${outOfRange > 1 ? 's' : ''} out of range\n`;
+    output += `⚠️ ${outOfRange} position${outOfRange > 1 ? "s" : ""} out of range\n`;
   }
-  
+
   output += `\n`;
-  
+
   // List positions
   positions.forEach((pos, i) => {
-    output += formatPositionForAgent(pos, { compact: true }) + '\n';
+    output += formatPositionForAgent(pos, { compact: true }) + "\n";
   });
-  
+
   // Actions
   if (totalFees > 1) {
     output += `\n💡 You have ${formatUSD(totalFees)} in fees ready to claim!`;
@@ -194,7 +197,7 @@ Want me to find some opportunities? Just say "find best LP" or tell me how much 
   if (outOfRange > 0) {
     output += `\n⚡ Some positions need rebalancing.`;
   }
-  
+
   return output;
 }
 
@@ -202,44 +205,44 @@ Want me to find some opportunities? Just say "find best LP" or tell me how much 
  * Format operation result
  */
 export function formatOperationResult(
-  operation: 'add' | 'remove' | 'claim',
+  operation: "add" | "remove" | "claim",
   success: boolean,
   details: {
     pool?: string;
     amount?: number;
     txSignature?: string;
     error?: string;
-  }
+  },
 ): string {
   if (!success) {
-    return `❌ **Operation Failed**\n\n${details.error || 'Unknown error'}`;
+    return `❌ **Operation Failed**\n\n${details.error || "Unknown error"}`;
   }
-  
-  const txLink = details.txSignature 
+
+  const txLink = details.txSignature
     ? `\n🔗 [View Transaction](https://solscan.io/tx/${details.txSignature})`
-    : '';
-  
+    : "";
+
   switch (operation) {
-    case 'add':
+    case "add":
       return `✅ **Liquidity Added!**
 
 Pool: ${details.pool}
 Amount: ${formatUSD(details.amount || 0)}${txLink}
 
 I'll keep an eye on this position for you.`;
-    
-    case 'remove':
+
+    case "remove":
       return `✅ **Liquidity Removed!**
 
 Pool: ${details.pool}
 Received: ${formatUSD(details.amount || 0)}${txLink}`;
-    
-    case 'claim':
+
+    case "claim":
       return `✅ **Fees Claimed!**
 
 Pool: ${details.pool}
 Amount: ${formatUSD(details.amount || 0)}${txLink}`;
-    
+
     default:
       return `✅ **Operation Complete**${txLink}`;
   }

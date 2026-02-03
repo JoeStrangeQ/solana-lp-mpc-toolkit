@@ -6,7 +6,11 @@ globalThis.Buffer = Buffer;
 import { ConvexError, Infer, v } from "convex/values";
 import { AuthorizationContext, PrivyClient, User } from "@privy-io/node";
 import { action, ActionCtx, MutationCtx } from "./_generated/server";
-import { PRIVY_APP_ID, PRIVY_APP_SECRET, PRIVY_SIGNER_PRIVATE_KEY } from "./convexEnv";
+import {
+  PRIVY_APP_ID,
+  PRIVY_APP_SECRET,
+  PRIVY_SIGNER_PRIVATE_KEY,
+} from "./convexEnv";
 import { api, internal } from "./_generated/api";
 import { Doc, Id } from "./_generated/dataModel";
 
@@ -33,7 +37,7 @@ export const vPrivyWallet = v.object({
     v.literal("google-drive"),
     v.literal("icloud"),
     v.literal("recovery-encryption-key"),
-    v.literal("privy-v2")
+    v.literal("privy-v2"),
   ),
 
   type: v.literal("wallet"),
@@ -72,15 +76,21 @@ export const authenticate = action({
   },
   handler: async (
     ctx,
-    args
-  ): Promise<{ success: true; user: Doc<"users">; wasCreated: boolean } | { success: false; error: string }> => {
+    args,
+  ): Promise<
+    | { success: true; user: Doc<"users">; wasCreated: boolean }
+    | { success: false; error: string }
+  > => {
     try {
       const { privyUser } = await authenticateUser({ ctx });
 
-      const { user, wasCreated } = await ctx.runMutation(internal.tables.users.mutations.getOrCreateUser, {
-        privyUserId: privyUser.id,
-        address: args.address,
-      });
+      const { user, wasCreated } = await ctx.runMutation(
+        internal.tables.users.mutations.getOrCreateUser,
+        {
+          privyUserId: privyUser.id,
+          address: args.address,
+        },
+      );
 
       return { success: true, user, wasCreated };
     } catch (err) {
@@ -90,7 +100,11 @@ export const authenticate = action({
   },
 });
 
-export async function authenticateUser({ ctx }: { ctx: ActionCtx | MutationCtx }): Promise<{
+export async function authenticateUser({
+  ctx,
+}: {
+  ctx: ActionCtx | MutationCtx;
+}): Promise<{
   user: Doc<"users"> | null;
   privyUser: User;
   userWallet: PrivyWallet;
@@ -107,34 +121,51 @@ export async function authenticateUser({ ctx }: { ctx: ActionCtx | MutationCtx }
 
   const embeddedWallet = privyUser.linked_accounts.find(isSolanaEmbeddedWallet);
 
-  if (!embeddedWallet) throw new ConvexError("User does not have a Privy embedded wallet");
+  if (!embeddedWallet)
+    throw new ConvexError("User does not have a Privy embedded wallet");
 
   return {
     user,
     privyUser,
-    userWallet: { ...embeddedWallet, public_key: embeddedWallet.public_key ?? "" },
+    userWallet: {
+      ...embeddedWallet,
+      public_key: embeddedWallet.public_key ?? "",
+    },
   };
 }
 
-export async function authenticateWithUserId({ ctx, userId }: { ctx: ActionCtx; userId: Id<"users"> }) {
+export async function authenticateWithUserId({
+  ctx,
+  userId,
+}: {
+  ctx: ActionCtx;
+  userId: Id<"users">;
+}) {
   //IMPORTANT : call only from internal actions/mutations
   const user = await ctx.runQuery(api.tables.users.get.getUserById, {
     id: userId,
   });
 
-  if (!user?.privyUserId) throw new Error(`Couldn't find privy id for user ${userId}`);
+  if (!user?.privyUserId)
+    throw new Error(`Couldn't find privy id for user ${userId}`);
   const privyUser = await privy.users()._get(user.privyUserId);
   const embeddedWallet = privyUser.linked_accounts.find(isSolanaEmbeddedWallet);
-  if (!embeddedWallet) throw new ConvexError("User does not have a Privy embedded wallet");
+  if (!embeddedWallet)
+    throw new ConvexError("User does not have a Privy embedded wallet");
 
   return {
     user,
     privyUser,
-    userWallet: { ...embeddedWallet, public_key: embeddedWallet.public_key ?? "" },
+    userWallet: {
+      ...embeddedWallet,
+      public_key: embeddedWallet.public_key ?? "",
+    },
   };
 }
 
-function isSolanaEmbeddedWallet(acc: User["linked_accounts"][number]): acc is Infer<typeof vPrivyWalletRaw> {
+function isSolanaEmbeddedWallet(
+  acc: User["linked_accounts"][number],
+): acc is Infer<typeof vPrivyWalletRaw> {
   return (
     acc.type === "wallet" &&
     acc.chain_type === "solana" &&
