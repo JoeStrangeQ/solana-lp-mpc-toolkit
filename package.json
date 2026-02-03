@@ -4,6 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "api": "tsx src/api/server.ts",
+    "api:dev": "tsx watch src/api/server.ts",
+    "test:arcium": "tsx scripts/test-arcium-encryption.ts",
+    "test:dex": "tsx scripts/test-dex-apis.ts",
+    "example": "tsx examples/agent-client.ts",
     "dev": "vite --port 3000",
     "start": "vite --port 3000",
     "build": "vite build && tsc",
