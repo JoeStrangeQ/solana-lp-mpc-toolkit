@@ -7,7 +7,7 @@ import { Connection, PublicKey, Transaction, Keypair } from '@solana/web3.js';
 
 // ============ Common Types ============
 
-export type DEXVenue = 'meteora' | 'orca' | 'raydium' | 'phoenix';
+export type DEXVenue = 'meteora' | 'orca' | 'raydium' | 'phoenix' | 'lifinity';
 
 export interface LPPool {
   venue: DEXVenue;
