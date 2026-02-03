@@ -1,5 +1,5 @@
 diff --git a/node_modules/@coral-xyz/anchor/package.json b/node_modules/@coral-xyz/anchor/package.json
-index 1234567..abcdefg 100644
+index 4c23a41..28e77f9 100644
 --- a/node_modules/@coral-xyz/anchor/package.json
 +++ b/node_modules/@coral-xyz/anchor/package.json
 @@ -4,6 +4,16 @@
@@ -14,7 +14,9 @@ index 1234567..abcdefg 100644
 +      },
 +      "require": "./dist/cjs/index.js",
 +      "default": "./dist/cjs/index.js"
-+    }
++    },
++    "./dist/cjs/*": "./dist/cjs/*",
++    "./dist/esm/*": "./dist/esm/*"
 +  },
    "browser": "./dist/browser/index.js",
    "license": "(MIT OR Apache-2.0)",
