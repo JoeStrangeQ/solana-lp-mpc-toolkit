@@ -149,9 +149,9 @@ export async function buildAddLiquidityTx(
     };
 
   } catch (error: unknown) {
-    const err = error as Error;
-    log.error('Failed to build add liquidity TX', { error: err.message });
-    return { success: false, error: err.message };
+    const errorMessage = error instanceof Error ? error.message : String(error) || 'Unknown error';
+    log.error('Failed to build add liquidity TX', { error: errorMessage });
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -203,9 +203,9 @@ export async function buildRemoveLiquidityTx(
     };
 
   } catch (error: unknown) {
-    const err = error as Error;
-    log.error('Failed to build remove liquidity TX', { error: err.message });
-    return { success: false, error: err.message };
+    const errorMessage = error instanceof Error ? error.message : String(error) || 'Unknown error';
+    log.error('Failed to build remove liquidity TX', { error: errorMessage });
+    return { success: false, error: errorMessage };
   }
 }
 
