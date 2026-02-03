@@ -146,16 +146,15 @@ app.get('/v1/pools/scan', async (c) => {
           .map((p: any) => ({
             venue: 'orca',
             address: p.address,
-              name: `${p.tokenA?.symbol}-${p.tokenB?.symbol}`,
-              apy: p.feeApr || 0,
-              tvl: p.tvl || 0,
-              volume24h: p.volume?.day || 0,
-              fee: (p.lpFeeRate || 0) * 100,
-            }));
-          pools.push(...filtered);
-        }
-      } catch (e: any) {
-        log.warn('Orca API error', { error: e?.message });
+            name: `${p.tokenA?.symbol}-${p.tokenB?.symbol}`,
+            apy: p.feeApr || 0,
+            tvl: p.tvl || 0,
+            volume24h: p.volume?.day || 0,
+            fee: (p.lpFeeRate || 0) * 100,
+          }));
+        pools.push(...filtered);
+      } else if (result.error) {
+        log.warn('Orca API error', { error: result.error });
       }
     }
 
