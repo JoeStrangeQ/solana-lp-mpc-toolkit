@@ -1,4 +1,6 @@
 {
+  "buildCommand": "",
+  "installCommand": "pnpm install",
   "functions": {
     "api/index.ts": {
       "maxDuration": 30
