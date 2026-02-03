@@ -20,7 +20,7 @@ import { jupiterClient, TOKENS } from '../src/swap';
 import { lpPipeline, METEORA_POOLS } from '../src/lp';
 import type { AgentResponse, LPIntent } from '../src/agent/types';
 
-const app = new Hono().basePath('/api');
+const app = new Hono();
 
 // Middleware
 app.use('*', cors());
