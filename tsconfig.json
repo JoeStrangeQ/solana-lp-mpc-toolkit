@@ -15,5 +15,5 @@
     "declarationMap": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "_archive"]
+  "exclude": ["node_modules", "dist", "_archive", "src/test-*.ts"]
 }

@@ -96,7 +96,15 @@ export class PrivyWalletClient {
 
     try {
       // Use the Solana-specific RPC method for signing
-      const result = await this.client.wallets.solana().signTransaction(
+      // Type cast needed as @privy-io/node types may lag behind actual API
+      type SolanaWallets = { solana: () => {
+        signTransaction: (walletId: string, params: { transaction: string }) => Promise<{ signed_transaction: string }>;
+        signAndSendTransaction: (walletId: string, params: { transaction: string }) => Promise<{ transaction_hash: string }>;
+        signMessage: (walletId: string, params: { message: string; encoding: string }) => Promise<{ signature: string }>;
+      }};
+      const wallets = this.client.wallets as unknown as SolanaWallets;
+      
+      const result = await wallets.solana().signTransaction(
         this.wallet.id,
         {
           transaction: transactionBase64,
@@ -119,7 +127,15 @@ export class PrivyWalletClient {
     }
 
     try {
-      const result = await this.client.wallets.solana().signAndSendTransaction(
+      // Type cast for Solana wallet methods
+      type SolanaWallets = { solana: () => {
+        signTransaction: (walletId: string, params: { transaction: string }) => Promise<{ signed_transaction: string }>;
+        signAndSendTransaction: (walletId: string, params: { transaction: string }) => Promise<{ transaction_hash: string }>;
+        signMessage: (walletId: string, params: { message: string; encoding: string }) => Promise<{ signature: string }>;
+      }};
+      const wallets = this.client.wallets as unknown as SolanaWallets;
+      
+      const result = await wallets.solana().signAndSendTransaction(
         this.wallet.id,
         {
           transaction: transactionBase64,
@@ -142,7 +158,15 @@ export class PrivyWalletClient {
     }
 
     try {
-      const result = await this.client.wallets.solana().signMessage(
+      // Type cast for Solana wallet methods
+      type SolanaWallets = { solana: () => {
+        signTransaction: (walletId: string, params: { transaction: string }) => Promise<{ signed_transaction: string }>;
+        signAndSendTransaction: (walletId: string, params: { transaction: string }) => Promise<{ transaction_hash: string }>;
+        signMessage: (walletId: string, params: { message: string; encoding: string }) => Promise<{ signature: string }>;
+      }};
+      const wallets = this.client.wallets as unknown as SolanaWallets;
+      
+      const result = await wallets.solana().signMessage(
         this.wallet.id,
         {
           message: Buffer.from(message).toString('base64'),

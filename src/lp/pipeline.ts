@@ -67,16 +67,6 @@ export interface ExecuteResult {
   message: string;
 }
 
-const TOKEN_DECIMALS: Record<string, number> = {
-  SOL: 9,
-  USDC: 6,
-  USDT: 6,
-  BONK: 5,
-  WIF: 6,
-  JUP: 6,
-  RAY: 6,
-};
-
 export class LPPipeline {
   private connection: Connection;
   private meteoraClient: MeteoraDirectClient;

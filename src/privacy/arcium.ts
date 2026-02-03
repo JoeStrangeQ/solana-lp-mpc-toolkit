@@ -5,7 +5,6 @@
  * Strategies remain private until execution
  */
 
-import { config } from '../config';
 import type { EncryptedStrategy, LPStrategy } from './types';
 
 // TODO: [BLOCKER] The @noble/curves library is incompatible with the current tsx/Node.js

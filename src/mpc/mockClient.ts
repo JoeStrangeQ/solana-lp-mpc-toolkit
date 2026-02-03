@@ -4,7 +4,7 @@
  * Simulates the MPCClient for testing without a real API key.
  */
 
-import type { MPCWallet, GenerateWalletResponse, SignTransactionResponse } from './types';
+import type { MPCWallet } from './types';
 
 export class MockMPCClient {
   private wallet: MPCWallet | null = null;

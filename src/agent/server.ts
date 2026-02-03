@@ -17,7 +17,7 @@ import { MockMPCClient } from '../mpc/mockClient';
 import { PrivyWalletClient } from '../mpc/privyClient';
 import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
-import { calculateFee, createFeeBreakdown, FEE_CONFIG } from '../fees';
+import { createFeeBreakdown, FEE_CONFIG } from '../fees';
 import { jupiterClient, TOKENS } from '../swap';
 import { lpPipeline, METEORA_POOLS } from '../lp';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types';
