@@ -23,7 +23,29 @@ import {
   getMXEAccAddress,
   getMXEPublicKey,
   getArciumProgramId,
+  getClusterAccAddress,
 } from '@arcium-hq/client';
+import * as anchor from '@coral-xyz/anchor';
+
+// ============ Devnet Configuration ============
+
+/**
+ * Arcium Devnet Cluster 456 (v0.7.0) - REAL MXE PUBLIC KEY
+ * Fetched: 2026-02-03T05:51:52.572Z
+ * 
+ * This is the x25519 public key for the MXE cluster on Solana devnet.
+ * Used for deriving shared secrets for encryption.
+ */
+export const ARCIUM_DEVNET_CONFIG = {
+  clusterOffset: 456,
+  mxePublicKey: new Uint8Array([
+    1, 174, 161, 187, 141, 66, 116, 90, 163, 13, 214, 142, 19, 88, 189, 84,
+    184, 25, 230, 74, 49, 61, 246, 124, 131, 198, 122, 107, 149, 253, 90, 100
+  ]),
+  mxePublicKeyHex: '01aea1bb8d42745aa30dd68e1358bd54b819e64a313df67c83c67a6b95fd5a64',
+  clusterAuthority: 'CkgyeACNCpPMzDt2b8n41jTit63VehY1ghPXNU9Lnz8L',
+  clusterSize: 2,
+};
 
 // ============ Types ============
 
@@ -36,7 +58,7 @@ export interface PrivacyKeys {
 export interface EncryptedStrategy {
   id: string;
   ownerPubkey: string;
-  ciphertext: number[][];      // Encrypted BigInt array
+  ciphertext: number[][];      // Encrypted bytes (each inner array is 32 bytes, values 0-255)
   publicKey: string;           // Client's X25519 public key (base64)
   nonce: string;               // 16-byte nonce (base64)
   timestamp: number;
@@ -46,7 +68,7 @@ export interface EncryptedStrategy {
 export interface EncryptedPosition {
   positionId: string;
   ownerPubkey: string;
-  encryptedValue: number[][];  // Encrypted value
+  encryptedValue: number[][];  // Encrypted bytes (values 0-255)
   venue: string;
   poolName: string;
   publicKey: string;
@@ -92,27 +114,60 @@ export class ArciumPrivacyService {
   /**
    * Initialize connection to Arcium MXE
    * Must be called before encryption operations
+   * 
+   * @param connection - Solana connection
+   * @param options - Optional: programId for custom MXE, useDevnet for automatic devnet config
    */
-  async initialize(connection: Connection, programId?: PublicKey): Promise<boolean> {
+  async initialize(
+    connection: Connection, 
+    options?: { 
+      programId?: PublicKey; 
+      useDevnet?: boolean;
+      mxePublicKey?: Uint8Array;
+    }
+  ): Promise<boolean> {
     try {
-      const arciumEnv = getArciumEnv();
+      const { programId, useDevnet = true, mxePublicKey } = options || {};
       
-      // If we have a program ID, try to get the MXE public key
-      if (programId) {
-        // In production: fetch MXE public key from on-chain
-        // const mxePublicKey = await getMXEPublicKey(provider, programId);
-        // For now, use a placeholder that works for devnet testing
-        this.mxePublicKey = new Uint8Array(32);
-        randomBytes(32).copy(Buffer.from(this.mxePublicKey));
+      // Priority 1: Explicit MXE public key provided
+      if (mxePublicKey) {
+        this.mxePublicKey = mxePublicKey;
+        console.log('[Arcium] Using provided MXE public key');
+      }
+      // Priority 2: Use devnet cluster 456 (recommended for hackathon)
+      else if (useDevnet) {
+        this.mxePublicKey = ARCIUM_DEVNET_CONFIG.mxePublicKey;
+        console.log(`[Arcium] Using devnet cluster ${ARCIUM_DEVNET_CONFIG.clusterOffset} MXE key`);
+        console.log(`[Arcium] MXE Key: ${ARCIUM_DEVNET_CONFIG.mxePublicKeyHex.slice(0, 16)}...`);
+      }
+      // Priority 3: Fetch from on-chain (requires deployed program)
+      else if (programId) {
+        const keypairPath = `${require('os').homedir()}/.config/solana/id.json`;
+        const keypairData = JSON.parse(require('fs').readFileSync(keypairPath, 'utf-8'));
+        const keypair = require('@solana/web3.js').Keypair.fromSecretKey(new Uint8Array(keypairData));
+        const wallet = new anchor.Wallet(keypair);
+        const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+        
+        const fetchedKey = await getMXEPublicKey(provider, programId);
+        if (fetchedKey) {
+          this.mxePublicKey = fetchedKey;
+          console.log('[Arcium] Fetched MXE public key from on-chain');
+        } else {
+          console.warn('[Arcium] MXE public key not found on-chain, using devnet fallback');
+          this.mxePublicKey = ARCIUM_DEVNET_CONFIG.mxePublicKey;
+        }
       }
 
-      // Derive shared secret if we have MXE public key
+      // Derive shared secret and initialize cipher
       if (this.mxePublicKey) {
         this.keys.sharedSecret = deriveSharedSecret(
           this.keys.privateKey,
           this.mxePublicKey
         );
         this.cipher = new RescueCipher(this.keys.sharedSecret);
+        console.log('[Arcium] ✅ RescueCipher initialized with real MXE shared secret');
+      } else {
+        console.warn('[Arcium] ⚠️ No MXE public key - using fallback encryption');
       }
 
       this.initialized = true;
@@ -122,6 +177,24 @@ export class ArciumPrivacyService {
       console.error('[Arcium] Failed to initialize:', error);
       return false;
     }
+  }
+
+  /**
+   * Quick initialization using devnet defaults
+   * Recommended for hackathon/testing
+   */
+  async initializeDevnet(): Promise<boolean> {
+    return this.initialize(
+      new Connection('https://api.devnet.solana.com', 'confirmed'),
+      { useDevnet: true }
+    );
+  }
+
+  /**
+   * Get the MXE public key being used
+   */
+  getMXEPublicKey(): Uint8Array | null {
+    return this.mxePublicKey;
   }
 
   /**
@@ -160,7 +233,7 @@ export class ArciumPrivacyService {
     return {
       id: this.generateId(),
       ownerPubkey: this.ownerPubkey.toBase58(),
-      ciphertext: ciphertext.map(arr => arr.map(n => Number(n))),
+      ciphertext: ciphertext.map(arr => Array.from(arr)),  // Store as number arrays (bytes 0-255)
       publicKey: this.getPublicKey(),
       nonce: Buffer.from(nonce).toString('base64'),
       timestamp: Date.now(),
@@ -174,7 +247,8 @@ export class ArciumPrivacyService {
   decryptStrategy(encrypted: EncryptedStrategy): AddLiquidityIntent | null {
     try {
       const nonce = Buffer.from(encrypted.nonce, 'base64');
-      const ciphertext = encrypted.ciphertext.map(arr => arr.map(n => BigInt(n)));
+      // Ciphertext is already number[][] (bytes), just pass through
+      const ciphertext = encrypted.ciphertext;
 
       let plaintext: bigint[];
       
@@ -205,20 +279,20 @@ export class ArciumPrivacyService {
     const valueBigInt = BigInt(Math.floor(valueUSD * 1e6));
     const feesBigInt = BigInt(Math.floor(feesUSD * 1e6));
 
-    let encValue: bigint[][];
-    let encFees: bigint[][];
+    let encValue: number[][];
+    let encFees: number[][];
 
     if (this.cipher) {
-      encValue = this.cipher.encrypt([valueBigInt], nonce);
-      encFees = this.cipher.encrypt([feesBigInt], nonce);
+      encValue = this.cipher.encrypt([valueBigInt], nonce).map(arr => Array.from(arr));
+      encFees = this.cipher.encrypt([feesBigInt], nonce).map(arr => Array.from(arr));
     } else {
-      encValue = this.fallbackEncrypt([valueBigInt], nonce);
-      encFees = this.fallbackEncrypt([feesBigInt], nonce);
+      encValue = this.fallbackEncrypt([valueBigInt], nonce).map(arr => arr.map(n => Number(n)));
+      encFees = this.fallbackEncrypt([feesBigInt], nonce).map(arr => arr.map(n => Number(n)));
     }
 
     return {
-      encryptedValue: encValue.map(arr => arr.map(n => Number(n))),
-      encryptedFees: encFees.map(arr => arr.map(n => Number(n))),
+      encryptedValue: encValue,
+      encryptedFees: encFees,
       nonce: Buffer.from(nonce).toString('base64'),
     };
   }
@@ -233,8 +307,9 @@ export class ArciumPrivacyService {
   ): { valueUSD: number; feesUSD: number } | null {
     try {
       const nonceBytes = Buffer.from(nonce, 'base64');
-      const valueArr = encryptedValue.map(arr => arr.map(n => BigInt(n)));
-      const feesArr = encryptedFees.map(arr => arr.map(n => BigInt(n)));
+      // Ciphertext is already number[][] (bytes)
+      const valueArr = encryptedValue;
+      const feesArr = encryptedFees;
 
       let valueBigInt: bigint;
       let feesBigInt: bigint;
