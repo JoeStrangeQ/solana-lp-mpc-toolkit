@@ -19,13 +19,16 @@ function getEnvNumber(key: string, defaultValue: number): number {
 function getEnvBoolean(key: string, defaultValue: boolean): boolean {
   const value = process.env[key]?.toLowerCase();
   if (!value) return defaultValue;
-  return value === 'true' || value === '1';
+  return value === "true" || value === "1";
 }
 
 function getEnvList(key: string, defaultValue: string[] = []): string[] {
   const value = process.env[key];
   if (!value) return defaultValue;
-  return value.split(',').map(s => s.trim()).filter(Boolean);
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 // ============ Configuration ============
@@ -33,72 +36,75 @@ function getEnvList(key: string, defaultValue: string[] = []): string[] {
 export const config = {
   // Server
   server: {
-    port: getEnvNumber('PORT', 3456),
-    host: getEnv('HOST', '0.0.0.0'),
-    env: getEnv('NODE_ENV', 'development'),
+    port: getEnvNumber("PORT", 3456),
+    host: getEnv("HOST", "0.0.0.0"),
+    env: getEnv("NODE_ENV", "development"),
   },
 
   // Solana
   solana: {
-    rpcUrl: getEnv('SOLANA_RPC', 'https://api.mainnet-beta.solana.com'),
-    rpcDevnet: getEnv('SOLANA_RPC_DEVNET', 'https://api.devnet.solana.com'),
-    commitment: getEnv('SOLANA_COMMITMENT', 'confirmed') as 'processed' | 'confirmed' | 'finalized',
+    rpcUrl: getEnv("SOLANA_RPC", "https://api.mainnet-beta.solana.com"),
+    rpcDevnet: getEnv("SOLANA_RPC_DEVNET", "https://api.devnet.solana.com"),
+    commitment: getEnv("SOLANA_COMMITMENT", "confirmed") as
+      | "processed"
+      | "confirmed"
+      | "finalized",
   },
 
   // Arcium
   arcium: {
-    clusterOffset: getEnvNumber('ARCIUM_CLUSTER_OFFSET', 456),
-    useDevnet: getEnvBoolean('ARCIUM_DEVNET', true),
+    clusterOffset: getEnvNumber("ARCIUM_CLUSTER_OFFSET", 456),
+    useDevnet: getEnvBoolean("ARCIUM_DEVNET", true),
   },
 
   // Rate Limiting
   rateLimit: {
-    enabled: getEnvBoolean('RATE_LIMIT_ENABLED', true),
-    windowMs: getEnvNumber('RATE_LIMIT_WINDOW_MS', 60000),
-    maxRequests: getEnvNumber('RATE_LIMIT_MAX_REQUESTS', 100),
-    txMaxRequests: getEnvNumber('RATE_LIMIT_TX_MAX', 10),
+    enabled: getEnvBoolean("RATE_LIMIT_ENABLED", true),
+    windowMs: getEnvNumber("RATE_LIMIT_WINDOW_MS", 60000),
+    maxRequests: getEnvNumber("RATE_LIMIT_MAX_REQUESTS", 100),
+    txMaxRequests: getEnvNumber("RATE_LIMIT_TX_MAX", 10),
   },
 
   // Authentication
   auth: {
-    apiKeys: getEnvList('API_KEYS'),
-    requireAuth: getEnvBoolean('REQUIRE_AUTH', false),
+    apiKeys: getEnvList("API_KEYS"),
+    requireAuth: getEnvBoolean("REQUIRE_AUTH", false),
   },
 
   // Logging
   logging: {
-    level: getEnv('LOG_LEVEL', 'info'),
-    format: getEnv('LOG_FORMAT', 'pretty'), // 'pretty' or 'json'
+    level: getEnv("LOG_LEVEL", "info"),
+    format: getEnv("LOG_FORMAT", "pretty"), // 'pretty' or 'json'
   },
 
   // Fetch/HTTP
   http: {
-    timeout: getEnvNumber('HTTP_TIMEOUT', 10000),
-    retries: getEnvNumber('HTTP_RETRIES', 2),
-    retryDelay: getEnvNumber('HTTP_RETRY_DELAY', 1000),
+    timeout: getEnvNumber("HTTP_TIMEOUT", 10000),
+    retries: getEnvNumber("HTTP_RETRIES", 2),
+    retryDelay: getEnvNumber("HTTP_RETRY_DELAY", 1000),
   },
 
   // DEX APIs
   dex: {
     meteora: {
-      apiUrl: getEnv('METEORA_API_URL', 'https://dlmm-api.meteora.ag'),
-      enabled: getEnvBoolean('METEORA_ENABLED', true),
+      apiUrl: getEnv("METEORA_API_URL", "https://dlmm-api.meteora.ag"),
+      enabled: getEnvBoolean("METEORA_ENABLED", true),
     },
     orca: {
-      apiUrl: getEnv('ORCA_API_URL', 'https://api.mainnet.orca.so'),
-      enabled: getEnvBoolean('ORCA_ENABLED', true),
+      apiUrl: getEnv("ORCA_API_URL", "https://api.mainnet.orca.so"),
+      enabled: getEnvBoolean("ORCA_ENABLED", true),
     },
     raydium: {
-      apiUrl: getEnv('RAYDIUM_API_URL', 'https://api-v3.raydium.io'),
-      enabled: getEnvBoolean('RAYDIUM_ENABLED', true),
+      apiUrl: getEnv("RAYDIUM_API_URL", "https://api-v3.raydium.io"),
+      enabled: getEnvBoolean("RAYDIUM_ENABLED", true),
     },
   },
 
   // Feature Flags
   features: {
-    encryption: getEnvBoolean('FEATURE_ENCRYPTION', true),
-    monitoring: getEnvBoolean('FEATURE_MONITORING', true),
-    txBuilding: getEnvBoolean('FEATURE_TX_BUILDING', true),
+    encryption: getEnvBoolean("FEATURE_ENCRYPTION", true),
+    monitoring: getEnvBoolean("FEATURE_MONITORING", true),
+    txBuilding: getEnvBoolean("FEATURE_TX_BUILDING", true),
   },
 };
 
@@ -108,19 +114,19 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
   // Validate RPC URL
-  if (!config.solana.rpcUrl.startsWith('http')) {
-    errors.push('SOLANA_RPC must be a valid HTTP(S) URL');
+  if (!config.solana.rpcUrl.startsWith("http")) {
+    errors.push("SOLANA_RPC must be a valid HTTP(S) URL");
   }
 
   // Validate port
   if (config.server.port < 1 || config.server.port > 65535) {
-    errors.push('PORT must be between 1 and 65535');
+    errors.push("PORT must be between 1 and 65535");
   }
 
   // Validate log level
-  const validLogLevels = ['debug', 'info', 'warn', 'error'];
+  const validLogLevels = ["debug", "info", "warn", "error"];
   if (!validLogLevels.includes(config.logging.level)) {
-    errors.push(`LOG_LEVEL must be one of: ${validLogLevels.join(', ')}`);
+    errors.push(`LOG_LEVEL must be one of: ${validLogLevels.join(", ")}`);
   }
 
   return {
@@ -138,7 +144,7 @@ export function getConfigSummary(): Record<string, any> {
       env: config.server.env,
     },
     solana: {
-      rpc: config.solana.rpcUrl.slice(0, 30) + '...',
+      rpc: config.solana.rpcUrl.slice(0, 30) + "...",
       commitment: config.solana.commitment,
     },
     arcium: {

@@ -47,8 +47,8 @@ export const useMfaReminderStore = create<MfaReminderState>()(
       partialize: (state) => ({
         lastShownAt: state.lastShownAt,
       }),
-    }
-  )
+    },
+  ),
 );
 
 export function useMfaReminderGuard() {

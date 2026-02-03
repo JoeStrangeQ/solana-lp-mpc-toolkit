@@ -1,11 +1,19 @@
 import { create } from "zustand";
-import { AMOUNTS_TO_OPEN_DLMM_POSITION, CollateralDepositInput, MaxBalance } from "../CollateralDepositInput";
+import {
+  AMOUNTS_TO_OPEN_DLMM_POSITION,
+  CollateralDepositInput,
+  MaxBalance,
+} from "../CollateralDepositInput";
 import { Row } from "../ui/Row";
 import { useConvexUser } from "~/providers/UserStates";
 import { Address, mints, tokensMetadata } from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { Skeleton } from "../ui/Skeleton";
-import { BinDistribution, BinDistributionSkeleton, LiquidityShape } from "../BinDistribution";
+import {
+  BinDistribution,
+  BinDistributionSkeleton,
+  LiquidityShape,
+} from "../BinDistribution";
 import { AssetSplit, AssetSplitSkelton } from "../AssetSplitSlider";
 import { useCreatePositionRangeStore } from "./RangeSelectorPanel";
 import { useEffect, useState } from "react";
@@ -13,10 +21,17 @@ import { useBinsAroundActiveBin } from "~/states/dlmm";
 import { useRouterState } from "@tanstack/react-router";
 import { useTokenBalance } from "~/states/balances";
 import { Button } from "../ui/Button";
-import { ConfirmPositionContent, ConfirmPositionContentSkeleton } from "./ConfirmPositionModal";
+import {
+  ConfirmPositionContent,
+  ConfirmPositionContentSkeleton,
+} from "./ConfirmPositionModal";
 import { Doc } from "../../../convex/_generated/dataModel";
 import { Modal } from "../ui/Modal";
-import { LeverageSlider, LeverageSliderCreatePosition, LeverageSliderSkeleton } from "../LeverageSlider";
+import {
+  LeverageSlider,
+  LeverageSliderCreatePosition,
+  LeverageSliderSkeleton,
+} from "../LeverageSlider";
 import { LimitOrderValues } from "../LimitOrdersModal";
 import { LabelValue } from "../ui/labelValueRow";
 import { LimitOrderInput } from "../../../convex/schema/limitOrders";
@@ -53,9 +68,11 @@ const defaultCreatePositionState: CreatePositionState = {
 export const useCreatePositionState = create<CreatePositionStore>((set) => ({
   ...defaultCreatePositionState,
 
-  setCreatePositionState: (newState) => set((state) => ({ ...state, ...newState })),
+  setCreatePositionState: (newState) =>
+    set((state) => ({ ...state, ...newState })),
 
-  resetCreatePositionState: () => set(() => ({ ...defaultCreatePositionState })),
+  resetCreatePositionState: () =>
+    set(() => ({ ...defaultCreatePositionState })),
 }));
 
 export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
@@ -71,7 +88,8 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
     setCreatePositionState,
     resetCreatePositionState,
   } = useCreatePositionState();
-  const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
+  const { lowerBin, upperBin, updateUpperLowerBins } =
+    useCreatePositionRangeStore();
 
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -106,10 +124,16 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
 
     const activeBinObj = bins[activeBinIndex];
     if (tokenXSplit === 0) {
-      updateUpperLowerBins({ newUpper: activeBinObj, newLower: bins[activeBinIndex - totalBins + 1] });
+      updateUpperLowerBins({
+        newUpper: activeBinObj,
+        newLower: bins[activeBinIndex - totalBins + 1],
+      });
     }
     if (tokenXSplit === 1) {
-      updateUpperLowerBins({ newLower: activeBinObj, newUpper: bins[activeBinIndex + totalBins - 1] });
+      updateUpperLowerBins({
+        newLower: activeBinObj,
+        newUpper: bins[activeBinIndex + totalBins - 1],
+      });
     }
   }, [tokenXSplit]);
 
@@ -125,7 +149,12 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
       <Row fullWidth className="mb-2.5">
         <Row className="gap-1.5">
           <div className="text-text text-sm">Collateral</div>
-          {convexUser && <RefreshTokenBalancesIcon className="h-3" userAddress={convexUser?.address} />}
+          {convexUser && (
+            <RefreshTokenBalancesIcon
+              className="h-3"
+              userAddress={convexUser?.address}
+            />
+          )}
         </Row>
         {convexUser && (
           <MnMSuspense fallback={<Skeleton className="w-12 h-3" />}>
@@ -134,7 +163,12 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
               userAddress={convexUser.address}
               onClick={(b) => {
                 const maxAmount =
-                  b.symbol === "SOL" ? Math.max(0.000001, b.balance - AMOUNTS_TO_OPEN_DLMM_POSITION) : b.balance;
+                  b.symbol === "SOL"
+                    ? Math.max(
+                        0.000001,
+                        b.balance - AMOUNTS_TO_OPEN_DLMM_POSITION,
+                      )
+                    : b.balance;
                 setCreatePositionState({ collateralUiAmount: maxAmount });
               }}
             />
@@ -145,12 +179,19 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
         <CollateralDepositInput
           initialCollateralMint={defaultCreatePositionState.collateralMint}
           value={collateralUiAmount}
-          onCollateralAmountChange={(amount) => setCreatePositionState({ collateralUiAmount: amount })}
-          onCollateralMintChange={(newMint) => setCreatePositionState({ collateralMint: newMint })}
+          onCollateralAmountChange={(amount) =>
+            setCreatePositionState({ collateralUiAmount: amount })
+          }
+          onCollateralMintChange={(newMint) =>
+            setCreatePositionState({ collateralMint: newMint })
+          }
         />
         {convexUser && collateralUiAmount > 0 ? (
           <MnMSuspense fallback={<LeverageSliderSkeleton />}>
-            <LeverageSliderCreatePosition userAddress={convexUser.address} poolAddress={poolAddress} />
+            <LeverageSliderCreatePosition
+              userAddress={convexUser.address}
+              poolAddress={poolAddress}
+            />
           </MnMSuspense>
         ) : (
           <LeverageSlider leverage={1} maxLeverage={0} disabled />
@@ -158,7 +199,9 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
       </div>
 
       {/*Bin dis */}
-      <div className="text-text text-sm text-left mb-2.5 mt-4">Set Bin Distribution</div>
+      <div className="text-text text-sm text-left mb-2.5 mt-4">
+        Set Bin Distribution
+      </div>
       <MnMSuspense fallback={<BinDistributionSkeleton />}>
         <BinDistribution
           poolAddress={poolAddress}
@@ -169,11 +212,15 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
           tokenXSplit={tokenXSplit}
           liquidityShape={liquidityShape}
           onRangeChange={updateUpperLowerBins}
-          onLiquidityShapeChange={(s) => setCreatePositionState({ liquidityShape: s })}
+          onLiquidityShapeChange={(s) =>
+            setCreatePositionState({ liquidityShape: s })
+          }
         />
       </MnMSuspense>
 
-      <div className="text-text text-sm text-left mb-2.5 mt-4">Set Asset Split</div>
+      <div className="text-text text-sm text-left mb-2.5 mt-4">
+        Set Asset Split
+      </div>
       <MnMSuspense fallback={<AssetSplitSkelton />}>
         <AssetSplit
           poolAddress={poolAddress}
@@ -182,7 +229,9 @@ export function CreatePositionPanel({ poolAddress }: { poolAddress: Address }) {
           tokenXSplit={tokenXSplit}
           lowerBin={lowerBin}
           upperBin={upperBin}
-          onSplitChange={(newSplitX) => setCreatePositionState({ tokenXSplit: newSplitX })}
+          onSplitChange={(newSplitX) =>
+            setCreatePositionState({ tokenXSplit: newSplitX })
+          }
         />
       </MnMSuspense>
 
@@ -240,7 +289,8 @@ function CreatePositionButton({
     mint: mints.sol,
   });
 
-  const insufficientBalance = collateralUiAmount > collateralTokenBalance.balance;
+  const insufficientBalance =
+    collateralUiAmount > collateralTokenBalance.balance;
 
   // 2. Rent requirement — different per token type
   const notEnoughForRent =
@@ -250,7 +300,12 @@ function CreatePositionButton({
       : // USDC deposit → rent still needs SOL
         solBalance.balance < AMOUNTS_TO_OPEN_DLMM_POSITION;
 
-  const disableButton = collateralUiAmount <= 0 || insufficientBalance || notEnoughForRent || !lowerBin || !upperBin;
+  const disableButton =
+    collateralUiAmount <= 0 ||
+    insufficientBalance ||
+    notEnoughForRent ||
+    !lowerBin ||
+    !upperBin;
 
   return (
     <>
@@ -302,10 +357,14 @@ export function CreatePositionPanelSkeleton() {
         <LeverageSliderSkeleton />
       </div>
       {/*Bin dis */}
-      <div className="text-text text-sm text-left mb-2.5 mt-4">Set Bin Distribution</div>
+      <div className="text-text text-sm text-left mb-2.5 mt-4">
+        Set Bin Distribution
+      </div>
       <BinDistributionSkeleton />
 
-      <div className="text-text text-sm text-left mb-2.5 mt-4">Set Asset Split</div>
+      <div className="text-text text-sm text-left mb-2.5 mt-4">
+        Set Asset Split
+      </div>
       <AssetSplitSkelton />
 
       <Button variant="liquidPrimary" className="mb-0 mt-4" disabled>

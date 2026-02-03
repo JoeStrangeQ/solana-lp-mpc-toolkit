@@ -42,7 +42,10 @@ export function BinDistribution({
   upperBin: SerializedBinLiquidity | null;
 
   onLiquidityShapeChange: (shape: LiquidityShape) => void;
-  onRangeChange: (p: { newLower?: SerializedBinLiquidity | undefined; newUpper?: SerializedBinLiquidity }) => void;
+  onRangeChange: (p: {
+    newLower?: SerializedBinLiquidity | undefined;
+    newUpper?: SerializedBinLiquidity;
+  }) => void;
 }) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const tokenX = useToken({ mint: pool.mint_x });
@@ -105,7 +108,10 @@ export function BinDistribution({
       id: "Bid-Ask",
       element: (
         <Row className="gap-1">
-          <BidAskIcon className="w-5 h-2" colored={liquidityShape === "Bid-Ask"} />
+          <BidAskIcon
+            className="w-5 h-2"
+            colored={liquidityShape === "Bid-Ask"}
+          />
           <div className="text-text text-xs">Bid-Ask</div>
         </Row>
       ),
@@ -144,7 +150,11 @@ export function BinDistribution({
       </Row>
 
       {!lowerBin || !upperBin ? (
-        <BinDistributionAdjusterSkeleton label="Loading Bins" maxBarHeight={80} shape={liquidityShape} />
+        <BinDistributionAdjusterSkeleton
+          label="Loading Bins"
+          maxBarHeight={80}
+          shape={liquidityShape}
+        />
       ) : (
         <BinDistributionAdjuster
           shape={liquidityShape}
@@ -171,7 +181,10 @@ type BinDistributionAdjusterProps = {
   tokenXAmount: number;
   tokenYAmount: number;
   maxBarHeight: number;
-  onRangeChange: (p: { lower: SerializedBinLiquidity; upper: SerializedBinLiquidity }) => void;
+  onRangeChange: (p: {
+    lower: SerializedBinLiquidity;
+    upper: SerializedBinLiquidity;
+  }) => void;
 };
 
 function BinDistributionAdjuster({
@@ -192,7 +205,10 @@ function BinDistributionAdjuster({
     numberOfBinsToTheRight: 67,
   });
   const [isDragging, setIsDragging] = useState(false);
-  const totalBins = useMemo(() => upperBin.binId - lowerBin.binId + 1, [lowerBin.binId, upperBin.binId]);
+  const totalBins = useMemo(
+    () => upperBin.binId - lowerBin.binId + 1,
+    [lowerBin.binId, upperBin.binId],
+  );
 
   const [binsYCount, setBinsYCount] = useState(Math.round(totalBins / 2));
   const binsXCount = totalBins - binsYCount;
@@ -211,7 +227,11 @@ function BinDistributionAdjuster({
     const spotAmountPerBinY = tokenYAmount / Math.max(binsYCount, 1);
     const spotAmountPerBinX = tokenXAmount / Math.max(binsXCount, 1);
 
-    const curveHeightsX = getLinearCurveHeights(binsXCount + 1, tokenXAmount, true);
+    const curveHeightsX = getLinearCurveHeights(
+      binsXCount + 1,
+      tokenXAmount,
+      true,
+    );
     const curveHeightsY = getLinearCurveHeights(binsYCount, tokenYAmount);
 
     const bidAskHeightsX = [...curveHeightsX].reverse();
@@ -220,7 +240,9 @@ function BinDistributionAdjuster({
     const maxAmountSpot = Math.max(spotAmountPerBinX, spotAmountPerBinY);
     const maxAmountCurve = Math.max(...curveHeightsX, ...curveHeightsY);
 
-    const currentBinRange = bins.filter((b) => b.binId >= lowerBin.binId && b.binId <= upperBin.binId);
+    const currentBinRange = bins.filter(
+      (b) => b.binId >= lowerBin.binId && b.binId <= upperBin.binId,
+    );
 
     return {
       spotAmountPerBinY,
@@ -233,7 +255,15 @@ function BinDistributionAdjuster({
       maxAmountCurve,
       currentBinRange,
     };
-  }, [binsXCount, binsYCount, tokenXAmount, tokenYAmount, bins, lowerBin.binId, upperBin.binId]);
+  }, [
+    binsXCount,
+    binsYCount,
+    tokenXAmount,
+    tokenYAmount,
+    bins,
+    lowerBin.binId,
+    upperBin.binId,
+  ]);
 
   // -----------------------------------------------------
   // 2️⃣ Auto-reset on activeBin change
@@ -260,7 +290,7 @@ function BinDistributionAdjuster({
         onRangeChange({ lower: newLower, upper: newUpper });
       }
     },
-    [activeBinId, totalBins, bins]
+    [activeBinId, totalBins, bins],
   );
 
   // -----------------------------------------------------
@@ -311,11 +341,21 @@ function BinDistributionAdjuster({
   // UI
   // -----------------------------------------------------
 
-  const binsGap = totalBins < 10 ? "gap-2" : totalBins < 25 ? "gap-1.5" : totalBins < 40 ? "gap-1" : "gap-0.5";
+  const binsGap =
+    totalBins < 10
+      ? "gap-2"
+      : totalBins < 25
+        ? "gap-1.5"
+        : totalBins < 40
+          ? "gap-1"
+          : "gap-0.5";
   return (
     <div className={"flex flex-col w-full"}>
       <div
-        className={cn("flex flex-row items-end justify-between w-full", binsGap)}
+        className={cn(
+          "flex flex-row items-end justify-between w-full",
+          binsGap,
+        )}
         style={{ height: maxBarHeight + 30 }}
       >
         {tokenXAmount === 0 && tokenYAmount === 0 ? (
@@ -347,7 +387,11 @@ function BinDistributionAdjuster({
 
             const max = shape === "Spot" ? maxAmountSpot : maxAmountCurve;
 
-            const minHeight = (isTokenY && tokenYAmount === 0) || (!isTokenY && tokenXAmount === 0) ? 0 : 2;
+            const minHeight =
+              (isTokenY && tokenYAmount === 0) ||
+              (!isTokenY && tokenXAmount === 0)
+                ? 0
+                : 2;
             const height = Math.max(minHeight, (amount / max) * maxBarHeight);
 
             return (
@@ -356,7 +400,11 @@ function BinDistributionAdjuster({
                 className={cn(
                   "flex-1 relative rounded-xl  ",
                   "rounded-b-none",
-                  isActive ? "bg-white/75" : isTokenY ? "bg-purple/75" : "bg-primary/75"
+                  isActive
+                    ? "bg-white/75"
+                    : isTokenY
+                      ? "bg-purple/75"
+                      : "bg-primary/75",
                 )}
                 initial={{ height: 0 }}
                 animate={{ height }}
@@ -365,7 +413,11 @@ function BinDistributionAdjuster({
                 {isActive && (
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8, y: 4 }}
-                    animate={isDragging ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0, scale: 0.8, y: 4 }}
+                    animate={
+                      isDragging
+                        ? { opacity: 1, scale: 1, y: 0 }
+                        : { opacity: 0, scale: 0.8, y: 4 }
+                    }
                     transition={{
                       duration: 0.18,
                       ease: "easeOut",
@@ -401,7 +453,10 @@ function BinDistributionAdjuster({
           <Slider.Thumb asChild>
             <div className="relative z-5 w-7 h-2.5 rounded-full outline-0  bg-text/75 backdrop-blur-lg flex items-center justify-center cursor-grab active:scale-95 transition-transform">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="w-px h-1.5 bg-black rounded-full mx-px" />
+                <div
+                  key={i}
+                  className="w-px h-1.5 bg-black rounded-full mx-px"
+                />
               ))}
             </div>
           </Slider.Thumb>
@@ -416,7 +471,11 @@ function BinDistributionAdjuster({
 }
 
 // helpers
-function getLinearCurveHeights(binCount: number, tokenAmount: number, reverse = false): number[] {
+function getLinearCurveHeights(
+  binCount: number,
+  tokenAmount: number,
+  reverse = false,
+): number[] {
   if (binCount <= 0) return [];
   const step = (2 * tokenAmount) / (binCount * (binCount + 1));
   const arr = Array.from({ length: binCount }, (_, i) => step * (i + 1));
@@ -435,7 +494,11 @@ export function BinDistributionSkeleton() {
         </div>
       </Row>
 
-      <BinDistributionAdjusterSkeleton label="Loading Bins" maxBarHeight={80} shape={"Spot"} />
+      <BinDistributionAdjusterSkeleton
+        label="Loading Bins"
+        maxBarHeight={80}
+        shape={"Spot"}
+      />
     </div>
   );
 }
@@ -457,7 +520,10 @@ function BinDistributionAdjusterSkeleton({
   return (
     <div className="flex flex-col w-full ">
       {/* Bars container */}
-      <div className="relative w-full px-3" style={{ height: maxBarHeight + 10 }}>
+      <div
+        className="relative w-full px-3"
+        style={{ height: maxBarHeight + 10 }}
+      >
         {/* Bars */}
         <div className="absolute inset-0 flex flex-row items-end justify-between gap-1.5">
           {heights.map((h, i) => (

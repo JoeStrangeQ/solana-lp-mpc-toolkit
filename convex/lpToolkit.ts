@@ -5,7 +5,12 @@
 
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
-import { vDEXVenue, vLPStrategy, vLPPosition, vLPOperation } from "./schema/lpPositions";
+import {
+  vDEXVenue,
+  vLPStrategy,
+  vLPPosition,
+  vLPOperation,
+} from "./schema/lpPositions";
 
 // ============ Position Queries ============
 
@@ -13,22 +18,22 @@ import { vDEXVenue, vLPStrategy, vLPPosition, vLPOperation } from "./schema/lpPo
  * Get all positions for a wallet address
  */
 export const getPositions = query({
-  args: { 
+  args: {
     ownerAddress: v.string(),
     activeOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { ownerAddress, activeOnly = true } = args;
-    
+
     if (activeOnly) {
       return await ctx.db
         .query("lpPositions")
-        .withIndex("by_owner_active", (q) => 
-          q.eq("ownerAddress", ownerAddress).eq("isActive", true)
+        .withIndex("by_owner_active", (q) =>
+          q.eq("ownerAddress", ownerAddress).eq("isActive", true),
         )
         .collect();
     }
-    
+
     return await ctx.db
       .query("lpPositions")
       .withIndex("by_owner", (q) => q.eq("ownerAddress", ownerAddress))
@@ -58,11 +63,11 @@ export const getPortfolioStats = query({
   handler: async (ctx, args) => {
     const positions = await ctx.db
       .query("lpPositions")
-      .withIndex("by_owner_active", (q) => 
-        q.eq("ownerAddress", args.ownerAddress).eq("isActive", true)
+      .withIndex("by_owner_active", (q) =>
+        q.eq("ownerAddress", args.ownerAddress).eq("isActive", true),
       )
       .collect();
-    
+
     const stats = {
       totalPositions: positions.length,
       totalValueUSD: 0,
@@ -72,25 +77,25 @@ export const getPortfolioStats = query({
       positionsOutOfRange: 0,
       byVenue: {} as Record<string, { count: number; valueUSD: number }>,
     };
-    
+
     for (const pos of positions) {
       stats.totalValueUSD += pos.currentValueUSD;
       stats.totalUnclaimedFeesUSD += pos.unclaimedFeesUSD;
       stats.totalFeesClaimedUSD += pos.totalFeesClaimedUSD;
-      
+
       if (pos.inRange) {
         stats.positionsInRange++;
       } else {
         stats.positionsOutOfRange++;
       }
-      
+
       if (!stats.byVenue[pos.venue]) {
         stats.byVenue[pos.venue] = { count: 0, valueUSD: 0 };
       }
       stats.byVenue[pos.venue].count++;
       stats.byVenue[pos.venue].valueUSD += pos.currentValueUSD;
     }
-    
+
     return stats;
   },
 });
@@ -121,10 +126,12 @@ export const createPosition = mutation({
       decimals: v.number(),
     }),
     depositValueUSD: v.number(),
-    priceRange: v.optional(v.object({
-      lower: v.number(),
-      upper: v.number(),
-    })),
+    priceRange: v.optional(
+      v.object({
+        lower: v.number(),
+        upper: v.number(),
+      }),
+    ),
     strategy: v.optional(vLPStrategy),
     isPrivate: v.optional(v.boolean()),
     encryptedData: v.optional(v.string()),
@@ -132,7 +139,7 @@ export const createPosition = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
-    
+
     const positionId = await ctx.db.insert("lpPositions", {
       ownerAddress: args.ownerAddress,
       agentId: args.agentId,
@@ -158,7 +165,7 @@ export const createPosition = mutation({
       encryptedData: args.encryptedData,
       publicKey: args.publicKey,
     });
-    
+
     return positionId;
   },
 });
@@ -180,12 +187,12 @@ export const updatePositionValue = mutation({
       .query("lpPositions")
       .withIndex("by_position_id", (q) => q.eq("positionId", args.positionId))
       .collect();
-    
+
     const position = positions[0];
     if (!position) {
       throw new Error(`Position not found: ${args.positionId}`);
     }
-    
+
     await ctx.db.patch(position._id, {
       currentValueUSD: args.currentValueUSD,
       unclaimedFeesA: args.unclaimedFeesA,
@@ -211,12 +218,12 @@ export const closePosition = mutation({
       .query("lpPositions")
       .withIndex("by_position_id", (q) => q.eq("positionId", args.positionId))
       .collect();
-    
+
     const position = positions[0];
     if (!position) {
       throw new Error(`Position not found: ${args.positionId}`);
     }
-    
+
     await ctx.db.patch(position._id, {
       currentValueUSD: args.finalValueUSD,
       totalFeesClaimedUSD: position.totalFeesClaimedUSD + args.feesClaimedUSD,
@@ -242,12 +249,12 @@ export const recordFeesClaimed = mutation({
       .query("lpPositions")
       .withIndex("by_position_id", (q) => q.eq("positionId", args.positionId))
       .collect();
-    
+
     const position = positions[0];
     if (!position) {
       throw new Error(`Position not found: ${args.positionId}`);
     }
-    
+
     await ctx.db.patch(position._id, {
       totalFeesClaimedUSD: position.totalFeesClaimedUSD + args.feesClaimedUSD,
       unclaimedFeesUSD: 0,
@@ -270,7 +277,7 @@ export const logOperation = mutation({
       v.literal("add_liquidity"),
       v.literal("remove_liquidity"),
       v.literal("claim_fees"),
-      v.literal("rebalance")
+      v.literal("rebalance"),
     ),
     venue: vDEXVenue,
     poolAddress: v.string(),
@@ -281,7 +288,7 @@ export const logOperation = mutation({
     status: v.union(
       v.literal("pending"),
       v.literal("confirmed"),
-      v.literal("failed")
+      v.literal("failed"),
     ),
     errorMessage: v.optional(v.string()),
   },
@@ -302,7 +309,7 @@ export const updateOperationStatus = mutation({
     status: v.union(
       v.literal("pending"),
       v.literal("confirmed"),
-      v.literal("failed")
+      v.literal("failed"),
     ),
     txSignature: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
@@ -320,13 +327,13 @@ export const updateOperationStatus = mutation({
  * Get recent operations for a wallet
  */
 export const getOperations = query({
-  args: { 
+  args: {
     ownerAddress: v.string(),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const { ownerAddress, limit = 20 } = args;
-    
+
     return await ctx.db
       .query("lpOperations")
       .withIndex("by_owner", (q) => q.eq("ownerAddress", ownerAddress))

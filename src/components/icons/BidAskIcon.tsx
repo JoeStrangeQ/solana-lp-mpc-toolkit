@@ -1,15 +1,15 @@
-import clsx from 'clsx'
+import clsx from "clsx";
 
 export const BidAskIcon = ({
-  className = 'w-9 h-9',
+  className = "w-9 h-9",
   colored = false,
 }: {
-  className?: string
-  colored?: boolean
+  className?: string;
+  colored?: boolean;
 }) => {
-  const leftFill = colored ? '#B6D162' : '#FFFFFF'
-  const rightFill = colored ? '#A866DD' : '#FFFFFF'
-  const transitionStyle = { transition: 'fill 0.3s ease-in-out' }
+  const leftFill = colored ? "#B6D162" : "#FFFFFF";
+  const rightFill = colored ? "#A866DD" : "#FFFFFF";
+  const transitionStyle = { transition: "fill 0.3s ease-in-out" };
 
   return (
     <svg
@@ -138,5 +138,5 @@ export const BidAskIcon = ({
       {/* Center stays white */}
       <rect width="3" height="5" x="30" y="21" fill="#fff" rx="1" />
     </svg>
-  )
-}
+  );
+};

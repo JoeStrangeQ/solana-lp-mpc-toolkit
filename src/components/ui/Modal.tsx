@@ -37,7 +37,10 @@ export function Modal({
           <MnMSuspense fallback={<></>}>
             <motion.div
               layout
-              className={cn("relative py-6 px-5 z-40 bg-white/3 backdrop-blur-xl inner-white rounded-4xl", className)}
+              className={cn(
+                "relative py-6 px-5 z-40 bg-white/3 backdrop-blur-xl inner-white rounded-4xl",
+                className,
+              )}
               initial={{ opacity: 0, scale: 0.5 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.5 }}
@@ -55,7 +58,11 @@ export function Modal({
                   transition={{ delay: 0.1, duration: 0.4, ease: "easeOut" }}
                   className="w-full"
                 >
-                  {typeof title === "string" ? <div className="text-text text-left text-xl">{title}</div> : title}
+                  {typeof title === "string" ? (
+                    <div className="text-text text-left text-xl">{title}</div>
+                  ) : (
+                    title
+                  )}
                 </motion.div>
 
                 <motion.div
@@ -87,6 +94,6 @@ export function Modal({
         </div>
       )}
     </AnimatePresence>,
-    document.body
+    document.body,
   );
 }

@@ -1,7 +1,7 @@
 /**
  * MnM Collateral Service
  * Manages LP tokens as collateral for borrowing
- * 
+ *
  * This service handles:
  * - Depositing DLMM LP positions as collateral
  * - Tracking collateral value
@@ -9,31 +9,33 @@
  * - Withdrawing collateral
  */
 
-import { 
-  Connection, 
-  PublicKey, 
-  Transaction, 
+import {
+  Connection,
+  PublicKey,
+  Transaction,
   TransactionInstruction,
   SystemProgram,
   Keypair,
-} from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
-import BN from 'bn.js';
-import { getPositionValue, LPTokenValue } from './dlmmService';
+} from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
+import BN from "bn.js";
+import { getPositionValue, LPTokenValue } from "./dlmmService";
 
 // ============ Program Constants ============
 
 // MnM Collateral Vault Program ID (to be deployed)
-export const COLLATERAL_PROGRAM_ID = new PublicKey('11111111111111111111111111111111'); // PLACEHOLDER
+export const COLLATERAL_PROGRAM_ID = new PublicKey(
+  "11111111111111111111111111111111",
+); // PLACEHOLDER
 
 // Risk Parameters
 export const RISK_PARAMS = {
-  MAX_LTV: 0.80,              // 80% max loan-to-value
+  MAX_LTV: 0.8, // 80% max loan-to-value
   LIQUIDATION_THRESHOLD: 0.85, // 85% - position liquidated above this
-  LIQUIDATION_PENALTY: 0.05,   // 5% penalty on liquidation
-  MIN_HEALTH_FACTOR: 1.0,      // Below 1.0 = liquidatable
-  HEALTH_WARNING: 1.2,         // Warning threshold
-  HEALTH_SAFE: 1.5,            // Considered safe above this
+  LIQUIDATION_PENALTY: 0.05, // 5% penalty on liquidation
+  MIN_HEALTH_FACTOR: 1.0, // Below 1.0 = liquidatable
+  HEALTH_WARNING: 1.2, // Warning threshold
+  HEALTH_SAFE: 1.5, // Considered safe above this
 };
 
 // ============ Types ============
@@ -47,7 +49,7 @@ export interface CollateralPosition {
   collateralValueUSD: number;
   borrowedAmountUSD: number;
   healthFactor: number;
-  status: 'active' | 'warning' | 'liquidatable' | 'liquidated';
+  status: "active" | "warning" | "liquidatable" | "liquidated";
 }
 
 export interface CollateralVault {
@@ -76,7 +78,7 @@ export interface BorrowParams {
 
 export interface HealthFactorResult {
   healthFactor: number;
-  status: 'safe' | 'warning' | 'danger' | 'liquidatable';
+  status: "safe" | "warning" | "danger" | "liquidatable";
   collateralValueUSD: number;
   borrowedAmountUSD: number;
   maxBorrowableUSD: number;
@@ -90,8 +92,8 @@ export interface HealthFactorResult {
  */
 export function deriveCollateralVaultPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from('collateral_vault')],
-    COLLATERAL_PROGRAM_ID
+    [Buffer.from("collateral_vault")],
+    COLLATERAL_PROGRAM_ID,
   );
 }
 
@@ -100,15 +102,15 @@ export function deriveCollateralVaultPDA(): [PublicKey, number] {
  */
 export function deriveCollateralPositionPDA(
   user: PublicKey,
-  dlmmPosition: PublicKey
+  dlmmPosition: PublicKey,
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [
-      Buffer.from('collateral_position'),
+      Buffer.from("collateral_position"),
       user.toBuffer(),
       dlmmPosition.toBuffer(),
     ],
-    COLLATERAL_PROGRAM_ID
+    COLLATERAL_PROGRAM_ID,
   );
 }
 
@@ -117,15 +119,11 @@ export function deriveCollateralPositionPDA(
  */
 export function deriveLoanPDA(
   user: PublicKey,
-  collateralPosition: PublicKey
+  collateralPosition: PublicKey,
 ): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [
-      Buffer.from('loan'),
-      user.toBuffer(),
-      collateralPosition.toBuffer(),
-    ],
-    COLLATERAL_PROGRAM_ID
+    [Buffer.from("loan"), user.toBuffer(), collateralPosition.toBuffer()],
+    COLLATERAL_PROGRAM_ID,
   );
 }
 
@@ -138,12 +136,12 @@ export function deriveLoanPDA(
  */
 export function calculateHealthFactor(
   collateralValueUSD: number,
-  borrowedAmountUSD: number
+  borrowedAmountUSD: number,
 ): HealthFactorResult {
   if (borrowedAmountUSD === 0) {
     return {
       healthFactor: Infinity,
-      status: 'safe',
+      status: "safe",
       collateralValueUSD,
       borrowedAmountUSD,
       maxBorrowableUSD: collateralValueUSD * RISK_PARAMS.MAX_LTV,
@@ -151,19 +149,24 @@ export function calculateHealthFactor(
     };
   }
 
-  const healthFactor = (collateralValueUSD * RISK_PARAMS.LIQUIDATION_THRESHOLD) / borrowedAmountUSD;
+  const healthFactor =
+    (collateralValueUSD * RISK_PARAMS.LIQUIDATION_THRESHOLD) /
+    borrowedAmountUSD;
   const maxBorrowableUSD = collateralValueUSD * RISK_PARAMS.MAX_LTV;
-  const availableToBorrowUSD = Math.max(0, maxBorrowableUSD - borrowedAmountUSD);
+  const availableToBorrowUSD = Math.max(
+    0,
+    maxBorrowableUSD - borrowedAmountUSD,
+  );
 
-  let status: 'safe' | 'warning' | 'danger' | 'liquidatable';
+  let status: "safe" | "warning" | "danger" | "liquidatable";
   if (healthFactor < RISK_PARAMS.MIN_HEALTH_FACTOR) {
-    status = 'liquidatable';
+    status = "liquidatable";
   } else if (healthFactor < RISK_PARAMS.HEALTH_WARNING) {
-    status = 'danger';
+    status = "danger";
   } else if (healthFactor < RISK_PARAMS.HEALTH_SAFE) {
-    status = 'warning';
+    status = "warning";
   } else {
-    status = 'safe';
+    status = "safe";
   }
 
   return {
@@ -188,7 +191,7 @@ export function calculateMaxBorrow(collateralValueUSD: number): number {
  * Returns the LP value threshold at which position becomes liquidatable
  */
 export function calculateLiquidationThreshold(
-  borrowedAmountUSD: number
+  borrowedAmountUSD: number,
 ): number {
   return borrowedAmountUSD / RISK_PARAMS.LIQUIDATION_THRESHOLD;
 }
@@ -200,25 +203,29 @@ export function calculateLiquidationThreshold(
  * This transfers ownership of the position to the collateral vault
  */
 export async function depositCollateral(
-  params: DepositCollateralParams
+  params: DepositCollateralParams,
 ): Promise<{
   transaction: Transaction;
   collateralPositionAddress: PublicKey;
   collateralValueUSD: number;
 }> {
-  const { connection, user, dlmmPoolAddress, dlmmPositionAddress, prices } = params;
+  const { connection, user, dlmmPoolAddress, dlmmPositionAddress, prices } =
+    params;
 
   // Calculate the value of the LP position
   const lpValue = await getPositionValue(
     connection,
     dlmmPoolAddress,
     dlmmPositionAddress,
-    prices
+    prices,
   );
 
   // Derive PDAs
   const [collateralVault] = deriveCollateralVaultPDA();
-  const [collateralPosition] = deriveCollateralPositionPDA(user, dlmmPositionAddress);
+  const [collateralPosition] = deriveCollateralPositionPDA(
+    user,
+    dlmmPositionAddress,
+  );
 
   // Build instruction to deposit LP position as collateral
   // This would transfer the DLMM position NFT/token to the vault
@@ -237,7 +244,9 @@ export async function depositCollateral(
 
   const transaction = new Transaction().add(instruction);
   transaction.feePayer = user;
-  transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  transaction.recentBlockhash = (
+    await connection.getLatestBlockhash()
+  ).blockhash;
 
   return {
     transaction,
@@ -249,14 +258,13 @@ export async function depositCollateral(
 /**
  * Borrow against deposited collateral
  */
-export async function borrow(
-  params: BorrowParams
-): Promise<{
+export async function borrow(params: BorrowParams): Promise<{
   transaction: Transaction;
   borrowedAmount: BN;
   newHealthFactor: number;
 }> {
-  const { connection, user, collateralPositionId, borrowAmount, borrowToken } = params;
+  const { connection, user, collateralPositionId, borrowAmount, borrowToken } =
+    params;
 
   // Parse collateral position ID to get addresses
   const collateralPosition = new PublicKey(collateralPositionId);
@@ -281,13 +289,15 @@ export async function borrow(
     programId: COLLATERAL_PROGRAM_ID,
     data: Buffer.concat([
       Buffer.from([1]), // Instruction discriminator for borrow
-      borrowAmount.toArrayLike(Buffer, 'le', 8),
+      borrowAmount.toArrayLike(Buffer, "le", 8),
     ]),
   });
 
   const transaction = new Transaction().add(instruction);
   transaction.feePayer = user;
-  transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  transaction.recentBlockhash = (
+    await connection.getLatestBlockhash()
+  ).blockhash;
 
   // Note: newHealthFactor should be fetched from on-chain state after tx
   return {
@@ -305,7 +315,7 @@ export async function repay(
   user: PublicKey,
   collateralPositionId: string,
   repayAmount: BN,
-  repayToken: PublicKey
+  repayToken: PublicKey,
 ): Promise<Transaction> {
   const collateralPosition = new PublicKey(collateralPositionId);
   const [loan] = deriveLoanPDA(user, collateralPosition);
@@ -325,13 +335,15 @@ export async function repay(
     programId: COLLATERAL_PROGRAM_ID,
     data: Buffer.concat([
       Buffer.from([2]), // Instruction discriminator for repay
-      repayAmount.toArrayLike(Buffer, 'le', 8),
+      repayAmount.toArrayLike(Buffer, "le", 8),
     ]),
   });
 
   const transaction = new Transaction().add(instruction);
   transaction.feePayer = user;
-  transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  transaction.recentBlockhash = (
+    await connection.getLatestBlockhash()
+  ).blockhash;
 
   return transaction;
 }
@@ -342,7 +354,7 @@ export async function repay(
 export async function withdrawCollateral(
   connection: Connection,
   user: PublicKey,
-  collateralPositionId: string
+  collateralPositionId: string,
 ): Promise<Transaction> {
   const collateralPosition = new PublicKey(collateralPositionId);
   const [collateralVault] = deriveCollateralVaultPDA();
@@ -360,7 +372,9 @@ export async function withdrawCollateral(
 
   const transaction = new Transaction().add(instruction);
   transaction.feePayer = user;
-  transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  transaction.recentBlockhash = (
+    await connection.getLatestBlockhash()
+  ).blockhash;
 
   return transaction;
 }
@@ -373,11 +387,11 @@ export async function withdrawCollateral(
 export async function getUserCollateralPositions(
   connection: Connection,
   user: PublicKey,
-  prices: { SOL: number; USDC: number; USDT: number }
+  prices: { SOL: number; USDC: number; USDT: number },
 ): Promise<CollateralPosition[]> {
   // This would fetch from on-chain state
   // For now, return empty array as placeholder
-  console.log('Fetching collateral positions for:', user.toBase58());
+  console.log("Fetching collateral positions for:", user.toBase58());
   return [];
 }
 
@@ -406,7 +420,7 @@ export async function liquidate(
   liquidator: PublicKey,
   collateralPositionId: string,
   repayAmount: BN,
-  repayToken: PublicKey
+  repayToken: PublicKey,
 ): Promise<{
   transaction: Transaction;
   expectedCollateral: BN;
@@ -414,7 +428,10 @@ export async function liquidate(
 }> {
   const collateralPosition = new PublicKey(collateralPositionId);
   const [collateralVault] = deriveCollateralVaultPDA();
-  const liquidatorRepayAccount = await getAssociatedTokenAddress(repayToken, liquidator);
+  const liquidatorRepayAccount = await getAssociatedTokenAddress(
+    repayToken,
+    liquidator,
+  );
 
   const instruction = new TransactionInstruction({
     keys: [
@@ -428,17 +445,20 @@ export async function liquidate(
     programId: COLLATERAL_PROGRAM_ID,
     data: Buffer.concat([
       Buffer.from([4]), // Instruction discriminator for liquidate
-      repayAmount.toArrayLike(Buffer, 'le', 8),
+      repayAmount.toArrayLike(Buffer, "le", 8),
     ]),
   });
 
   const transaction = new Transaction().add(instruction);
   transaction.feePayer = liquidator;
-  transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  transaction.recentBlockhash = (
+    await connection.getLatestBlockhash()
+  ).blockhash;
 
   // Calculate expected collateral (includes liquidation bonus)
   const repayAmountNum = repayAmount.toNumber();
-  const collateralAmount = repayAmountNum * (1 + RISK_PARAMS.LIQUIDATION_PENALTY);
+  const collateralAmount =
+    repayAmountNum * (1 + RISK_PARAMS.LIQUIDATION_PENALTY);
 
   return {
     transaction,
@@ -454,24 +474,24 @@ export default {
   deriveCollateralVaultPDA,
   deriveCollateralPositionPDA,
   deriveLoanPDA,
-  
+
   // Calculations
   calculateHealthFactor,
   calculateMaxBorrow,
   calculateLiquidationThreshold,
   isLiquidatable,
   needsAttention,
-  
+
   // Operations
   depositCollateral,
   borrow,
   repay,
   withdrawCollateral,
   liquidate,
-  
+
   // Monitoring
   getUserCollateralPositions,
-  
+
   // Constants
   RISK_PARAMS,
   COLLATERAL_PROGRAM_ID,

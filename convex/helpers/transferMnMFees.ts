@@ -18,12 +18,17 @@ export async function buildTransferMnMTx({
   outputMint: Address;
   totalFeesInRawOutputToken: BN;
 }) {
-  const mnmFeeRawAmount = totalFeesInRawOutputToken.muln(MNM_FEE_PERCENT).divn(100);
+  const mnmFeeRawAmount = totalFeesInRawOutputToken
+    .muln(MNM_FEE_PERCENT)
+    .divn(100);
 
   if (mnmFeeRawAmount.isNeg() || mnmFeeRawAmount.isZero()) {
     return null;
   }
-  const mnmFeeRawAmountNumber = safeBigIntToNumber(mnmFeeRawAmount, "MnM Fee Raw Amount");
+  const mnmFeeRawAmountNumber = safeBigIntToNumber(
+    mnmFeeRawAmount,
+    "MnM Fee Raw Amount",
+  );
   const { blockhash } = await connection.getLatestBlockhash();
   const mnmFeeClaimTx = await buildTransferTokenTransaction({
     mint: new PublicKey(outputMint),
@@ -42,7 +47,7 @@ export async function buildTransferMnMTx({
     mnmFeeRawAmount: mnmFeeRawAmountNumber,
     totalFeesAfterMnMCut: safeBigIntToNumber(
       totalFeesInRawOutputToken.sub(mnmFeeRawAmount),
-      "total fees after mnm cut"
+      "total fees after mnm cut",
     ),
   };
 }
@@ -55,12 +60,17 @@ export async function transferMnMFees({
   outputMint: Address;
   totalFeesInRawOutputToken: BN;
 }) {
-  const mnmFeeRawAmount = totalFeesInRawOutputToken.muln(MNM_FEE_PERCENT).divn(100);
+  const mnmFeeRawAmount = totalFeesInRawOutputToken
+    .muln(MNM_FEE_PERCENT)
+    .divn(100);
 
   if (mnmFeeRawAmount.isNeg() || mnmFeeRawAmount.isZero()) {
     return { mnmFeeTransferTxId: null, mnmFeeRawAmount: 0 };
   }
-  const mnmFeeRawAmountNumber = safeBigIntToNumber(mnmFeeRawAmount, "MnM Fee Raw Amount");
+  const mnmFeeRawAmountNumber = safeBigIntToNumber(
+    mnmFeeRawAmount,
+    "MnM Fee Raw Amount",
+  );
   const { blockhash } = await connection.getLatestBlockhash();
   const mnmFeeClaimTx = await buildTransferTokenTransaction({
     mint: new PublicKey(outputMint),
@@ -83,14 +93,17 @@ export async function transferMnMFees({
       transaction: mnmFeeClaimTx.serialize(),
     });
 
-  const txId = await connection.sendRawTransaction(Buffer.from(signed_transaction, "base64"), { skipPreflight: true });
+  const txId = await connection.sendRawTransaction(
+    Buffer.from(signed_transaction, "base64"),
+    { skipPreflight: true },
+  );
 
   return {
     mnmFeeTransferTxId: txId,
     mnmFeeRawAmount: mnmFeeRawAmountNumber,
     totalFeesAfterMnMCut: safeBigIntToNumber(
       totalFeesInRawOutputToken.sub(mnmFeeRawAmount),
-      "total fees after mnm cut"
+      "total fees after mnm cut",
     ),
   };
 }

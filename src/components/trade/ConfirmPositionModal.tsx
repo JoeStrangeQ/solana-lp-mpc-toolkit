@@ -1,5 +1,9 @@
 import { usePool } from "~/states/pools";
-import { Address, toAddress, tokensMetadata } from "../../../convex/utils/solana";
+import {
+  Address,
+  toAddress,
+  tokensMetadata,
+} from "../../../convex/utils/solana";
 import { useToken } from "~/states/tokens";
 import { useCreatePositionState } from "./CreatePositionPanel";
 import { useSwapQuote } from "~/states/swap";
@@ -47,14 +51,23 @@ export function ConfirmPositionContent({
     leverage,
     resetCreatePositionState,
   } = useCreatePositionState();
-  const { lowerBin, upperBin, updateUpperLowerBins } = useCreatePositionRangeStore();
-  const createPosition = useAction(api.actions.dlmmPosition.createPosition.createPosition);
+  const { lowerBin, upperBin, updateUpperLowerBins } =
+    useCreatePositionRangeStore();
+  const createPosition = useAction(
+    api.actions.dlmmPosition.createPosition.createPosition,
+  );
 
-  const { refetch: refetchBalances } = useBalances({ address: toAddress(convexUser.address) });
+  const { refetch: refetchBalances } = useBalances({
+    address: toAddress(convexUser.address),
+  });
 
   const {
     binRange: { bins, activeBin: activeBinId },
-  } = useBinsAroundActiveBin({ poolAddress, numberOfBinsToTheLeft: 124, numberOfBinsToTheRight: 124 });
+  } = useBinsAroundActiveBin({
+    poolAddress,
+    numberOfBinsToTheLeft: 124,
+    numberOfBinsToTheRight: 124,
+  });
 
   const { strategyAddress, lqtCBps, apyCBps } = useLoopscaleQuote({
     userAddress: toAddress(convexUser.address),
@@ -68,7 +81,10 @@ export function ConfirmPositionContent({
   const tokenY = useToken({ mint: pool.mint_y });
   const collateralToken = tokensMetadata[collateralMint];
 
-  const depositRawAmount = amountToRawAmount(collateralUiAmount, collateralToken.decimals);
+  const depositRawAmount = amountToRawAmount(
+    collateralUiAmount,
+    collateralToken.decimals,
+  );
   const xDepositedRawAmount = depositRawAmount * tokenXSplit;
   const yDepositedRawAmount = depositRawAmount - xDepositedRawAmount;
 
@@ -110,11 +126,15 @@ export function ConfirmPositionContent({
       const createPositionPromise = createPosition({
         poolAddress,
         quoteDetails,
-        liquidityShape: liquidityShape === "Bid-Ask" ? "BidAsk" : liquidityShape,
+        liquidityShape:
+          liquidityShape === "Bid-Ask" ? "BidAsk" : liquidityShape,
         autoCompoundSplit: 0,
         poolEntryPrice: pool.current_price,
 
-        activeBin: { id: activeBin.binId, price: Number(activeBin.pricePerToken) },
+        activeBin: {
+          id: activeBin.binId,
+          price: Number(activeBin.pricePerToken),
+        },
         lowerBin: { id: lowerBin.binId, price: Number(lowerBin.pricePerToken) },
         upperBin: { id: upperBin.binId, price: Number(upperBin.pricePerToken) },
 
@@ -177,9 +197,13 @@ export function ConfirmPositionContent({
           <Info className="w-3 h-3 text-yellow shrink-0 mt-0.5" />
 
           <div className="flex flex-col w-full items-start leading-tight">
-            <div className="text-yellow text-sm leading-tight">{quoteErrorTitle}</div>
+            <div className="text-yellow text-sm leading-tight">
+              {quoteErrorTitle}
+            </div>
 
-            <div className="text-yellow/60 text-xs leading-tight">{quoteErrorSubtitle}</div>
+            <div className="text-yellow/60 text-xs leading-tight">
+              {quoteErrorSubtitle}
+            </div>
           </div>
         </Row>
       )}
@@ -301,7 +325,14 @@ function CratePositionDetails({
         <LabelValue
           variant="row"
           label={"Stop Loss/Take Profit"}
-          value={<LimitOrderValues poolAddress={pool.address} sl={sl} tp={tp} disableEdit />}
+          value={
+            <LimitOrderValues
+              poolAddress={pool.address}
+              sl={sl}
+              tp={tp}
+              disableEdit
+            />
+          }
         />
       </div>
     </div>
@@ -322,9 +353,19 @@ export function ConfirmPositionContentSkeleton() {
           <Skeleton className="mb-3 w-32 h-5" />
           {/*Labels */}
           <div className="flex flex-col gap-0.5">
-            <LabelValue variant="row" label={"Liquidity Distribution"} value={0} isLoading />
+            <LabelValue
+              variant="row"
+              label={"Liquidity Distribution"}
+              value={0}
+              isLoading
+            />
 
-            <LabelValue variant="row" label={"Position Range"} value={0} isLoading />
+            <LabelValue
+              variant="row"
+              label={"Position Range"}
+              value={0}
+              isLoading
+            />
           </div>
         </div>
       </div>

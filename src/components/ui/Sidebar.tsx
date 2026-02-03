@@ -8,7 +8,11 @@ type SidebarProps = {
   children: React.ReactNode;
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, children }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  isOpen,
+  onClose,
+  children,
+}) => {
   // ESC key close logic stays the same
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {

@@ -2,7 +2,12 @@ import { cn } from "~/utils/cn";
 
 export function MnMIcon({ className = "w-9 h-9" }: { className?: string }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" className={cn("text-primary", className)} fill="none" viewBox="0 0 300 301">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      className={cn("text-primary", className)}
+      fill="none"
+      viewBox="0 0 300 301"
+    >
       <path
         fill="currentColor"
         fillRule="evenodd"

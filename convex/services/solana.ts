@@ -1,4 +1,9 @@
-import { AddressLookupTableAccount, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
+import {
+  AddressLookupTableAccount,
+  PublicKey,
+  Transaction,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import { zSimulationResultSchema } from "../types/solanaRpcValidations";
 import { toVersioned } from "../utils/solana";
 import { connection, RPC_URL } from "../convexEnv";
@@ -13,7 +18,9 @@ export function getCachedALT(address: string): Promise<ALTAccount> {
 
   if (!existing) {
     // create promise that resolves to the `.value`
-    existing = connection.getAddressLookupTable(new PublicKey(address)).then((res) => res.value);
+    existing = connection
+      .getAddressLookupTable(new PublicKey(address))
+      .then((res) => res.value);
 
     altCache.set(address, existing);
   }
@@ -23,7 +30,7 @@ export function getCachedALT(address: string): Promise<ALTAccount> {
 
 export async function simulateTransaction(
   transaction: VersionedTransaction | Transaction,
-  options?: { replaceRecentBlockhash?: boolean }
+  options?: { replaceRecentBlockhash?: boolean },
 ) {
   const tx = toVersioned(transaction);
   const serialized = tx.serialize();
@@ -52,7 +59,7 @@ export async function simulateTransaction(
 
   if (parsedRes.result.context.apiVersion !== "3.0.6") {
     console.warn(
-      "Urgent simulation warning: RPC api version has changed, please check that simulation schema is still valid"
+      "Urgent simulation warning: RPC api version has changed, please check that simulation schema is still valid",
     );
   }
   return parsedRes.result.value;

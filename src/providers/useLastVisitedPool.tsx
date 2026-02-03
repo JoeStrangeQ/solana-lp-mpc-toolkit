@@ -14,10 +14,19 @@ export interface LastVisitedState {
   };
 
   // dynamic dictionary: "sol-usdc" → { protocol, poolAddress }
-  lastByPairKey: Record<string, { protocol: Protocol; poolAddress: Address } | null>;
+  lastByPairKey: Record<
+    string,
+    { protocol: Protocol; poolAddress: Address } | null
+  >;
 
   // MAIN API:
-  setLastVisited: ({ poolAddress, protocol }: { protocol: Protocol; poolAddress: string }) => void;
+  setLastVisited: ({
+    poolAddress,
+    protocol,
+  }: {
+    protocol: Protocol;
+    poolAddress: string;
+  }) => void;
   getLastVisited: () => string | null;
 
   setLastByPairKey: ({
@@ -30,7 +39,9 @@ export interface LastVisitedState {
     poolAddress: Address;
   }) => void;
 
-  getLastByPairKey: (pairKey: string) => { protocol: Protocol; poolAddress: Address } | null | undefined;
+  getLastByPairKey: (
+    pairKey: string,
+  ) => { protocol: Protocol; poolAddress: Address } | null | undefined;
 }
 
 export const useLastVisitedPool = create(
@@ -45,9 +56,22 @@ export const useLastVisitedPool = create(
       },
 
       lastByPairKey: {
-        "sol-usdc": { protocol: "dlmm", poolAddress: toAddress("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6") },
-        "met-usdc": { protocol: "dlmm", poolAddress: toAddress("5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd") },
-        "met-sol": { protocol: "dlmm", poolAddress: toAddress("AsSyvUnbfaZJPRrNh3kUuvZTeHKoMVWEoHz86f4Q5D9x") },
+        "sol-usdc": {
+          protocol: "dlmm",
+          poolAddress: toAddress("5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6"),
+        },
+        "met-usdc": {
+          protocol: "dlmm",
+          poolAddress: toAddress(
+            "5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd",
+          ),
+        },
+        "met-sol": {
+          protocol: "dlmm",
+          poolAddress: toAddress(
+            "AsSyvUnbfaZJPRrNh3kUuvZTeHKoMVWEoHz86f4Q5D9x",
+          ),
+        },
       },
 
       setLastVisited: ({ protocol, poolAddress }) => {
@@ -85,6 +109,6 @@ export const useLastVisitedPool = create(
     }),
     {
       name: "mnm-last-visited-pool",
-    }
-  )
+    },
+  ),
 );

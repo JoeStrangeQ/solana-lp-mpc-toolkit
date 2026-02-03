@@ -34,7 +34,11 @@ export function Dropdown({
   return (
     <div className={cn("relative inline-flex", className)}>
       {/* Full-screen backdrop */}
-      <Backdrop show={isOpen} onClick={() => setIsOpen(false)} className="bg-black/30 backdrop-blur-none z-20" />
+      <Backdrop
+        show={isOpen}
+        onClick={() => setIsOpen(false)}
+        className="bg-black/30 backdrop-blur-none z-20"
+      />
 
       <button
         onClick={(e) => {
@@ -60,7 +64,7 @@ export function Dropdown({
               "bg-backgroundTertiary border border-white/10 shadow-xl z-20",
               alignClass,
               originClass,
-              dropdownClassName
+              dropdownClassName,
             )}
             onClick={(e) => e.stopPropagation()}
             style={{ pointerEvents: isOpen ? "auto" : "none" }}

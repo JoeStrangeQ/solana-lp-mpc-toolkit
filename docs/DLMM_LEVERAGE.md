@@ -13,6 +13,7 @@ MnM provides leveraged DLMM (Dynamic Liquidity Market Maker) positions on Solana
 ### Key Innovation
 
 Unlike traditional lending protocols, MnM uses an **atomic leverage-first approach**:
+
 - Borrow → Create LP → Collateralize in **ONE transaction**
 - No gap risk between steps
 - All-or-nothing execution (reverts on failure)
@@ -100,11 +101,11 @@ Unlike traditional lending protocols, MnM uses an **atomic leverage-first approa
 Amplify your DLMM position size beyond your capital:
 
 | Leverage | Your Capital | Position Size | LTV Required |
-|----------|-------------|---------------|--------------|
-| 2x | $100 | $200 | 50% |
-| 3x | $100 | $300 | 66.7% |
-| 4x | $100 | $400 | 75% |
-| 5x | $100 | $500 | 80% (max) |
+| -------- | ------------ | ------------- | ------------ |
+| 2x       | $100         | $200          | 50%          |
+| 3x       | $100         | $300          | 66.7%        |
+| 4x       | $100         | $400          | 75%          |
+| 5x       | $100         | $500          | 80% (max)    |
 
 **Formula:** `Leverage = 1 / (1 - LTV)`
 
@@ -115,10 +116,10 @@ Measures position safety. Think of it as distance from liquidation:
 ```
                     HEALTH FACTOR SCALE
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    
+
     < 1.0      │  LIQUIDATABLE 🔴
     ───────────┼────────────────────────────────
-    1.0 - 1.1  │  DANGER       🟠  
+    1.0 - 1.1  │  DANGER       🟠
     ───────────┼────────────────────────────────
     1.1 - 1.2  │  WARNING      🟡
     ───────────┼────────────────────────────────
@@ -168,11 +169,11 @@ Example:
 
 ## Supported Pools
 
-| Pool | Address | Status |
-|------|---------|--------|
-| SOL/USDC | `5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6` | ✅ Active |
+| Pool      | Address                                        | Status    |
+| --------- | ---------------------------------------------- | --------- |
+| SOL/USDC  | `5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6`  | ✅ Active |
 | USDC/USDT | `ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq` | ✅ Active |
-| SOL/USDT | `Gf8YTgnugSZgdGBYYMpMi6v1bPgjCgX7BrrLzH6FNCvz` | ✅ Active |
+| SOL/USDT  | `Gf8YTgnugSZgdGBYYMpMi6v1bPgjCgX7BrrLzH6FNCvz` | ✅ Active |
 
 ---
 
@@ -181,16 +182,16 @@ Example:
 ### Create Leveraged Position
 
 ```typescript
-import { buildLeverageTransaction } from './services/leverageService';
+import { buildLeverageTransaction } from "./services/leverageService";
 
 const result = await buildLeverageTransaction({
   connection,
   user: keypair,
-  baseAsset: 'USDC',
-  baseAmount: 100,        // $100 initial capital
-  targetLeverage: 2,      // 2x leverage
+  baseAsset: "USDC",
+  baseAmount: 100, // $100 initial capital
+  targetLeverage: 2, // 2x leverage
   poolAddress: DLMM_POOLS.SOL_USDC,
-  binRange: 10,           // ±10 bins from active
+  binRange: 10, // ±10 bins from active
   slippageTolerance: 0.5, // 0.5%
 });
 
@@ -212,12 +213,12 @@ console.log(result.summary);
 ### Calculate Position Risk
 
 ```typescript
-import { calculatePositionRisk } from './utils/riskCalculations';
+import { calculatePositionRisk } from "./utils/riskCalculations";
 
 const risk = calculatePositionRisk(
-  1000,   // $1000 collateral value
-  400,    // $400 debt
-  100     // $100 price per collateral unit
+  1000, // $1000 collateral value
+  400, // $400 debt
+  100, // $100 price per collateral unit
 );
 
 // Returns:
@@ -235,12 +236,12 @@ const risk = calculatePositionRisk(
 ### Validate Borrow
 
 ```typescript
-import { validateBorrow } from './utils/riskCalculations';
+import { validateBorrow } from "./utils/riskCalculations";
 
 const validation = validateBorrow(
-  1000,  // Current collateral
-  200,   // Current debt
-  300    // New borrow amount
+  1000, // Current collateral
+  200, // Current debt
+  300, // New borrow amount
 );
 
 // Returns:
@@ -340,23 +341,29 @@ When Health Factor drops below 1.0:
 ## Security Considerations
 
 ### Atomicity
+
 All leverage operations are atomic:
+
 - Single transaction = no partial state
 - Failure at any step reverts entire operation
 - No gap risk between borrow and collateralize
 
 ### Oracle
+
 Uses Pyth Network for price feeds:
+
 - Maximum staleness: 60 seconds
 - Price validation on every operation
 - Fallback to Switchboard if Pyth unavailable
 
 ### Flash Loan Safety
+
 - Flash loans must be repaid in same transaction
 - Receipt PDA uses slot number (prevents reuse)
 - 0.09% fee deters abuse
 
 ### Liquidation Protection
+
 - 85% threshold (not 80%) gives buffer
 - 5% penalty incentivizes timely liquidations
 - 50% max per liquidation prevents total loss
@@ -365,24 +372,24 @@ Uses Pyth Network for price feeds:
 
 ## Frontend Components
 
-| Component | Purpose |
-|-----------|---------|
-| `DLMMLeverageInterface.tsx` | Main leverage creation UI |
-| `PositionManager.tsx` | View/manage open positions |
-| `HealthFactorDisplay.tsx` | Risk visualization |
-| `PoolSelector.tsx` | DLMM pool selection |
-| `LeverageSlider.tsx` | Leverage amount control |
+| Component                   | Purpose                    |
+| --------------------------- | -------------------------- |
+| `DLMMLeverageInterface.tsx` | Main leverage creation UI  |
+| `PositionManager.tsx`       | View/manage open positions |
+| `HealthFactorDisplay.tsx`   | Risk visualization         |
+| `PoolSelector.tsx`          | DLMM pool selection        |
+| `LeverageSlider.tsx`        | Leverage amount control    |
 
 ---
 
 ## Services
 
-| Service | Purpose |
-|---------|---------|
-| `dlmmService.ts` | Meteora DLMM SDK integration |
+| Service                | Purpose                        |
+| ---------------------- | ------------------------------ |
+| `dlmmService.ts`       | Meteora DLMM SDK integration   |
 | `collateralService.ts` | LP token collateral management |
-| `leverageService.ts` | Atomic leverage transactions |
-| `lendingService.ts` | Pool deposit/withdraw |
+| `leverageService.ts`   | Atomic leverage transactions   |
+| `lendingService.ts`    | Pool deposit/withdraw          |
 
 ---
 
@@ -401,24 +408,24 @@ npx ts-node tests/dlmm-integration.test.ts
 
 ## Deployment Status
 
-| Environment | Status | Address |
-|-------------|--------|---------|
-| Devnet | ✅ Deployed | `MnM...` |
-| Mainnet | 🔜 Pending | - |
-| Audit | 📋 Scheduled | - |
+| Environment | Status       | Address  |
+| ----------- | ------------ | -------- |
+| Devnet      | ✅ Deployed  | `MnM...` |
+| Mainnet     | 🔜 Pending   | -        |
+| Audit       | 📋 Scheduled | -        |
 
 ---
 
 ## Comparison: MnM vs Alternatives
 
-| Feature | MnM (Atomic) | DeFiTuna | Position-First |
-|---------|--------------|----------|----------------|
-| Execution | Single tx | Single tx | Multiple txs |
-| Gap Risk | None | None | Between steps |
-| Partial Entry | No | No | Yes |
-| UX Complexity | Low | Low | High |
-| MEV Exposure | Medium | Medium | Low |
-| Capital Efficiency | High | High | Lower |
+| Feature            | MnM (Atomic) | DeFiTuna  | Position-First |
+| ------------------ | ------------ | --------- | -------------- |
+| Execution          | Single tx    | Single tx | Multiple txs   |
+| Gap Risk           | None         | None      | Between steps  |
+| Partial Entry      | No           | No        | Yes            |
+| UX Complexity      | Low          | Low       | High           |
+| MEV Exposure       | Medium       | Medium    | Low            |
+| Capital Efficiency | High         | High      | Lower          |
 
 ---
 
@@ -431,4 +438,4 @@ npx ts-node tests/dlmm-integration.test.ts
 
 ---
 
-*For architecture details, see [ARCHITECTURE.md](./ARCHITECTURE.md)*
+_For architecture details, see [ARCHITECTURE.md](./ARCHITECTURE.md)_

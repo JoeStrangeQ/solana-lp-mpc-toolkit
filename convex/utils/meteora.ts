@@ -1,12 +1,17 @@
 import { BinLiquidity, PositionData } from "@meteora-ag/dlmm";
-import { SerializedBinLiquidity, SerializedPositionData } from "../services/meteora";
+import {
+  SerializedBinLiquidity,
+  SerializedPositionData,
+} from "../services/meteora";
 import { Address } from "./solana";
 import { PublicKey } from "@solana/web3.js";
 import BN from "bn.js";
 
 const METEORA_PROGRAM_ID = "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo";
 
-export function serializeBinLiquidity(bin: BinLiquidity): SerializedBinLiquidity {
+export function serializeBinLiquidity(
+  bin: BinLiquidity,
+): SerializedBinLiquidity {
   return {
     ...bin,
     xAmount: bin.xAmount.toString(),
@@ -14,11 +19,15 @@ export function serializeBinLiquidity(bin: BinLiquidity): SerializedBinLiquidity
     supply: bin.supply.toString(),
     feeAmountXPerTokenStored: bin.feeAmountXPerTokenStored.toString(),
     feeAmountYPerTokenStored: bin.feeAmountYPerTokenStored.toString(),
-    rewardPerTokenStored: bin.rewardPerTokenStored.map((bn: any) => bn.toString()),
+    rewardPerTokenStored: bin.rewardPerTokenStored.map((bn: any) =>
+      bn.toString(),
+    ),
   };
 }
 
-export function serializePositionData(data: PositionData): SerializedPositionData {
+export function serializePositionData(
+  data: PositionData,
+): SerializedPositionData {
   return {
     totalXAmount: data.totalXAmount,
     totalYAmount: data.totalYAmount,
@@ -37,16 +46,26 @@ export function serializePositionData(data: PositionData): SerializedPositionDat
     feeYExcludeTransferFee: data.feeYExcludeTransferFee.toString(),
     rewardOneExcludeTransferFee: data.rewardOneExcludeTransferFee.toString(),
     rewardTwoExcludeTransferFee: data.rewardTwoExcludeTransferFee.toString(),
-    totalXAmountExcludeTransferFee: data.totalXAmountExcludeTransferFee.toString(),
-    totalYAmountExcludeTransferFee: data.totalYAmountExcludeTransferFee.toString(),
+    totalXAmountExcludeTransferFee:
+      data.totalXAmountExcludeTransferFee.toString(),
+    totalYAmountExcludeTransferFee:
+      data.totalYAmountExcludeTransferFee.toString(),
     owner: data.owner.toBase58(),
   };
 }
 
-function derivePositionPubkey(lbPair: PublicKey, base: PublicKey, lowerBinId: BN, width: BN, programId: PublicKey) {
+function derivePositionPubkey(
+  lbPair: PublicKey,
+  base: PublicKey,
+  lowerBinId: BN,
+  width: BN,
+  programId: PublicKey,
+) {
   let lowerBinIdBytes: Uint8Array;
   if (lowerBinId.isNeg()) {
-    lowerBinIdBytes = new Uint8Array(lowerBinId.toTwos(32).toArrayLike(Buffer, "le", 4));
+    lowerBinIdBytes = new Uint8Array(
+      lowerBinId.toTwos(32).toArrayLike(Buffer, "le", 4),
+    );
   } else {
     lowerBinIdBytes = new Uint8Array(lowerBinId.toArrayLike(Buffer, "le", 4));
   }
@@ -58,7 +77,7 @@ function derivePositionPubkey(lbPair: PublicKey, base: PublicKey, lowerBinId: BN
       lowerBinIdBytes,
       new Uint8Array(width.toArrayLike(Buffer, "le", 4)),
     ],
-    programId
+    programId,
   );
 }
 
@@ -82,7 +101,7 @@ export function deriveMeteoraPositionPubkey({
     loanPda,
     new BN(lowerBinId),
     new BN(width),
-    new PublicKey(METEORA_PROGRAM_ID)
+    new PublicKey(METEORA_PROGRAM_ID),
   );
 
   return pda;

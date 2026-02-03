@@ -5,7 +5,11 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { getJupSwapInstructions, getJupSwapQuote, JupQuoteResponse } from "../services/jupiter";
+import {
+  getJupSwapInstructions,
+  getJupSwapQuote,
+  JupQuoteResponse,
+} from "../services/jupiter";
 import { Address, getCuInstructions, isTokenClose } from "../utils/solana";
 import { connection } from "../convexEnv";
 import { tryCatch } from "../utils/tryCatch";
@@ -57,7 +61,7 @@ export async function buildJupSwapTransaction({
       outputMint,
       inputAmount,
       slippageBps,
-    })
+    }),
   );
 
   if (quoteRes.error) {
@@ -76,13 +80,14 @@ export async function buildJupSwapTransaction({
       userAddress,
       quote,
       options,
-    })
+    }),
   );
 
   if (instructionsRes.error) {
     throw {
       errorType: "INSTRUCTIONS_ERROR",
-      errorMessage: instructionsRes.error.message ?? "Failed to fetch instructions",
+      errorMessage:
+        instructionsRes.error.message ?? "Failed to fetch instructions",
       raw: instructionsRes.error,
     };
   }
@@ -91,7 +96,9 @@ export async function buildJupSwapTransaction({
 
   // Fetch lookup tables
   const fetchALT = inst.addressLookupTableAddresses.map((lt) =>
-    connection.getAddressLookupTable(new PublicKey(lt)).then((res) => res.value)
+    connection
+      .getAddressLookupTable(new PublicKey(lt))
+      .then((res) => res.value),
   );
   const altAccounts = await Promise.all(fetchALT);
 
@@ -119,13 +126,14 @@ export async function buildJupSwapTransaction({
         fromPubkey: new PublicKey(userAddress),
         toPubkey: new PublicKey(getRandomNozomiTipPubkey()),
         lamports: 1_050_000,
-      })
+      }),
     );
   }
 
   const msg = new TransactionMessage({
     payerKey: new PublicKey(userAddress),
-    recentBlockhash: blockhash ?? (await connection.getLatestBlockhash()).blockhash,
+    recentBlockhash:
+      blockhash ?? (await connection.getLatestBlockhash()).blockhash,
     instructions: allInstructions,
   }).compileToV0Message(altAccounts.filter((a) => a !== null));
 
@@ -165,7 +173,10 @@ export async function buildAndSimulateJupiterSwap(params: {
 }) {
   const { tx, quote } = await buildJupSwapTransaction(params);
 
-  const simRes = await simulateAndGetTokensBalance({ userAddress: params.userAddress, transaction: tx });
+  const simRes = await simulateAndGetTokensBalance({
+    userAddress: params.userAddress,
+    transaction: tx,
+  });
 
   if (simRes.sim.err) {
     console.log("Log", simRes.sim.logs);

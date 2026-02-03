@@ -1,8 +1,12 @@
 import { v } from "convex/values";
-import { parseSwapQuoteJson, normalizeSwapQuotes } from "../helpers/normalizeServerSwapQuote";
+import {
+  parseSwapQuoteJson,
+  normalizeSwapQuotes,
+} from "../helpers/normalizeServerSwapQuote";
 import { Address } from "../utils/solana";
 
-const MNM_SERVER_URL = "https://apparitional-noninterdependent-dori.ngrok-free.dev";
+const MNM_SERVER_URL =
+  "https://apparitional-noninterdependent-dori.ngrok-free.dev";
 
 export const vQuoteDetails = v.object({
   quoteId: v.string(),
@@ -19,7 +23,7 @@ export async function getServerSwapQuote({
 }) {
   const res = await fetch(
     `${MNM_SERVER_URL}/swap-quote?userId=${encodeURIComponent(userId)}&streamKey=${encodeURIComponent(streamKey)}&quoteId=${encodeURIComponent(quoteId)}`,
-    { headers: { "Content-Type": "application/json" } }
+    { headers: { "Content-Type": "application/json" } },
   );
 
   if (!res.ok) {
@@ -47,12 +51,14 @@ export async function getSingleSwapQuote({
 }) {
   const res = await fetch(
     `${MNM_SERVER_URL}/quote?inputMint=${encodeURIComponent(inputMint)}&outputMint=${encodeURIComponent(outputMint)}&amount=${encodeURIComponent(rawAmount)}&slippageBps=${encodeURIComponent(slippageBps)}&userAddress=${encodeURIComponent(userAddress)}`,
-    { headers: { "Content-Type": "application/json" } }
+    { headers: { "Content-Type": "application/json" } },
   );
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Failed to fetch single swap quote (${res.status})`);
+    throw new Error(
+      err.error || `Failed to fetch single swap quote (${res.status})`,
+    );
   }
 
   const raw = await res.json();

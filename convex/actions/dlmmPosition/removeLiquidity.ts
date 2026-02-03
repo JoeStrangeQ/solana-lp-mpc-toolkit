@@ -1,7 +1,11 @@
 "use node";
 import { v } from "convex/values";
 import { action, ActionCtx, internalAction } from "../../_generated/server";
-import { authenticateUser, authenticateWithUserId, vPrivyWallet } from "../../privy";
+import {
+  authenticateUser,
+  authenticateWithUserId,
+  vPrivyWallet,
+} from "../../privy";
 import { api, internal } from "../../_generated/api";
 import { getDlmmPoolConn } from "../../services/meteora";
 import {
@@ -33,7 +37,10 @@ import { buildJupSwapTransaction } from "../../helpers/buildJupiterSwapTransacti
 import { simulateAndGetTokensBalance } from "../../helpers/simulateAndGetTokensBalance";
 import { tryCatch } from "../../utils/tryCatch";
 import { SwapSpec } from "../../helpers/executeSwapsWithNozomi";
-import { getJupiterTokenPrices, JupQuoteResponse } from "../../services/jupiter";
+import {
+  getJupiterTokenPrices,
+  JupQuoteResponse,
+} from "../../services/jupiter";
 import { buildTransferMnMTx } from "../../helpers/transferMnMFees";
 import { ActionRes } from "../../types/actionResults";
 import { repayLoan } from "../../services/loopscale";
@@ -52,14 +59,17 @@ export const removeLiquidity = action({
     const { user, userWallet } = await authenticateUser({ ctx });
     if (!user || !userWallet) throw new Error("Couldn't find user");
 
-    return await ctx.runAction(internal.actions.dlmmPosition.removeLiquidity.internalRemoveLiquidity, {
-      trigger: args.trigger,
-      positionPubkey: args.positionPubkey,
-      percentageToWithdraw: args.percentageToWithdraw,
-      outputMint: args.outputMint,
-      userWallet,
-      userId: user._id,
-    });
+    return await ctx.runAction(
+      internal.actions.dlmmPosition.removeLiquidity.internalRemoveLiquidity,
+      {
+        trigger: args.trigger,
+        positionPubkey: args.positionPubkey,
+        percentageToWithdraw: args.percentageToWithdraw,
+        outputMint: args.outputMint,
+        userWallet,
+        userId: user._id,
+      },
+    );
   },
 });
 
@@ -79,17 +89,24 @@ export const internalRemoveLiquidity = internalAction({
     try {
       let userWallet = args.userWallet;
       if (!userWallet) {
-        userWallet = (await authenticateWithUserId({ ctx, userId: args.userId })).userWallet;
+        userWallet = (
+          await authenticateWithUserId({ ctx, userId: args.userId })
+        ).userWallet;
       }
       if (!userWallet) throw new Error("Couldn't find user wallet");
       const { positionPubkey, percentageToWithdraw, trigger } = args;
 
       // //TODO: fetch user settings to know what slippage he is willing to take .
-      const position = await ctx.runQuery(api.tables.positions.get.getPositionByPubkey, { positionPubkey });
+      const position = await ctx.runQuery(
+        api.tables.positions.get.getPositionByPubkey,
+        { positionPubkey },
+      );
       if (!position) throw new Error(`Position ${positionPubkey} not found`);
 
       const dlmmPoolConn = await getDlmmPoolConn(position.poolAddress);
-      const dlmmPosition = await dlmmPoolConn.getPosition(new PublicKey(positionPubkey));
+      const dlmmPosition = await dlmmPoolConn.getPosition(
+        new PublicKey(positionPubkey),
+      );
       const { positionData: onChainPosition } = dlmmPosition;
       const userAddress = toAddress(userWallet.address);
       const xMint = toAddress(position.tokenX.mint);
@@ -99,7 +116,8 @@ export const internalRemoveLiquidity = internalAction({
       const claimableFeeX = onChainPosition.feeX;
       const claimableFeeY = onChainPosition.feeY;
 
-      const transactions: { tx: VersionedTransaction; description: string }[] = [];
+      const transactions: { tx: VersionedTransaction; description: string }[] =
+        [];
       const { blockhash } = await connection.getLatestBlockhash();
       const { tipTx, cuPriceMicroLamports, cuLimit } = await buildTipTx({
         speed: "low",
@@ -157,7 +175,10 @@ export const internalRemoveLiquidity = internalAction({
       ];
 
       const buildSwaps = swapSpecs
-        .filter(({ inputMint, amount }) => !amount.isZero() && inputMint !== outputMint)
+        .filter(
+          ({ inputMint, amount }) =>
+            !amount.isZero() && inputMint !== outputMint,
+        )
         .map(async ({ inputMint, amount, slippageBps }) => {
           return buildJupSwapTransaction({
             userAddress,
@@ -180,26 +201,36 @@ export const internalRemoveLiquidity = internalAction({
       transactions.push(
         {
           tx: toVersioned(removeLiquidityTx),
-          description: percentageToWithdraw === 100 ? "Close Position" : "Remove Liquidity",
+          description:
+            percentageToWithdraw === 100
+              ? "Close Position"
+              : "Remove Liquidity",
         },
         ...swapsRes.data.map(({ tx }, i) => ({
           tx,
           description: `Swap #${i + 1}`,
-        }))
+        })),
       );
 
-      const { totalFeesClaimedInOutputToken, totalReceivedOutToken } = computeTotalFeesClaimedInOutputToken({
-        swapQuotes: swapsRes.data.map((s) => s.quote),
-        xMint,
-        yMint,
-        xRemoved,
-        yRemoved,
-        feeX: claimableFeeX,
-        feeY: claimableFeeY,
-      });
+      const { totalFeesClaimedInOutputToken, totalReceivedOutToken } =
+        computeTotalFeesClaimedInOutputToken({
+          swapQuotes: swapsRes.data.map((s) => s.quote),
+          xMint,
+          yMint,
+          xRemoved,
+          yRemoved,
+          feeX: claimableFeeX,
+          feeY: claimableFeeY,
+        });
 
-      let tokenOutputAmount = safeBigIntToNumber(totalReceivedOutToken, "tokenOutputAmount");
-      if (percentageToWithdraw === 100 && (!claimableFeeX.isZero() || !claimableFeeY.isZero())) {
+      let tokenOutputAmount = safeBigIntToNumber(
+        totalReceivedOutToken,
+        "tokenOutputAmount",
+      );
+      if (
+        percentageToWithdraw === 100 &&
+        (!claimableFeeX.isZero() || !claimableFeeY.isZero())
+      ) {
         const mnmFeeClaimTxRes = await buildTransferMnMTx({
           userWallet,
           outputMint,
@@ -207,8 +238,12 @@ export const internalRemoveLiquidity = internalAction({
         });
 
         if (mnmFeeClaimTxRes) {
-          transactions.push({ tx: toVersioned(mnmFeeClaimTxRes.mnmFeeClaimTx), description: "MnM Fee" });
-          tokenOutputAmount = tokenOutputAmount - mnmFeeClaimTxRes.mnmFeeRawAmount;
+          transactions.push({
+            tx: toVersioned(mnmFeeClaimTxRes.mnmFeeClaimTx),
+            description: "MnM Fee",
+          });
+          tokenOutputAmount =
+            tokenOutputAmount - mnmFeeClaimTxRes.mnmFeeRawAmount;
         }
       }
 
@@ -221,10 +256,14 @@ export const internalRemoveLiquidity = internalAction({
 
       const txsConfirmRes = await fastTransactionConfirm([txIds[0]], 7_000);
       if (txsConfirmRes[0].err) {
-        throw new Error(`Transaction ${txsConfirmRes[0].signature} failed: ${JSON.stringify(txsConfirmRes[0].err)}`);
+        throw new Error(
+          `Transaction ${txsConfirmRes[0].signature} failed: ${JSON.stringify(txsConfirmRes[0].err)}`,
+        );
       }
 
-      const prices = await getJupiterTokenPrices({ mints: [xMint, yMint, outputMint] });
+      const prices = await getJupiterTokenPrices({
+        mints: [xMint, yMint, outputMint],
+      });
       const xPrice = prices[xMint]?.usdPrice ?? 0;
       const yPrice = prices[yMint]?.usdPrice ?? 0;
       const collateralPrice = prices[outputMint]?.usdPrice ?? 0;
@@ -255,7 +294,12 @@ export const internalRemoveLiquidity = internalAction({
           },
         };
 
-        const pnl = await calculatePnl({ ctx, position, onChainPosition, tokensData });
+        const pnl = await calculatePnl({
+          ctx,
+          position,
+          onChainPosition,
+          tokensData,
+        });
         const [id] = await Promise.all([
           ctx.runMutation(internal.tables.activities.mutations.createActivity, {
             userId: args.userId,
@@ -273,9 +317,15 @@ export const internalRemoveLiquidity = internalAction({
               },
             },
           }),
-          ctx.runMutation(internal.tables.positions.mutations.closePositionByPubkey, { positionPubkey }),
+          ctx.runMutation(
+            internal.tables.positions.mutations.closePositionByPubkey,
+            { positionPubkey },
+          ),
           trigger === "manual" &&
-            ctx.runMutation(internal.tables.orders.mutations.cancelOrdersForPosition, { positionPubkey }),
+            ctx.runMutation(
+              internal.tables.orders.mutations.cancelOrdersForPosition,
+              { positionPubkey },
+            ),
         ]);
 
         activityId = id;
@@ -294,7 +344,8 @@ export const internalRemoveLiquidity = internalAction({
       console.error("remove liquidity failed:", error);
       return {
         status: "failed",
-        errorMsg: error.message ?? "Something went wrong while removing liquidity.",
+        errorMsg:
+          error.message ?? "Something went wrong while removing liquidity.",
       };
     }
   },
@@ -333,7 +384,7 @@ async function buildAndSimulateRemoveLiquidityTx({
       toBinId,
       bps: new BN(Math.round(percentageToWithdraw * 100)),
       shouldClaimAndClose: percentageToWithdraw === 100,
-    })
+    }),
   );
 
   if (getRemoveLiqRes.error?.message.includes("No liquidity to remove")) {
@@ -343,7 +394,8 @@ async function buildAndSimulateRemoveLiquidityTx({
     });
   }
 
-  if (!getRemoveLiqRes.data) throw new Error("Couldn't build remove liquidity transaction");
+  if (!getRemoveLiqRes.data)
+    throw new Error("Couldn't build remove liquidity transaction");
   removeTx = getRemoveLiqRes.data[0];
 
   const cuIxs: TransactionInstruction[] = getCuInstructions({
@@ -358,13 +410,18 @@ async function buildAndSimulateRemoveLiquidityTx({
 
   const message = new TransactionMessage({
     payerKey: new PublicKey(userAddress),
-    recentBlockhash: options?.recentBlockhash ?? (await connection.getLatestBlockhash()).blockhash,
+    recentBlockhash:
+      options?.recentBlockhash ??
+      (await connection.getLatestBlockhash()).blockhash,
     instructions: [...cuIxs, ...filteredIxs],
   }).compileToV0Message();
 
   const versionedTx = new VersionedTransaction(message);
 
-  const simRes = await simulateAndGetTokensBalance({ userAddress: toAddress(userAddress), transaction: versionedTx });
+  const simRes = await simulateAndGetTokensBalance({
+    userAddress: toAddress(userAddress),
+    transaction: versionedTx,
+  });
 
   if (simRes.sim.err) {
     throw new Error("Failed to simulate remove liquidity transaction");
@@ -372,8 +429,14 @@ async function buildAndSimulateRemoveLiquidityTx({
 
   const xMint = dlmmPoolConn.lbPair.tokenXMint.toBase58();
   const yMint = dlmmPoolConn.lbPair.tokenYMint.toBase58();
-  console.log("x removed", simRes.tokenBalancesChange[xMint].rawAmount.toString());
-  console.log("y removed", simRes.tokenBalancesChange[yMint].rawAmount.toString());
+  console.log(
+    "x removed",
+    simRes.tokenBalancesChange[xMint].rawAmount.toString(),
+  );
+  console.log(
+    "y removed",
+    simRes.tokenBalancesChange[yMint].rawAmount.toString(),
+  );
   const xDelta = simRes.tokenBalancesChange[xMint]?.rawAmount ?? new BN(0);
   const yDelta = simRes.tokenBalancesChange[yMint]?.rawAmount ?? new BN(0);
   const xRemoved = BN.max(adjustSolRent(xMint, xDelta), new BN(0));
@@ -401,9 +464,12 @@ async function calculatePnl({
   const xMetadata = tokensMetadata[xInitial.mint];
   const yMetadata = tokensMetadata[yInitial.mint];
 
-  const claimedFeesActivities = await ctx.runQuery(api.tables.activities.get.getClaimedFeesByPosition, {
-    positionPubkey: position.positionPubkey,
-  });
+  const claimedFeesActivities = await ctx.runQuery(
+    api.tables.activities.get.getClaimedFeesByPosition,
+    {
+      positionPubkey: position.positionPubkey,
+    },
+  );
 
   const xCurrentPrice = tokensData.tokenX.usdPrice;
   const yCurrentPrice = tokensData.tokenY.usdPrice;
@@ -411,9 +477,13 @@ async function calculatePnl({
   // -----------------------------
   // Initial USD
   // -----------------------------
-  const xInitialUsdValue = rawAmountToAmount(xInitial.rawAmount, xMetadata.decimals) * xInitial.usdPrice;
+  const xInitialUsdValue =
+    rawAmountToAmount(xInitial.rawAmount, xMetadata.decimals) *
+    xInitial.usdPrice;
 
-  const yInitialUsdValue = rawAmountToAmount(yInitial.rawAmount, yMetadata.decimals) * yInitial.usdPrice;
+  const yInitialUsdValue =
+    rawAmountToAmount(yInitial.rawAmount, yMetadata.decimals) *
+    yInitial.usdPrice;
 
   const totalInitialUsd = xInitialUsdValue + yInitialUsdValue;
 
@@ -421,59 +491,74 @@ async function calculatePnl({
   // Current USD (assets)
   // -----------------------------
   const xCurrentUsdValue =
-    rawAmountToAmount(parseFloat(onChainPosition.totalXAmount), xMetadata.decimals) * xCurrentPrice;
+    rawAmountToAmount(
+      parseFloat(onChainPosition.totalXAmount),
+      xMetadata.decimals,
+    ) * xCurrentPrice;
 
   const yCurrentUsdValue =
-    rawAmountToAmount(parseFloat(onChainPosition.totalYAmount), yMetadata.decimals) * yCurrentPrice;
+    rawAmountToAmount(
+      parseFloat(onChainPosition.totalYAmount),
+      yMetadata.decimals,
+    ) * yCurrentPrice;
 
-  const usdAssetPnl = xCurrentUsdValue - xInitialUsdValue + (yCurrentUsdValue - yInitialUsdValue);
+  const usdAssetPnl =
+    xCurrentUsdValue - xInitialUsdValue + (yCurrentUsdValue - yInitialUsdValue);
 
   // ============================================================
   //  REALIZED FEES USD  (from harvested, price locked at claim)
   //  TOTAL RAW CLAIMED (from claimedX / claimedY)
   // ============================================================
-  const { realizedFeesUsd, totalRawClaimedX, totalRawClaimedY } = claimedFeesActivities?.reduce(
-    (acc, act) => {
-      if (act.type !== "claim_fees") return acc;
+  const { realizedFeesUsd, totalRawClaimedX, totalRawClaimedY } =
+    claimedFeesActivities?.reduce(
+      (acc, act) => {
+        if (act.type !== "claim_fees") return acc;
 
-      // -----------------------------
-      // USD realized (harvested)
-      // -----------------------------
-      const harvested = (act.details as any)?.harvested;
-      if (harvested) {
-        const { rawAmount, mint, usdPrice } = harvested;
-        const decimals = tokensMetadata[mint]?.decimals;
+        // -----------------------------
+        // USD realized (harvested)
+        // -----------------------------
+        const harvested = (act.details as any)?.harvested;
+        if (harvested) {
+          const { rawAmount, mint, usdPrice } = harvested;
+          const decimals = tokensMetadata[mint]?.decimals;
 
-        if (decimals != null) {
-          acc.realizedFeesUsd += rawAmountToAmount(rawAmount, decimals) * usdPrice;
+          if (decimals != null) {
+            acc.realizedFeesUsd +=
+              rawAmountToAmount(rawAmount, decimals) * usdPrice;
+          }
         }
-      }
 
-      // -----------------------------
-      // Total RAW claimed (token X + Y)
-      // -----------------------------
-      acc.totalRawClaimedX += act.details.claimedX?.rawAmount ?? 0;
-      acc.totalRawClaimedY += act.details.claimedY?.rawAmount ?? 0;
+        // -----------------------------
+        // Total RAW claimed (token X + Y)
+        // -----------------------------
+        acc.totalRawClaimedX += act.details.claimedX?.rawAmount ?? 0;
+        acc.totalRawClaimedY += act.details.claimedY?.rawAmount ?? 0;
 
-      return acc;
-    },
-    {
+        return acc;
+      },
+      {
+        realizedFeesUsd: 0,
+        totalRawClaimedX: 0,
+        totalRawClaimedY: 0,
+      },
+    ) ?? {
       realizedFeesUsd: 0,
       totalRawClaimedX: 0,
       totalRawClaimedY: 0,
-    }
-  ) ?? {
-    realizedFeesUsd: 0,
-    totalRawClaimedX: 0,
-    totalRawClaimedY: 0,
-  };
+    };
 
   // ============================================================
   // UNREALIZED FEES (still on-chain)
   // ============================================================
 
-  const unclaimedRawFeesX = rawAmountToAmount(onChainPosition.feeX.toNumber(), xMetadata.decimals);
-  const unclaimedRawFeesY = rawAmountToAmount(onChainPosition.feeY.toNumber(), yMetadata.decimals);
+  const unclaimedRawFeesX = rawAmountToAmount(
+    onChainPosition.feeX.toNumber(),
+    xMetadata.decimals,
+  );
+  const unclaimedRawFeesY = rawAmountToAmount(
+    onChainPosition.feeY.toNumber(),
+    yMetadata.decimals,
+  );
 
   const xUnrealizedFeeUsd = unclaimedRawFeesX * xCurrentPrice;
   const yUnrealizedFeeUsd = unclaimedRawFeesY * yCurrentPrice;
@@ -554,7 +639,7 @@ function computeTotalFeesClaimedInOutputToken({
 
       return acc;
     },
-    { outAmountX: new BN(0), outAmountY: new BN(0) }
+    { outAmountX: new BN(0), outAmountY: new BN(0) },
   );
 
   let outputFromFeeX = new BN(0);
@@ -601,7 +686,9 @@ async function buildRepayLoanTx({
     const vtx = new VersionedTransaction(msg);
 
     // allocate correct number of signature slots
-    vtx.signatures = Array(msg.header.numRequiredSignatures).fill(Buffer.alloc(64)); // empty sig
+    vtx.signatures = Array(msg.header.numRequiredSignatures).fill(
+      Buffer.alloc(64),
+    ); // empty sig
 
     // now apply program signatures
     for (const s of tx.signatures) {
@@ -617,14 +704,23 @@ async function buildRepayLoanTx({
   });
 
   const transaction = versionedTxs[0];
-  const simRes = await simulateAndGetTokensBalance({ userAddress: toAddress(userAddress), transaction });
+  const simRes = await simulateAndGetTokensBalance({
+    userAddress: toAddress(userAddress),
+    transaction,
+  });
 
   if (simRes.sim.err) {
     throw new Error("Failed to simulate remove liquidity transaction");
   }
 
-  console.log("x removed", simRes.tokenBalancesChange[xMint].rawAmount.toString());
-  console.log("y removed", simRes.tokenBalancesChange[yMint].rawAmount.toString());
+  console.log(
+    "x removed",
+    simRes.tokenBalancesChange[xMint].rawAmount.toString(),
+  );
+  console.log(
+    "y removed",
+    simRes.tokenBalancesChange[yMint].rawAmount.toString(),
+  );
   const xDelta = simRes.tokenBalancesChange[xMint]?.rawAmount ?? new BN(0);
   const yDelta = simRes.tokenBalancesChange[yMint]?.rawAmount ?? new BN(0);
   const xRemoved = BN.max(adjustSolRent(xMint, xDelta), new BN(0));

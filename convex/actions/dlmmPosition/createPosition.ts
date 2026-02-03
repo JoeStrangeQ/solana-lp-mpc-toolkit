@@ -36,7 +36,10 @@ import {
 import { api, internal } from "../../_generated/api";
 import { getDlmmPoolConn } from "../../services/meteora";
 import { vLimitOrderInput } from "../../schema/limitOrders";
-import { buildMultipleJupiterSwapsAtomically, SwapSpec } from "../../helpers/executeSwapsWithNozomi";
+import {
+  buildMultipleJupiterSwapsAtomically,
+  SwapSpec,
+} from "../../helpers/executeSwapsWithNozomi";
 import { tryCatch } from "../../utils/tryCatch";
 import { deriveLoanPda } from "../../utils/loopscale";
 import { deriveMeteoraPositionPubkey } from "../../utils/meteora";
@@ -74,16 +77,32 @@ export const createPosition = action({
     tokenY: vPairToken,
     liquidityShape: vLiquidityShape,
     borrowQuote: v.optional(vLoopscaleQuote),
-    limits: v.optional(v.object({ sl: v.optional(vLimitOrderInput), tp: v.optional(vLimitOrderInput) })),
+    limits: v.optional(
+      v.object({
+        sl: v.optional(vLimitOrderInput),
+        tp: v.optional(vLimitOrderInput),
+      }),
+    ),
   },
   handler: async (ctx, args): Promise<ActionRes<"create_position">> => {
     try {
       const { user, userWallet } = await authenticateUser({ ctx });
-      const { tokenX, tokenY, collateral, poolAddress, activeBin, lowerBin, upperBin, liquidityShape } = args;
+      const {
+        tokenX,
+        tokenY,
+        collateral,
+        poolAddress,
+        activeBin,
+        lowerBin,
+        upperBin,
+        liquidityShape,
+      } = args;
 
       if (!user) throw new Error("Couldn't find user");
       console.time("quotes");
-      const getSwapQuotes = args.quoteDetails.map((q) => getServerSwapQuote({ userId: user._id, ...q }));
+      const getSwapQuotes = args.quoteDetails.map((q) =>
+        getServerSwapQuote({ userId: user._id, ...q }),
+      );
       const swapQuotesRes = await tryCatch(Promise.all(getSwapQuotes));
       console.timeEnd("quotes");
 
@@ -100,13 +119,17 @@ export const createPosition = action({
       const shouldSwapX = collateral.mint !== tokenX.mint && tokenX.split > 0;
       const shouldSwapY = collateral.mint !== tokenY.mint && tokenY.split > 0;
 
-      const validTitanQuotes = swapQuotesRes.data?.filter((q) => Object.values(q.quotes).length > 0);
+      const validTitanQuotes = swapQuotesRes.data?.filter(
+        (q) => Object.values(q.quotes).length > 0,
+      );
       if (validTitanQuotes && validTitanQuotes.length > 0) {
         const titanSwapTxs = await Promise.all(
           validTitanQuotes.map((q) => {
             const quote = Object.values(q.quotes)[0];
             if (!quote) {
-              throw new Error("We couldn’t find a valid swap route to the pool’s pair assets.");
+              throw new Error(
+                "We couldn’t find a valid swap route to the pool’s pair assets.",
+              );
             }
             const { instructions, addressLookupTables } = quote;
             finalSwapQuotes.push({
@@ -126,12 +149,14 @@ export const createPosition = action({
                 recentBlockhash: blockhash,
               },
             });
-          })
+          }),
         );
         swapsTxs.push(...titanSwapTxs);
       } else if (shouldSwapX || shouldSwapY) {
         //titan quotes are empty although we need to have a swap.
-        console.log("using jupiter as fallback, no titan quotes but needs a swap");
+        console.log(
+          "using jupiter as fallback, no titan quotes but needs a swap",
+        );
         const { rawAmountTokenX, rawAmountTokenY } = getPairCollateralAmount({
           collateralUiAmount: collateral.amount,
           collateralDecimals: collateral.decimals,
@@ -164,14 +189,16 @@ export const createPosition = action({
           skipCloseAccount: true,
           swapSpecs,
         });
-        if (!buildJupSwapRes.ok) throw new Error("Couldn't find a valid swap quote");
+        if (!buildJupSwapRes.ok)
+          throw new Error("Couldn't find a valid swap quote");
         const jupiterSwaps = buildJupSwapRes.swapDetails.map(({ tx }) => tx);
-        const jupiterFormattedQuotes: NormalizedSwapQuote[] = buildJupSwapRes.swapDetails.map(({ quote }) => ({
-          inputMint: quote.inputMint,
-          outputMint: quote.outputMint,
-          outAmount: quote.outAmount,
-          slippageBps: quote.slippageBps,
-        }));
+        const jupiterFormattedQuotes: NormalizedSwapQuote[] =
+          buildJupSwapRes.swapDetails.map(({ quote }) => ({
+            inputMint: quote.inputMint,
+            outputMint: quote.outputMint,
+            outAmount: quote.outAmount,
+            slippageBps: quote.slippageBps,
+          }));
         swapsTxs.push(...jupiterSwaps);
         finalSwapQuotes.push(...jupiterFormattedQuotes);
       }
@@ -183,7 +210,9 @@ export const createPosition = action({
       });
 
       if (xRawAmount.isZero() && yRawAmount.isZero()) {
-        throw new Error("Invalid DLMM position: both X and Y amounts are zero.");
+        throw new Error(
+          "Invalid DLMM position: both X and Y amounts are zero.",
+        );
       }
 
       let positionPubkey: Address;
@@ -198,7 +227,11 @@ export const createPosition = action({
           yMint: toAddress(tokenY.mint),
           xRawAmount: safeBigIntToNumber(xRawAmount),
           yRawAmount: safeBigIntToNumber(yRawAmount),
-          options: { cuLimit, cuPriceMicroLamports, recentBlockhash: blockhash },
+          options: {
+            cuLimit,
+            cuPriceMicroLamports,
+            recentBlockhash: blockhash,
+          },
         });
 
         const {
@@ -223,24 +256,26 @@ export const createPosition = action({
         loanAddress = toAddress(loan);
         if (wrapSolTx) createPositionTransactions.push(wrapSolTx);
         createPositionTransactions.push(createLeveragedPositionTx[0]);
-        loopscaleBlockHash = createLeveragedPositionTx[0].message.recentBlockhash;
+        loopscaleBlockHash =
+          createLeveragedPositionTx[0].message.recentBlockhash;
       } else {
-        const { createPositionTx, positionPubkey: pk } = await buildCreatePositionTx({
-          userAddress: userWallet.address,
-          poolAddress,
-          xRawAmount: xRawAmount,
-          yRawAmount: yRawAmount,
-          strategy: {
-            minBinId: lowerBin.id,
-            maxBinId: upperBin.id,
-            strategyType: StrategyType[liquidityShape],
-          },
-          options: {
-            cuLimit,
-            cuPriceMicroLamports,
-            recentBlockhash: blockhash,
-          },
-        });
+        const { createPositionTx, positionPubkey: pk } =
+          await buildCreatePositionTx({
+            userAddress: userWallet.address,
+            poolAddress,
+            xRawAmount: xRawAmount,
+            yRawAmount: yRawAmount,
+            strategy: {
+              minBinId: lowerBin.id,
+              maxBinId: upperBin.id,
+              strategyType: StrategyType[liquidityShape],
+            },
+            options: {
+              cuLimit,
+              cuPriceMicroLamports,
+              recentBlockhash: blockhash,
+            },
+          });
 
         positionPubkey = toAddress(pk);
         createPositionTransactions.push(createPositionTx);
@@ -248,7 +283,11 @@ export const createPosition = action({
 
       //TODO: Change token prices to get from our mnm-server using switchboard
       const getTokenPrices = getJupiterTokenPrices({
-        mints: [toAddress(collateral.mint), toAddress(tokenX.mint), toAddress(tokenY.mint)],
+        mints: [
+          toAddress(collateral.mint),
+          toAddress(tokenX.mint),
+          toAddress(tokenY.mint),
+        ],
       });
 
       const sendBundle = signAndSendJitoBundle({
@@ -257,22 +296,32 @@ export const createPosition = action({
         transactions: [...swapsTxs, ...createPositionTransactions, tipTx],
       });
 
-      const [{ txIds, bundleId }, tokenPrices] = await Promise.all([sendBundle, getTokenPrices]);
+      const [{ txIds, bundleId }, tokenPrices] = await Promise.all([
+        sendBundle,
+        getTokenPrices,
+      ]);
       const createPositionTxId = txIds[txIds.length - 2];
-      const txsConfirmRes = await fastTransactionConfirm([createPositionTxId], 10_000);
+      const txsConfirmRes = await fastTransactionConfirm(
+        [createPositionTxId],
+        10_000,
+      );
       console.log("bundleId", bundleId);
       if (txsConfirmRes[0].err) {
         throw new Error(
-          `Transaction ${txsConfirmRes[0].signature} failed: ${JSON.stringify(txsConfirmRes[0].err ?? "couldn't confirm the transaction")}`
+          `Transaction ${txsConfirmRes[0].signature} failed: ${JSON.stringify(txsConfirmRes[0].err ?? "couldn't confirm the transaction")}`,
         );
       }
       console.time("db");
 
       //TODO: Make it more accurate with simulations on the create leverage position
       const leverage = args.borrowQuote?.leverage ?? 1;
-      const xInitialSize = isLeverage ? safeBigIntToNumber(xRawAmount) * leverage : safeBigIntToNumber(xRawAmount);
+      const xInitialSize = isLeverage
+        ? safeBigIntToNumber(xRawAmount) * leverage
+        : safeBigIntToNumber(xRawAmount);
 
-      const yInitialSize = isLeverage ? safeBigIntToNumber(yRawAmount) * leverage : safeBigIntToNumber(yRawAmount);
+      const yInitialSize = isLeverage
+        ? safeBigIntToNumber(yRawAmount) * leverage
+        : safeBigIntToNumber(yRawAmount);
       const tokenDetails = {
         collateral: {
           mint: collateral.mint,
@@ -312,7 +361,7 @@ export const createPosition = action({
             orderInput: args.limits.sl,
             percentageToWithdraw: 100,
             positionPubkey,
-          })
+          }),
         );
       }
 
@@ -325,7 +374,7 @@ export const createPosition = action({
             orderInput: args.limits.tp,
             percentageToWithdraw: 100,
             positionPubkey,
-          })
+          }),
         );
       }
       const [activityId] = await Promise.all([
@@ -379,7 +428,8 @@ export const createPosition = action({
       console.error("CreatePosition failed:", error);
       return {
         status: "failed",
-        errorMsg: error?.message ?? "Something went wrong while creating the position.",
+        errorMsg:
+          error?.message ?? "Something went wrong while creating the position.",
       };
     }
   },
@@ -403,11 +453,12 @@ export function getPairAmounts({
   tokenX: Infer<typeof vPairToken>;
   tokenY: Infer<typeof vPairToken>;
 }) {
-  const { collateralRawAmount, rawAmountTokenX, rawAmountTokenY } = getPairCollateralAmount({
-    collateralUiAmount: collateral.amount,
-    collateralDecimals: collateral.decimals,
-    xSplit: tokenX.split,
-  });
+  const { collateralRawAmount, rawAmountTokenX, rawAmountTokenY } =
+    getPairCollateralAmount({
+      collateralUiAmount: collateral.amount,
+      collateralDecimals: collateral.decimals,
+      xSplit: tokenX.split,
+    });
 
   let xRawAmount = new BN(0);
   let yRawAmount = new BN(0);
@@ -455,7 +506,10 @@ function getPairCollateralAmount({
   collateralDecimals: number;
   xSplit: number;
 }) {
-  const collateralRawAmount = amountToRawAmount(collateralUiAmount, collateralDecimals);
+  const collateralRawAmount = amountToRawAmount(
+    collateralUiAmount,
+    collateralDecimals,
+  );
   const rawAmountTokenX = Math.floor(collateralRawAmount * xSplit);
   const rawAmountTokenY = Math.floor(collateralRawAmount * (1 - xSplit));
 
@@ -485,14 +539,15 @@ async function buildCreatePositionTx({
 
   const newPositionKeypair = new Keypair();
 
-  const createPositionTx = await dlmmPoolConn.initializePositionAndAddLiquidityByStrategy({
-    positionPubKey: newPositionKeypair.publicKey,
-    user: new PublicKey(userAddress),
-    totalXAmount: xRawAmount,
-    totalYAmount: yRawAmount,
-    strategy,
-    slippage: 1,
-  });
+  const createPositionTx =
+    await dlmmPoolConn.initializePositionAndAddLiquidityByStrategy({
+      positionPubKey: newPositionKeypair.publicKey,
+      user: new PublicKey(userAddress),
+      totalXAmount: xRawAmount,
+      totalYAmount: yRawAmount,
+      strategy,
+      slippage: 1,
+    });
 
   const cuIxs: TransactionInstruction[] = [];
   if (options?.cuLimit || options?.cuPriceMicroLamports) {
@@ -502,7 +557,7 @@ async function buildCreatePositionTx({
       }),
       ComputeBudgetProgram.setComputeUnitPrice({
         microLamports: options.cuPriceMicroLamports ?? 1_000_000,
-      })
+      }),
     );
   }
 
@@ -552,16 +607,22 @@ async function buildLeveragedCreatePositionTx({
   liquidityShape: Infer<typeof vLiquidityShape>;
   borrowQuote: Infer<typeof vLoopscaleQuote>;
 }) {
-  const { brwRawAmountInCollateral, xBorrowedRaw, yBorrowedRaw } = calculateBorrowedAmount({
-    collateralMint,
-    collateralRawAmount,
-    leverage: borrowQuote.leverage,
-    xRawAmount,
-    yRawAmount,
-  });
+  const { brwRawAmountInCollateral, xBorrowedRaw, yBorrowedRaw } =
+    calculateBorrowedAmount({
+      collateralMint,
+      collateralRawAmount,
+      leverage: borrowQuote.leverage,
+      xRawAmount,
+      yRawAmount,
+    });
   const loanPda = deriveLoanPda({ userAddress });
   const positionPda = toAddress(
-    deriveMeteoraPositionPubkey({ poolAddress, loanPda, lowerBinId, upperBinId }).toBase58()
+    deriveMeteoraPositionPubkey({
+      poolAddress,
+      loanPda,
+      lowerBinId,
+      upperBinId,
+    }).toBase58(),
   );
 
   const { transactions, loanAddress } = await flashBorrow({
@@ -588,7 +649,9 @@ async function buildLeveragedCreatePositionTx({
     const vtx = new VersionedTransaction(msg);
 
     // allocate correct number of signature slots
-    vtx.signatures = Array(msg.header.numRequiredSignatures).fill(Buffer.alloc(64)); // empty sig
+    vtx.signatures = Array(msg.header.numRequiredSignatures).fill(
+      Buffer.alloc(64),
+    ); // empty sig
 
     // now apply program signatures
     for (const s of tx.signatures) {
@@ -604,12 +667,21 @@ async function buildLeveragedCreatePositionTx({
   });
 
   const positionPubkey = toAddress(
-    deriveMeteoraPositionPubkey({ poolAddress, loanPda: new PublicKey(loanAddress), lowerBinId, upperBinId }).toBase58()
+    deriveMeteoraPositionPubkey({
+      poolAddress,
+      loanPda: new PublicKey(loanAddress),
+      lowerBinId,
+      upperBinId,
+    }).toBase58(),
   );
 
   console.log("Position Pubkey", positionPubkey);
 
-  return { createLeveragedPositionTx: versionedTxs, loanAddress, positionPubkey };
+  return {
+    createLeveragedPositionTx: versionedTxs,
+    loanAddress,
+    positionPubkey,
+  };
 }
 
 function calculateBorrowedAmount({
@@ -632,7 +704,9 @@ function calculateBorrowedAmount({
   const total = xRawAmount.add(yRawAmount);
 
   const xRatio = total.isZero() ? new BN(0) : xRawAmount.mul(SCALE).div(total);
-  const borrowedRawBN = new BN(Math.floor(collateralRawAmount * (leverage - 1)));
+  const borrowedRawBN = new BN(
+    Math.floor(collateralRawAmount * (leverage - 1)),
+  );
 
   const xBorrowedRaw = borrowedRawBN.mul(xRatio).div(SCALE);
   const yBorrowedRaw = borrowedRawBN.sub(xBorrowedRaw);
@@ -682,7 +756,10 @@ function buildWrapSolTx({
     lamports: lamportsToWrap,
   });
 
-  const cuIxs = getCuInstructions({ limit: options.cuLimit, price: options.cuPriceMicroLamports });
+  const cuIxs = getCuInstructions({
+    limit: options.cuLimit,
+    price: options.cuPriceMicroLamports,
+  });
 
   const legacyTx = new Transaction().add(...cuIxs).add(...instructions);
   legacyTx.recentBlockhash = options.recentBlockhash;

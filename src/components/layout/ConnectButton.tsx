@@ -1,4 +1,9 @@
-import { useLogin, usePrivy, useSessionSigners, WalletWithMetadata } from "@privy-io/react-auth";
+import {
+  useLogin,
+  usePrivy,
+  useSessionSigners,
+  WalletWithMetadata,
+} from "@privy-io/react-auth";
 import { useConvexUser } from "~/providers/UserStates";
 import { useAction } from "convex/react";
 import { AnimatePresence } from "motion/react";
@@ -27,7 +32,11 @@ export function ConnectButton() {
               {abbreviateAddress(userAddress)}
             </Button>
           ) : (
-            <Button variant="liquidPrimary" loading={!ready || !isLoggedIn || !userAddress} onClick={connectWallet}>
+            <Button
+              variant="liquidPrimary"
+              loading={!ready || !isLoggedIn || !userAddress}
+              onClick={connectWallet}
+            >
               {ready ? "Connect wallet" : "Connecting"}
             </Button>
           )}
@@ -55,7 +64,7 @@ export function useConnectWallet() {
     onComplete: async ({ user }) => {
       const embededWallet = user.linkedAccounts.find(
         (acc): acc is WalletWithMetadata & { connectorType: "embedded" } =>
-          acc.type === "wallet" && acc.connectorType === "embedded"
+          acc.type === "wallet" && acc.connectorType === "embedded",
       );
 
       if (!embededWallet) {

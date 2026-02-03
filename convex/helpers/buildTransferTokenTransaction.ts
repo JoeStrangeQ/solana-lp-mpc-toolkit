@@ -43,7 +43,7 @@ export async function buildTransferTokenTransaction({
       }),
       ComputeBudgetProgram.setComputeUnitPrice({
         microLamports: options.cuPriceMicroLamports ?? 1_000_000,
-      })
+      }),
     );
   }
 
@@ -53,7 +53,7 @@ export async function buildTransferTokenTransaction({
         fromPubkey: from,
         toPubkey: recipient,
         lamports: rawAmount,
-      })
+      }),
     );
   } else {
     const [sourceAta, destAta] = await Promise.all([
@@ -72,13 +72,15 @@ export async function buildTransferTokenTransaction({
             from, // payer
             destAta, // ATA
             recipient, // owner
-            mint
-          )
+            mint,
+          ),
         );
       }
     }
 
-    instructions.push(createTransferInstruction(sourceAta, destAta, from, rawAmount));
+    instructions.push(
+      createTransferInstruction(sourceAta, destAta, from, rawAmount),
+    );
   }
 
   const { blockhash: recentBlockhash } = options?.recentBlockhash

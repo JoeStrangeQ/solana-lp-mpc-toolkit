@@ -34,8 +34,12 @@ export async function parseTransactionsBalanceChanges({
 }): Promise<ParseTxResult> {
   if (shouldAwaitConfirmation) {
     const statuses = await fastTransactionConfirm(signatures);
-    const failedSigs = statuses.filter((s) => s.status === "failed").map((s) => s.signature);
-    const confirmedSigs = statuses.filter((s) => s.status === "confirmed").map((s) => s.signature);
+    const failedSigs = statuses
+      .filter((s) => s.status === "failed")
+      .map((s) => s.signature);
+    const confirmedSigs = statuses
+      .filter((s) => s.status === "confirmed")
+      .map((s) => s.signature);
 
     if (failedSigs.length > 0) {
       return {
@@ -50,8 +54,8 @@ export async function parseTransactionsBalanceChanges({
       connection.getParsedTransaction(sig, {
         commitment: "confirmed",
         maxSupportedTransactionVersion: 0,
-      })
-    )
+      }),
+    ),
   );
 
   const preTokenBalances: Record<string, TokenAmountRes> = {};
@@ -102,7 +106,9 @@ export async function parseTransactionsBalanceChanges({
     // -----------------------------------------
     // SOL BALANCE CHANGE
     // -----------------------------------------
-    const accountKeys = tx.transaction.message.accountKeys.map((k) => k.pubkey.toBase58());
+    const accountKeys = tx.transaction.message.accountKeys.map((k) =>
+      k.pubkey.toBase58(),
+    );
 
     const userIndex = accountKeys.indexOf(userAddress);
     if (userIndex === -1) throw new Error("Couldn't find user index");

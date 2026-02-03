@@ -43,7 +43,10 @@ export interface SerializedPositionData {
 const poolCache: Record<string, DLMM> = {};
 export async function getDlmmPoolConn(poolAddress: string) {
   if (!poolCache[poolAddress]) {
-    poolCache[poolAddress] = await DLMM.create(connection, new PublicKey(poolAddress));
+    poolCache[poolAddress] = await DLMM.create(
+      connection,
+      new PublicKey(poolAddress),
+    );
   }
   return poolCache[poolAddress];
 }
@@ -58,7 +61,10 @@ export async function getBinsAroundActiveBin({
   numberOfBinsToTheRight: number;
 }) {
   const dlmmPoolConn = await getDlmmPoolConn(poolAddress);
-  const result = await dlmmPoolConn.getBinsAroundActiveBin(numberOfBinsToTheLeft, numberOfBinsToTheRight);
+  const result = await dlmmPoolConn.getBinsAroundActiveBin(
+    numberOfBinsToTheLeft,
+    numberOfBinsToTheRight,
+  );
 
   return {
     activeBin: result.activeBin,

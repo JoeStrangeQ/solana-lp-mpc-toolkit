@@ -14,7 +14,10 @@ export default function Backdrop({
     <AnimatePresence>
       {show && (
         <motion.div
-          className={cn("fixed inset-0 bg-black/40 z-40 flex items-center justify-center backdrop-blur-sm", className)}
+          className={cn(
+            "fixed inset-0 bg-black/40 z-40 flex items-center justify-center backdrop-blur-sm",
+            className,
+          )}
           onClick={onClick}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

@@ -67,7 +67,13 @@ export function SlidingSelect<T extends string>({
   };
 
   return (
-    <div ref={containerRef} className={cn(`relative flex rounded-full bg-backgroundQuaternary `, className)}>
+    <div
+      ref={containerRef}
+      className={cn(
+        `relative flex rounded-full bg-backgroundQuaternary `,
+        className,
+      )}
+    >
       {/* Highlight */}
 
       <motion.div

@@ -2,7 +2,12 @@ import { usePool } from "~/states/pools";
 import { cn } from "~/utils/cn";
 import { abbreviateAmount, formatUsdValue } from "~/utils/numberFormats";
 import { Doc } from "../../../convex/_generated/dataModel";
-import { Address, getMarketFromMints, toAddress, tokensMetadata } from "../../../convex/utils/solana";
+import {
+  Address,
+  getMarketFromMints,
+  toAddress,
+  tokensMetadata,
+} from "../../../convex/utils/solana";
 import { MnMSuspense } from "../MnMSuspense";
 import { PoolTokenIcons } from "../TokenIcon";
 import { LabelValue } from "../ui/labelValueRow";
@@ -10,7 +15,10 @@ import { Row } from "../ui/Row";
 import { TableCell, TableRow } from "../ui/Table";
 import { useToken, useTokenPrice } from "~/states/tokens";
 import { Skeleton } from "../ui/Skeleton";
-import { BinIdAndPrice, PositionTokenAmount } from "../../../convex/schema/positions";
+import {
+  BinIdAndPrice,
+  PositionTokenAmount,
+} from "../../../convex/schema/positions";
 import { FormattedBinPrice } from "../FormattedBinPrice";
 import { TriangleAlert, XCircle } from "lucide-react";
 import { rawAmountToAmount } from "../../../convex/utils/amounts";
@@ -24,7 +32,11 @@ import { LimitOrderValues } from "../LimitOrdersModal";
 import { useConvexUser } from "~/providers/UserStates";
 import { LimitOrderInput as LimitOrderInputType } from "../../../convex/schema/limitOrders";
 
-export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions"> }) {
+export function DlmmOpenPositionRow({
+  dbPosition,
+}: {
+  dbPosition: Doc<"positions">;
+}) {
   const { convexUser } = useConvexUser();
   const poolAddress = toAddress(dbPosition.poolAddress);
   const positionPubkey = toAddress(dbPosition.positionPubkey);
@@ -41,15 +53,24 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
   const sl = orders.find((o) => o.direction === "sl");
   const tp = orders.find((o) => o.direction === "tp");
 
-  const isSlActivated = sl?.status === "executing" || sl?.status === "executed" || sl?.status === "triggered";
-  const isTpActivated = tp?.status === "executing" || tp?.status === "executed" || tp?.status === "triggered";
+  const isSlActivated =
+    sl?.status === "executing" ||
+    sl?.status === "executed" ||
+    sl?.status === "triggered";
+  const isTpActivated =
+    tp?.status === "executing" ||
+    tp?.status === "executed" ||
+    tp?.status === "triggered";
 
   return (
     <TableRow>
       {/*Pool */}
       <TableCell>
         <MnMSuspense fallback={<PoolSkeleton />}>
-          <Pool poolAddress={poolAddress} leverage={dbPosition?.leverage ?? 1} />
+          <Pool
+            poolAddress={poolAddress}
+            leverage={dbPosition?.leverage ?? 1}
+          />
         </MnMSuspense>
       </TableCell>
       {/*Size */}
@@ -73,7 +94,10 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
       {/*Price/entry */}
       <TableCell>
         <MnMSuspense fallback={<Skeleton className="h-4 w-20" />}>
-          <PoolPrice poolAddress={poolAddress} poolEntryPrice={dbPosition.poolEntryPrice} />
+          <PoolPrice
+            poolAddress={poolAddress}
+            poolEntryPrice={dbPosition.poolEntryPrice}
+          />
         </MnMSuspense>
       </TableCell>
 
@@ -93,17 +117,27 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
             tp={tp ? { price: tp.triggerPrice, swapTo: tp.swapTo } : undefined}
             onSaveOrders={async (newSl, newTp) => {
               // --- Helper to compare order deep equality ---
-              const isSame = (oldOrder?: LimitOrderInputType, newOrder?: LimitOrderInputType) => {
+              const isSame = (
+                oldOrder?: LimitOrderInputType,
+                newOrder?: LimitOrderInputType,
+              ) => {
                 if (!oldOrder && !newOrder) return true;
                 if (!oldOrder || !newOrder) return false;
-                return oldOrder.price === newOrder.price && oldOrder.swapTo === newOrder.swapTo;
+                return (
+                  oldOrder.price === newOrder.price &&
+                  oldOrder.swapTo === newOrder.swapTo
+                );
               };
 
               // --------------------------
               //   NORMALIZED INPUTS
               // --------------------------
-              const slInput = newSl?.price ? newSl : ({ price: 0, swapTo: "none" } as LimitOrderInputType);
-              const tpInput = newTp?.price ? newTp : ({ price: 0, swapTo: "none" } as LimitOrderInputType);
+              const slInput = newSl?.price
+                ? newSl
+                : ({ price: 0, swapTo: "none" } as LimitOrderInputType);
+              const tpInput = newTp?.price
+                ? newTp
+                : ({ price: 0, swapTo: "none" } as LimitOrderInputType);
 
               // --------------------------
               //   HANDLE STOP LOSS (SL)
@@ -114,7 +148,10 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
                 // Case: No SL before, user added one → CREATE
                 await createOrder({
                   direction: "sl",
-                  market: getMarketFromMints(dbPosition.tokenX.mint, dbPosition.tokenY.mint),
+                  market: getMarketFromMints(
+                    dbPosition.tokenX.mint,
+                    dbPosition.tokenY.mint,
+                  ),
                   orderInput: slInput,
                   percentageToWithdraw: 100,
                   positionPubkey: dbPosition.positionPubkey,
@@ -122,8 +159,15 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
                 });
               } else if (sl && slInput.price === 0) {
                 // Case: SL existed & now cleared → CANCEL
-                await cancel({ orderId: sl._id, reason: "User canceled SL from UI" });
-              } else if (sl && slInput.price > 0 && !isSame({ price: sl.triggerPrice, swapTo: sl.swapTo }, slInput)) {
+                await cancel({
+                  orderId: sl._id,
+                  reason: "User canceled SL from UI",
+                });
+              } else if (
+                sl &&
+                slInput.price > 0 &&
+                !isSame({ price: sl.triggerPrice, swapTo: sl.swapTo }, slInput)
+              ) {
                 // Case: SL existed & changed → UPDATE
                 await updateOrder({ orderId: sl._id, orderInput: slInput });
               }
@@ -138,7 +182,10 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
                 // Case: No TP before, user added one → CREATE
                 await createOrder({
                   direction: "tp",
-                  market: getMarketFromMints(dbPosition.tokenX.mint, dbPosition.tokenY.mint),
+                  market: getMarketFromMints(
+                    dbPosition.tokenX.mint,
+                    dbPosition.tokenY.mint,
+                  ),
                   orderInput: tpInput,
                   percentageToWithdraw: 100,
                   positionPubkey: dbPosition.positionPubkey,
@@ -146,8 +193,15 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
                 });
               } else if (tp && tpInput.price === 0) {
                 // Case: TP existed & now cleared → CANCEL
-                await cancel({ orderId: tp._id, reason: "User canceled TP from UI" });
-              } else if (tp && tpInput.price > 0 && !isSame({ price: tp.triggerPrice, swapTo: tp.swapTo }, tpInput)) {
+                await cancel({
+                  orderId: tp._id,
+                  reason: "User canceled TP from UI",
+                });
+              } else if (
+                tp &&
+                tpInput.price > 0 &&
+                !isSame({ price: tp.triggerPrice, swapTo: tp.swapTo }, tpInput)
+              ) {
                 // Case: TP existed & changed → UPDATE
                 await updateOrder({ orderId: tp._id, orderInput: tpInput });
               }
@@ -170,16 +224,30 @@ export function DlmmOpenPositionRow({ dbPosition }: { dbPosition: Doc<"positions
       </TableCell>
       <TableCell className="w-0 whitespace-nowrap pl-2">
         <Row justify="end" className="gap-2">
-          <ViewMoreButton positionPubkey={positionPubkey} loanAddress={dbPosition.loanAddress} />
-          <ClosePositionButton positionPubkey={positionPubkey} disable={isSlActivated || isTpActivated} />
+          <ViewMoreButton
+            positionPubkey={positionPubkey}
+            loanAddress={dbPosition.loanAddress}
+          />
+          <ClosePositionButton
+            positionPubkey={positionPubkey}
+            disable={isSlActivated || isTpActivated}
+          />
         </Row>
       </TableCell>
     </TableRow>
   );
 }
 
-function ClosePositionButton({ positionPubkey, disable }: { positionPubkey: Address; disable: boolean }) {
-  const closePosition = useAction(api.actions.dlmmPosition.removeLiquidity.removeLiquidity);
+function ClosePositionButton({
+  positionPubkey,
+  disable,
+}: {
+  positionPubkey: Address;
+  disable: boolean;
+}) {
+  const closePosition = useAction(
+    api.actions.dlmmPosition.removeLiquidity.removeLiquidity,
+  );
 
   const closePositionMut = useTanstackMut({
     mutationFn: async () => {
@@ -211,9 +279,17 @@ function ClosePositionButton({ positionPubkey, disable }: { positionPubkey: Addr
   );
 }
 
-function ViewMoreButton({ positionPubkey, loanAddress }: { positionPubkey: Address; loanAddress?: string }) {
+function ViewMoreButton({
+  positionPubkey,
+  loanAddress,
+}: {
+  positionPubkey: Address;
+  loanAddress?: string;
+}) {
   const claimFees = useAction(api.actions.dlmmPosition.claimFees.claimFees);
-  const leverageClaimFees = useAction(api.actions.dlmmPosition.tempClaimFees.claimFees);
+  const leverageClaimFees = useAction(
+    api.actions.dlmmPosition.tempClaimFees.claimFees,
+  );
 
   const claimFeesMut = useTanstackMut({
     mutationFn: async () => {
@@ -254,20 +330,33 @@ function ViewMoreButton({ positionPubkey, loanAddress }: { positionPubkey: Addre
     </Button>
   );
 }
-function Pool({ poolAddress, leverage = 1 }: { poolAddress: Address; leverage?: number }) {
+function Pool({
+  poolAddress,
+  leverage = 1,
+}: {
+  poolAddress: Address;
+  leverage?: number;
+}) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const tokenX = useToken({ mint: pool.mint_x });
   const tokenY = useToken({ mint: pool.mint_y });
   return (
     <Row justify="start" className="gap-1.5">
-      <PoolTokenIcons size={28} xIcon={tokenX.icon} yIcon={tokenY.icon} dex="Meteora" />
+      <PoolTokenIcons
+        size={28}
+        xIcon={tokenX.icon}
+        yIcon={tokenY.icon}
+        dex="Meteora"
+      />
       <div className="flex flex-col">
         <Row justify="start" className="gap-1">
           <div className="text-text text-sm font-normal">{pool.name}</div>
           <div
             className={cn(
               "flex px-2 py-px rounded-full text-xs font-normal ",
-              leverage > 1 ? "bg-primary/10 text-primary" : "bg-white/10 text-text"
+              leverage > 1
+                ? "bg-primary/10 text-primary"
+                : "bg-white/10 text-text",
             )}
           >
             x{leverage}
@@ -293,7 +382,13 @@ function Pool({ poolAddress, leverage = 1 }: { poolAddress: Address; leverage?: 
   );
 }
 
-function Size({ poolAddress, positionPubkey }: { poolAddress: Address; positionPubkey: Address }) {
+function Size({
+  poolAddress,
+  positionPubkey,
+}: {
+  poolAddress: Address;
+  positionPubkey: Address;
+}) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const tokenX = useToken({ mint: pool.mint_x });
   const tokenY = useToken({ mint: pool.mint_y });
@@ -318,7 +413,11 @@ function Size({ poolAddress, positionPubkey }: { poolAddress: Address; positionP
 
   const totalUsd = usdX + usdY;
 
-  return <div className="text-text text-xs font-normal">{formatUsdValue(totalUsd)}</div>;
+  return (
+    <div className="text-text text-xs font-normal">
+      {formatUsdValue(totalUsd)}
+    </div>
+  );
 }
 function Range({
   poolAddress,
@@ -332,7 +431,8 @@ function Range({
   const pool = usePool({ poolAddress, protocol: "dlmm" });
 
   const currentPrice = Number(pool.current_price);
-  const isInRange = lowerBin.price <= currentPrice && upperBin.price >= currentPrice;
+  const isInRange =
+    lowerBin.price <= currentPrice && upperBin.price >= currentPrice;
   return (
     <Row justify="start" className="gap-1">
       {isInRange ? (
@@ -340,9 +440,17 @@ function Range({
       ) : (
         <TriangleAlert className="w-3 h-3 text-yellow" />
       )}
-      <FormattedBinPrice value={lowerBin.price} classname="text-sm text-text font-normal" significantDigits={4} />
+      <FormattedBinPrice
+        value={lowerBin.price}
+        classname="text-sm text-text font-normal"
+        significantDigits={4}
+      />
       <div className="text-sm text-text font-normal mx-px">-</div>
-      <FormattedBinPrice value={upperBin.price} classname="text-sm text-text font-normal" significantDigits={4} />
+      <FormattedBinPrice
+        value={upperBin.price}
+        classname="text-sm text-text font-normal"
+        significantDigits={4}
+      />
     </Row>
   );
 }
@@ -376,12 +484,22 @@ function PoolSkeleton() {
   );
 }
 
-function PoolPrice({ poolAddress, poolEntryPrice }: { poolAddress: Address; poolEntryPrice: number }) {
+function PoolPrice({
+  poolAddress,
+  poolEntryPrice,
+}: {
+  poolAddress: Address;
+  poolEntryPrice: number;
+}) {
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const currentPrice = Number(pool.current_price);
   return (
     <Row justify="start" className="gap-px">
-      <FormattedBinPrice value={currentPrice} classname="text-sm text-text font-normal" significantDigits={4} />
+      <FormattedBinPrice
+        value={currentPrice}
+        classname="text-sm text-text font-normal"
+        significantDigits={4}
+      />
       <div className="text-sm text-textSecondary font-normal">/</div>
       <FormattedBinPrice
         value={poolEntryPrice}
@@ -401,13 +519,21 @@ function Liquidation() {
       {lowerLiqPrice === 0 ? (
         <div className="text-sm text-textSecondary font-normal">--</div>
       ) : (
-        <FormattedBinPrice value={lowerLiqPrice} classname="text-sm text-yellow font-normal" significantDigits={4} />
+        <FormattedBinPrice
+          value={lowerLiqPrice}
+          classname="text-sm text-yellow font-normal"
+          significantDigits={4}
+        />
       )}
       <div className="text-sm text-text font-normal">/</div>
       {upperLiqPriceUp === 0 ? (
         <div className="text-sm text-textSecondary font-normal">--</div>
       ) : (
-        <FormattedBinPrice value={upperLiqPriceUp} classname="text-sm text-yellow font-normal" significantDigits={4} />
+        <FormattedBinPrice
+          value={upperLiqPriceUp}
+          classname="text-sm text-yellow font-normal"
+          significantDigits={4}
+        />
       )}
     </Row>
   );
@@ -438,7 +564,10 @@ function PnL({
     positionPubkey,
   });
 
-  const claimedFeesActivities = useQuery(api.tables.activities.get.getClaimedFeesByPosition, { positionPubkey });
+  const claimedFeesActivities = useQuery(
+    api.tables.activities.get.getClaimedFeesByPosition,
+    { positionPubkey },
+  );
   if (!onChainPosition)
     return (
       <div className="flex flex-col space-y-px">
@@ -461,8 +590,14 @@ function PnL({
   // -----------------------------
   // Current USD (from on-chain)
   // -----------------------------
-  const currentXAmount = rawAmountToAmount(Number(totalXAmount), tokenX.decimals);
-  const currentYAmount = rawAmountToAmount(Number(totalYAmount), tokenY.decimals);
+  const currentXAmount = rawAmountToAmount(
+    Number(totalXAmount),
+    tokenX.decimals,
+  );
+  const currentYAmount = rawAmountToAmount(
+    Number(totalYAmount),
+    tokenY.decimals,
+  );
 
   const currentXUsd = currentXAmount * xPrice;
   const currentYUsd = currentYAmount * yPrice;
@@ -497,7 +632,8 @@ function PnL({
   // Unrealized PnL includes:
   // - the current value of the position
   // - the unclaimed fees
-  const unrealizedPnlUsd = totalUsdCurrent + unrealizedFeesUsd - totalUsdInitial;
+  const unrealizedPnlUsd =
+    totalUsdCurrent + unrealizedFeesUsd - totalUsdInitial;
 
   // Total PnL = realized + unrealized
   const pnlUsd = realizedFeesUsd + unrealizedPnlUsd;
@@ -511,7 +647,12 @@ function PnL({
     <div className="flex flex-col">
       <Row justify="start" className="gap-1">
         {/* PnL in USD */}
-        <div className={cn("text-sm font-normal", isProfit ? "text-green" : "text-red")}>
+        <div
+          className={cn(
+            "text-sm font-normal",
+            isProfit ? "text-green" : "text-red",
+          )}
+        >
           {formatUsdValue(pnlUsd, { maximumFractionDigits: 5 })}
         </div>
 
@@ -519,7 +660,7 @@ function PnL({
         <div
           className={cn(
             "flex px-2 py-px rounded-full text-xs font-normal",
-            isProfit ? "text-green bg-green/10" : "text-red bg-red/10"
+            isProfit ? "text-green bg-green/10" : "text-red bg-red/10",
           )}
         >
           {abbreviateAmount(pnlPct, { type: "percentage" })}%
@@ -528,7 +669,10 @@ function PnL({
 
       {/* Fees */}
       <div className="text-textSecondary text-xs font-normal">
-        {formatUsdValue(unrealizedFeesUsd + realizedFeesUsd, { maximumFractionDigits: 5 })} in fees
+        {formatUsdValue(unrealizedFeesUsd + realizedFeesUsd, {
+          maximumFractionDigits: 5,
+        })}{" "}
+        in fees
       </div>
     </div>
   );

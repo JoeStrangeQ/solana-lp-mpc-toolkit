@@ -1,5 +1,8 @@
 import BN from "bn.js";
-import { BlockhashWithExpiryBlockHeight, VersionedTransaction } from "@solana/web3.js";
+import {
+  BlockhashWithExpiryBlockHeight,
+  VersionedTransaction,
+} from "@solana/web3.js";
 import { PrivyWallet } from "../privy";
 import { Address, toAddress } from "../utils/solana";
 import { JupQuoteResponse } from "../services/jupiter";
@@ -33,9 +36,16 @@ export async function executeSwapsWithNozomi({
   // 1. Build swapDetails either from Titan quotes or Jupiter atomic builder
   if (titanSwapQuotes && titanSwapQuotes.length > 0) {
     try {
-      swapDetails = await buildTitanSwaps({ userWallet, titanSwapQuotes, blockhash });
+      swapDetails = await buildTitanSwaps({
+        userWallet,
+        titanSwapQuotes,
+        blockhash,
+      });
     } catch (error) {
-      console.error("Titan swap build failed, falling back to Jupiter swaps:", error);
+      console.error(
+        "Titan swap build failed, falling back to Jupiter swaps:",
+        error,
+      );
 
       // Option A: fall back to Jupiter using Titan quote amounts as base specs
       const newSwapSpecs = titanSwapQuotes.map(titanQuoteToSwapSpec);
@@ -77,13 +87,15 @@ export async function executeSwapsWithNozomi({
           slippageBps: d.quote.slippageBps,
           priceImpactPct: "0",
         },
-      })
+      }),
     );
   }
 
   // 2. Send swaps via Nozomi
   const sendResults = await Promise.all(
-    swapDetails.map(({ tx, quote }) => sendSwap({ userWallet, tx, quote, attempt }))
+    swapDetails.map(({ tx, quote }) =>
+      sendSwap({ userWallet, tx, quote, attempt }),
+    ),
   );
 
   const succeeded = sendResults.filter((r): r is SwapSendSuccess => r.ok);
@@ -153,7 +165,10 @@ export async function buildMultipleJupiterSwapsAtomically({
     console.log(`Swap atomic build attempt ${attempt}/${MAX_TRIES}`);
 
     const buildPromises = swapSpecs
-      .filter(({ inputMint, outputMint, amount }) => !amount.isZero() && inputMint !== outputMint)
+      .filter(
+        ({ inputMint, outputMint, amount }) =>
+          !amount.isZero() && inputMint !== outputMint,
+      )
       .map(({ inputMint, outputMint, amount, slippageBps }) =>
         buildAndSimulateJupiterSwap({
           userAddress: toAddress(userAddress),
@@ -167,14 +182,17 @@ export async function buildMultipleJupiterSwapsAtomically({
           options: {
             skipUserAccountsRpcCalls: false,
           },
-        })
+        }),
       );
 
     const results = await Promise.allSettled(buildPromises);
 
     const fulfilled = results.filter(
-      (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof buildAndSimulateJupiterSwap>>> =>
-        r.status === "fulfilled"
+      (
+        r,
+      ): r is PromiseFulfilledResult<
+        Awaited<ReturnType<typeof buildAndSimulateJupiterSwap>>
+      > => r.status === "fulfilled",
     );
 
     const failedBuilds = fulfilled.filter((r) => !r.value.ok);
@@ -206,7 +224,10 @@ export async function buildMultipleJupiterSwapsAtomically({
           quote: v.quote as JupQuoteResponse,
         };
       })
-      .filter((x): x is { tx: VersionedTransaction; quote: JupQuoteResponse } => x !== null);
+      .filter(
+        (x): x is { tx: VersionedTransaction; quote: JupQuoteResponse } =>
+          x !== null,
+      );
 
     return { ok: true, swapDetails: swaps };
   }
@@ -239,7 +260,10 @@ async function buildTitanSwaps({
         throw new Error("Titan quote expired");
       }
 
-      if (route.expiresAfterSlot && lastValidBlockHeight > route.expiresAfterSlot) {
+      if (
+        route.expiresAfterSlot &&
+        lastValidBlockHeight > route.expiresAfterSlot
+      ) {
         throw new Error("Titan quote slot-expired");
       }
 
@@ -255,7 +279,10 @@ async function buildTitanSwaps({
         },
       });
 
-      const simRes = await simulateAndGetTokensBalance({ userAddress: toAddress(userWallet.address), transaction: tx });
+      const simRes = await simulateAndGetTokensBalance({
+        userAddress: toAddress(userWallet.address),
+        transaction: tx,
+      });
 
       if (simRes.sim.err) {
         console.log("Swap with titan failed", simRes.sim.logs);
@@ -264,7 +291,10 @@ async function buildTitanSwaps({
       console.log("simRes", simRes.tokenBalancesChange[q.outputMint]);
       console.log("Quote a", route.outAmount);
 
-      console.log("After slip", route.outAmount * (1 - route.slippageBps / 10_000));
+      console.log(
+        "After slip",
+        route.outAmount * (1 - route.slippageBps / 10_000),
+      );
       return {
         tx,
         quote: {
@@ -276,7 +306,7 @@ async function buildTitanSwaps({
           priceImpactPct: "0",
         },
       };
-    })
+    }),
   );
 }
 
@@ -342,7 +372,9 @@ const titanQuoteToSwapSpec = (q: SwapQuotes): SwapSpec => {
   };
 };
 
-const normalizeQuote = (q: NozomiExecutedSwapQuote): NozomiExecutedSwapQuote => ({
+const normalizeQuote = (
+  q: NozomiExecutedSwapQuote,
+): NozomiExecutedSwapQuote => ({
   inputMint: q.inputMint,
   inAmount: Number(q.inAmount),
   outputMint: q.outputMint,
@@ -360,7 +392,11 @@ function successResponse(successes: NozomiSwapSuccess[], attempt: number) {
   };
 }
 
-function failureResponse(failed: SwapSendFailure[], successes: NozomiSwapSuccess[], attempt: number) {
+function failureResponse(
+  failed: SwapSendFailure[],
+  successes: NozomiSwapSuccess[],
+  attempt: number,
+) {
   const lastError = failed[failed.length - 1]?.error ?? "Unknown last error";
 
   return {
@@ -408,7 +444,10 @@ async function sendSwap({
 
     return { ok: true, txId, quote };
   } catch (err) {
-    console.error(`ERROR sending swap via Nozomi for ${quote.inputMint} on attempt ${attempt}`, err);
+    console.error(
+      `ERROR sending swap via Nozomi for ${quote.inputMint} on attempt ${attempt}`,
+      err,
+    );
     return { ok: false, error: err, quote };
   }
 }

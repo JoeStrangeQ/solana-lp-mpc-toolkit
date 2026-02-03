@@ -13,7 +13,13 @@ import {
   VersionedMessage,
   VersionedTransaction,
 } from "@solana/web3.js";
-import { Address, fastTransactionConfirm, getCuInstructions, toAddress, toVersioned } from "../../utils/solana";
+import {
+  Address,
+  fastTransactionConfirm,
+  getCuInstructions,
+  toAddress,
+  toVersioned,
+} from "../../utils/solana";
 import { buildTipTx, signAndSendJitoBundle } from "../../helpers/jito";
 import { connection } from "../../convexEnv";
 import DLMM, { LbPosition } from "@meteora-ag/dlmm";
@@ -23,7 +29,10 @@ import { SwapSpec } from "../../helpers/executeSwapsWithNozomi";
 import { buildJupSwapTransaction } from "../../helpers/buildJupiterSwapTransaction";
 import { safeBigIntToNumber } from "../../utils/amounts";
 import { tryCatch } from "../../utils/tryCatch";
-import { getJupiterTokenPrices, JupQuoteResponse } from "../../services/jupiter";
+import {
+  getJupiterTokenPrices,
+  JupQuoteResponse,
+} from "../../services/jupiter";
 import { buildTransferMnMTx } from "../../helpers/transferMnMFees";
 import { loopscaleClaimDlmmFees } from "../../services/loopscale";
 
@@ -38,11 +47,16 @@ export const claimFees = action({
       const { positionPubkey, isAutomated } = args;
       const { user, userWallet } = await authenticateUser({ ctx });
       if (!user || !userWallet) throw new Error("Couldn't find user");
-      const position = await ctx.runQuery(api.tables.positions.get.getPositionByPubkey, { positionPubkey });
+      const position = await ctx.runQuery(
+        api.tables.positions.get.getPositionByPubkey,
+        { positionPubkey },
+      );
       if (!position) throw new Error(`Position ${positionPubkey} not found`);
 
       const dlmmPoolConn = await getDlmmPoolConn(position.poolAddress);
-      const onChainPosition = await dlmmPoolConn.getPosition(new PublicKey(positionPubkey));
+      const onChainPosition = await dlmmPoolConn.getPosition(
+        new PublicKey(positionPubkey),
+      );
 
       const userAddress = toAddress(userWallet.address);
       const xMint = toAddress(position.tokenX.mint);
@@ -60,7 +74,9 @@ export const claimFees = action({
         userAddress,
         dlmmPoolConn,
         onChainPosition,
-        loanAddress: position.loanAddress ? toAddress(position.loanAddress) : undefined,
+        loanAddress: position.loanAddress
+          ? toAddress(position.loanAddress)
+          : undefined,
         options: {
           cuLimit,
           cuPriceMicroLamports,
@@ -74,7 +90,10 @@ export const claimFees = action({
       ];
 
       const buildSwaps = swapSpecs
-        .filter(({ inputMint, amount }) => !amount.isZero() && inputMint !== outputMint)
+        .filter(
+          ({ inputMint, amount }) =>
+            !amount.isZero() && inputMint !== outputMint,
+        )
         .map(async ({ inputMint, amount, slippageBps }) => {
           return buildJupSwapTransaction({
             userAddress,
@@ -94,16 +113,17 @@ export const claimFees = action({
         };
       }
 
-      const transactions: { tx: VersionedTransaction; description: string }[] = [
-        {
-          tx: toVersioned(claimTx),
-          description: "Claim Fees",
-        },
-        ...swapsRes.data.map(({ tx }, i) => ({
-          tx,
-          description: `Swap #${i + 1}`,
-        })),
-      ];
+      const transactions: { tx: VersionedTransaction; description: string }[] =
+        [
+          {
+            tx: toVersioned(claimTx),
+            description: "Claim Fees",
+          },
+          ...swapsRes.data.map(({ tx }, i) => ({
+            tx,
+            description: `Swap #${i + 1}`,
+          })),
+        ];
 
       let directOutput = new BN(0); //when no swap is needed
       if (xMint === outputMint) directOutput = directOutput.add(xClaimed);
@@ -113,7 +133,10 @@ export const claimFees = action({
       }).totalFeesClaimedInOutputToken;
 
       const totalFeesInRawOutputToken = swappedOut.add(directOutput);
-      let userRawOutput = safeBigIntToNumber(totalFeesInRawOutputToken, "userRawOutput");
+      let userRawOutput = safeBigIntToNumber(
+        totalFeesInRawOutputToken,
+        "userRawOutput",
+      );
 
       const mnmFeeClaimTxRes = await buildTransferMnMTx({
         userWallet,
@@ -122,7 +145,10 @@ export const claimFees = action({
       });
 
       if (mnmFeeClaimTxRes) {
-        transactions.push({ tx: toVersioned(mnmFeeClaimTxRes.mnmFeeClaimTx), description: "MnM Fee" });
+        transactions.push({
+          tx: toVersioned(mnmFeeClaimTxRes.mnmFeeClaimTx),
+          description: "MnM Fee",
+        });
         userRawOutput = userRawOutput - mnmFeeClaimTxRes.mnmFeeRawAmount;
       }
 
@@ -135,10 +161,14 @@ export const claimFees = action({
 
       const txsConfirmRes = await fastTransactionConfirm([txIds[0]], 7_000);
       if (txsConfirmRes[0].err) {
-        throw new Error(`Transaction ${txsConfirmRes[0].signature} failed: ${JSON.stringify(txsConfirmRes[0].err)}`);
+        throw new Error(
+          `Transaction ${txsConfirmRes[0].signature} failed: ${JSON.stringify(txsConfirmRes[0].err)}`,
+        );
       }
 
-      const prices = await getJupiterTokenPrices({ mints: [xMint, yMint, outputMint] });
+      const prices = await getJupiterTokenPrices({
+        mints: [xMint, yMint, outputMint],
+      });
       const xPrice = prices[xMint]?.usdPrice ?? 0;
       const yPrice = prices[yMint]?.usdPrice ?? 0;
       const outputPrice = prices[outputMint]?.usdPrice ?? 0;
@@ -150,36 +180,39 @@ export const claimFees = action({
         };
       });
 
-      const activityId = await ctx.runMutation(internal.tables.activities.mutations.createActivity, {
-        userId: user._id,
-        input: {
-          type: "claim_fees",
-          relatedPositionPubkey: positionPubkey,
-          transactionIds,
-          bundleId,
-          details: {
-            autoTriggered: isAutomated,
-            compoundedRawAmounts: { tokenX: 0, tokenY: 0 },
-            poolAddress: position.poolAddress,
-            positionType: "DLMM",
-            harvested: {
-              mint: outputMint,
-              rawAmount: userRawOutput,
-              usdPrice: outputPrice,
-            },
-            claimedX: {
-              mint: position.tokenX.mint,
-              rawAmount: safeBigIntToNumber(xClaimed, "X claimed"),
-              usdPrice: xPrice,
-            },
-            claimedY: {
-              mint: position.tokenY.mint,
-              rawAmount: safeBigIntToNumber(yClaimed, "Y claimed"),
-              usdPrice: yPrice,
+      const activityId = await ctx.runMutation(
+        internal.tables.activities.mutations.createActivity,
+        {
+          userId: user._id,
+          input: {
+            type: "claim_fees",
+            relatedPositionPubkey: positionPubkey,
+            transactionIds,
+            bundleId,
+            details: {
+              autoTriggered: isAutomated,
+              compoundedRawAmounts: { tokenX: 0, tokenY: 0 },
+              poolAddress: position.poolAddress,
+              positionType: "DLMM",
+              harvested: {
+                mint: outputMint,
+                rawAmount: userRawOutput,
+                usdPrice: outputPrice,
+              },
+              claimedX: {
+                mint: position.tokenX.mint,
+                rawAmount: safeBigIntToNumber(xClaimed, "X claimed"),
+                usdPrice: xPrice,
+              },
+              claimedY: {
+                mint: position.tokenY.mint,
+                rawAmount: safeBigIntToNumber(yClaimed, "Y claimed"),
+                usdPrice: yPrice,
+              },
             },
           },
         },
-      });
+      );
 
       return {
         status: "success",
@@ -244,7 +277,9 @@ async function buildAndSimulateClaimFeeTx({
 
     const message = new TransactionMessage({
       payerKey: new PublicKey(userAddress),
-      recentBlockhash: options?.recentBlockhash ?? (await connection.getLatestBlockhash()).blockhash,
+      recentBlockhash:
+        options?.recentBlockhash ??
+        (await connection.getLatestBlockhash()).blockhash,
       instructions: [...cuIxs, ...filteredIxs],
     }).compileToV0Message();
 
@@ -262,15 +297,22 @@ async function buildAndSimulateClaimFeeTx({
 
   const xMint = dlmmPoolConn.lbPair.tokenXMint.toBase58();
   const yMint = dlmmPoolConn.lbPair.tokenYMint.toBase58();
-  console.log("x claimed", simRes.tokenBalancesChange[xMint].rawAmount.toString());
-  console.log("y claimed", simRes.tokenBalancesChange[yMint].rawAmount.toString());
+  console.log(
+    "x claimed",
+    simRes.tokenBalancesChange[xMint].rawAmount.toString(),
+  );
+  console.log(
+    "y claimed",
+    simRes.tokenBalancesChange[yMint].rawAmount.toString(),
+  );
   const xDelta = simRes.tokenBalancesChange[xMint]?.rawAmount ?? new BN(0);
   const yDelta = simRes.tokenBalancesChange[yMint]?.rawAmount ?? new BN(0);
   //we checking how much tokens getting out of the pool
   const xClaimed = xDelta.isNeg() ? xDelta.abs() : new BN(0);
   const yClaimed = yDelta.isNeg() ? yDelta.abs() : new BN(0);
 
-  if (xClaimed.isZero() && yClaimed.isZero()) throw new Error("No fees to claim");
+  if (xClaimed.isZero() && yClaimed.isZero())
+    throw new Error("No fees to claim");
 
   return {
     claimTx: tx,
@@ -279,7 +321,11 @@ async function buildAndSimulateClaimFeeTx({
   };
 }
 
-function computeTotalClaimedFeesInOutputTokenFromSwaps({ swapQuotes }: { swapQuotes: JupQuoteResponse[] }) {
+function computeTotalClaimedFeesInOutputTokenFromSwaps({
+  swapQuotes,
+}: {
+  swapQuotes: JupQuoteResponse[];
+}) {
   const totalOut = swapQuotes.reduce((acc, q) => {
     return acc.add(new BN(q.outAmount));
   }, new BN(0));
@@ -298,14 +344,20 @@ async function buildLoopscaleClaimFeeTx({
   loanAddress: Address;
   positionPubkey: Address;
 }) {
-  const { message, signatures } = await loopscaleClaimDlmmFees({ userAddress, loanAddress, positionPubkey });
+  const { message, signatures } = await loopscaleClaimDlmmFees({
+    userAddress,
+    loanAddress,
+    positionPubkey,
+  });
 
   const rawMsg = Buffer.from(message, "base64");
   const msg = VersionedMessage.deserialize(rawMsg);
   const vtx = new VersionedTransaction(msg);
 
   // allocate correct number of signature slots
-  vtx.signatures = Array(msg.header.numRequiredSignatures).fill(Buffer.alloc(64)); // empty sig
+  vtx.signatures = Array(msg.header.numRequiredSignatures).fill(
+    Buffer.alloc(64),
+  ); // empty sig
 
   // now apply program signatures
   for (const s of signatures) {

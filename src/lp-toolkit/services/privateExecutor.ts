@@ -1,7 +1,7 @@
 /**
  * Private Executor
  * Executes LP operations through Arcium's MXE (Multi-party eXecution Environment)
- * 
+ *
  * Uses @arcium-hq/client SDK for:
  * - x25519 key exchange with MXE
  * - RescueCipher encryption of strategy params
@@ -9,11 +9,20 @@
  * - Hidden execution intent (prevent front-running)
  */
 
-import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js';
-import { ArciumPrivacyService, generatePrivacyKeys, EncryptedStrategy } from './arciumPrivacy';
-import { getAdapter, getAllAdapters } from '../adapters';
-import { DEXVenue, LPPool, AddLiquidityIntent, RemoveLiquidityIntent } from '../adapters/types';
-import { calculateFee, FeeCalculation } from '../fees/feeCollector';
+import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
+import {
+  ArciumPrivacyService,
+  generatePrivacyKeys,
+  EncryptedStrategy,
+} from "./arciumPrivacy";
+import { getAdapter, getAllAdapters } from "../adapters";
+import {
+  DEXVenue,
+  LPPool,
+  AddLiquidityIntent,
+  RemoveLiquidityIntent,
+} from "../adapters/types";
+import { calculateFee, FeeCalculation } from "../fees/feeCollector";
 
 // ============ Types ============
 
@@ -21,7 +30,7 @@ export interface PrivateExecutionResult {
   success: boolean;
   positionId?: string;
   txSignature?: string;
-  encryptedReceipt?: string;  // Encrypted execution details
+  encryptedReceipt?: string; // Encrypted execution details
   fee: FeeCalculation;
   error?: string;
   // Privacy metadata
@@ -63,13 +72,13 @@ export class PrivateExecutor {
    */
   async addLiquidityPrivate(
     userKeypair: Keypair,
-    intent: AddLiquidityIntent
+    intent: AddLiquidityIntent,
   ): Promise<PrivateExecutionResult> {
     // 1. Encrypt strategy parameters
     const encryptedStrategy = this.privacyService.encryptStrategy(intent);
-    
+
     // 2. Get adapter
-    const venue = intent.venue || 'meteora';
+    const venue = intent.venue || "meteora";
     const adapter = getAdapter(venue);
     if (!adapter) {
       return {
@@ -90,7 +99,7 @@ export class PrivateExecutor {
       const { transaction, positionId } = await adapter.addLiquidity(
         this.connection,
         userKeypair,
-        intent
+        intent,
       );
 
       // 4. Calculate fee
@@ -103,12 +112,14 @@ export class PrivateExecutor {
         strategy: intent.strategy,
         timestamp: Date.now(),
       };
-      const encryptedReceipt = Buffer.from(JSON.stringify(receipt)).toString('base64');
+      const encryptedReceipt = Buffer.from(JSON.stringify(receipt)).toString(
+        "base64",
+      );
 
       return {
         success: true,
         positionId,
-        txSignature: 'private_' + Date.now(), // Would be real sig
+        txSignature: "private_" + Date.now(), // Would be real sig
         encryptedReceipt,
         fee,
         privacy: {
@@ -139,7 +150,7 @@ export class PrivateExecutor {
   async removeLiquidityPrivate(
     userKeypair: Keypair,
     venue: DEXVenue,
-    params: RemoveLiquidityIntent
+    params: RemoveLiquidityIntent,
   ): Promise<PrivateExecutionResult> {
     const adapter = getAdapter(venue);
     if (!adapter) {
@@ -160,12 +171,12 @@ export class PrivateExecutor {
       const transaction = await adapter.removeLiquidity(
         this.connection,
         userKeypair,
-        params
+        params,
       );
 
       return {
         success: true,
-        txSignature: 'private_' + Date.now(),
+        txSignature: "private_" + Date.now(),
         fee: calculateFee(0), // Fee calculated on actual value
         privacy: {
           encrypted: true,

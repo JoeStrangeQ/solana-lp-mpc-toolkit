@@ -3,35 +3,35 @@
  * Liquidation logic, risk thresholds, and safety calculations
  */
 
-import BN from 'bn.js';
+import BN from "bn.js";
 
 // ============ Risk Parameters ============
 
 export const RISK_PARAMS = {
   // Maximum Loan-to-Value ratio (80%)
-  MAX_LTV: 0.80,
-  
+  MAX_LTV: 0.8,
+
   // Liquidation threshold (85%) - when position becomes liquidatable
   LIQUIDATION_THRESHOLD: 0.85,
-  
+
   // Liquidation penalty/bonus for liquidators (5%)
   LIQUIDATION_PENALTY: 0.05,
-  
+
   // Health factor warning threshold
   HEALTH_FACTOR_WARNING: 1.2,
-  
+
   // Health factor danger threshold
   HEALTH_FACTOR_DANGER: 1.1,
-  
+
   // Minimum health factor for new positions
   MIN_INITIAL_HEALTH_FACTOR: 1.3,
-  
+
   // Maximum leverage (derived from MAX_LTV)
-  MAX_LEVERAGE: 1 / (1 - 0.80), // 5x
-  
+  MAX_LEVERAGE: 1 / (1 - 0.8), // 5x
+
   // Price impact limits
   MAX_PRICE_IMPACT_BPS: 100, // 1%
-  
+
   // Slippage tolerance default
   DEFAULT_SLIPPAGE_BPS: 50, // 0.5%
 };
@@ -43,7 +43,7 @@ export interface PositionRisk {
   currentLTV: number;
   liquidationPrice: number;
   safetyMargin: number; // Distance from liquidation as %
-  status: 'healthy' | 'warning' | 'danger' | 'liquidatable';
+  status: "healthy" | "warning" | "danger" | "liquidatable";
   requiredCollateralToSafe: number; // Amount needed to reach warning threshold
   maxWithdrawable: number; // Amount that can be withdrawn while staying safe
 }
@@ -66,10 +66,12 @@ export interface LiquidationInfo {
  */
 export function calculateHealthFactor(
   collateralValueUSD: number,
-  debtValueUSD: number
+  debtValueUSD: number,
 ): number {
   if (debtValueUSD === 0) return Infinity;
-  return (collateralValueUSD * RISK_PARAMS.LIQUIDATION_THRESHOLD) / debtValueUSD;
+  return (
+    (collateralValueUSD * RISK_PARAMS.LIQUIDATION_THRESHOLD) / debtValueUSD
+  );
 }
 
 /**
@@ -78,7 +80,7 @@ export function calculateHealthFactor(
  */
 export function calculateLTV(
   collateralValueUSD: number,
-  debtValueUSD: number
+  debtValueUSD: number,
 ): number {
   if (collateralValueUSD === 0) return Infinity;
   return debtValueUSD / collateralValueUSD;
@@ -88,12 +90,12 @@ export function calculateLTV(
  * Get risk status from health factor
  */
 export function getRiskStatus(
-  healthFactor: number
-): 'healthy' | 'warning' | 'danger' | 'liquidatable' {
-  if (healthFactor < 1) return 'liquidatable';
-  if (healthFactor < RISK_PARAMS.HEALTH_FACTOR_DANGER) return 'danger';
-  if (healthFactor < RISK_PARAMS.HEALTH_FACTOR_WARNING) return 'warning';
-  return 'healthy';
+  healthFactor: number,
+): "healthy" | "warning" | "danger" | "liquidatable" {
+  if (healthFactor < 1) return "liquidatable";
+  if (healthFactor < RISK_PARAMS.HEALTH_FACTOR_DANGER) return "danger";
+  if (healthFactor < RISK_PARAMS.HEALTH_FACTOR_WARNING) return "warning";
+  return "healthy";
 }
 
 /**
@@ -102,7 +104,7 @@ export function getRiskStatus(
 export function calculatePositionRisk(
   collateralValueUSD: number,
   debtValueUSD: number,
-  collateralPriceUSD: number // Per unit of collateral
+  collateralPriceUSD: number, // Per unit of collateral
 ): PositionRisk {
   const healthFactor = calculateHealthFactor(collateralValueUSD, debtValueUSD);
   const currentLTV = calculateLTV(collateralValueUSD, debtValueUSD);
@@ -113,24 +115,31 @@ export function calculatePositionRisk(
   // So: newPrice * collateralUnits * liquidationThreshold = debt
   // newPrice = debt / (collateralUnits * liquidationThreshold)
   const collateralUnits = collateralValueUSD / collateralPriceUSD;
-  const liquidationPrice = collateralUnits > 0
-    ? debtValueUSD / (collateralUnits * RISK_PARAMS.LIQUIDATION_THRESHOLD)
-    : 0;
+  const liquidationPrice =
+    collateralUnits > 0
+      ? debtValueUSD / (collateralUnits * RISK_PARAMS.LIQUIDATION_THRESHOLD)
+      : 0;
 
   // Safety margin: how far from liquidation price (as %)
-  const safetyMargin = collateralPriceUSD > liquidationPrice
-    ? ((collateralPriceUSD - liquidationPrice) / collateralPriceUSD) * 100
-    : 0;
+  const safetyMargin =
+    collateralPriceUSD > liquidationPrice
+      ? ((collateralPriceUSD - liquidationPrice) / collateralPriceUSD) * 100
+      : 0;
 
   // Calculate collateral needed to reach warning threshold
   // Target HF = 1.2
   // Required collateral = (debt * targetHF) / liquidationThreshold
   const targetHF = RISK_PARAMS.HEALTH_FACTOR_WARNING;
-  const requiredCollateral = (debtValueUSD * targetHF) / RISK_PARAMS.LIQUIDATION_THRESHOLD;
-  const requiredCollateralToSafe = Math.max(0, requiredCollateral - collateralValueUSD);
+  const requiredCollateral =
+    (debtValueUSD * targetHF) / RISK_PARAMS.LIQUIDATION_THRESHOLD;
+  const requiredCollateralToSafe = Math.max(
+    0,
+    requiredCollateral - collateralValueUSD,
+  );
 
   // Calculate max withdrawable while maintaining warning threshold
-  const minCollateral = (debtValueUSD * targetHF) / RISK_PARAMS.LIQUIDATION_THRESHOLD;
+  const minCollateral =
+    (debtValueUSD * targetHF) / RISK_PARAMS.LIQUIDATION_THRESHOLD;
   const maxWithdrawable = Math.max(0, collateralValueUSD - minCollateral);
 
   return {
@@ -151,7 +160,7 @@ export function calculatePositionRisk(
  */
 export function calculateLiquidation(
   collateralValueUSD: number,
-  debtValueUSD: number
+  debtValueUSD: number,
 ): LiquidationInfo {
   const healthFactor = calculateHealthFactor(collateralValueUSD, debtValueUSD);
   const isLiquidatable = healthFactor < 1;
@@ -171,14 +180,18 @@ export function calculateLiquidation(
   // Liquidator repays debt and receives collateral + bonus
   // We allow partial liquidation up to 50% of debt per tx
   const maxLiquidationRatio = 0.5; // 50% max per liquidation
-  
+
   const debtToRepay = debtValueUSD * maxLiquidationRatio;
   const collateralToSeize = debtToRepay * (1 + RISK_PARAMS.LIQUIDATION_PENALTY);
   const liquidatorBonus = debtToRepay * RISK_PARAMS.LIQUIDATION_PENALTY;
 
   // Cap seizure at available collateral
-  const actualCollateralSeized = Math.min(collateralToSeize, collateralValueUSD);
-  const actualDebtRepaid = actualCollateralSeized / (1 + RISK_PARAMS.LIQUIDATION_PENALTY);
+  const actualCollateralSeized = Math.min(
+    collateralToSeize,
+    collateralValueUSD,
+  );
+  const actualDebtRepaid =
+    actualCollateralSeized / (1 + RISK_PARAMS.LIQUIDATION_PENALTY);
 
   return {
     isLiquidatable: true,
@@ -196,10 +209,13 @@ export function calculateLiquidation(
 export function validateBorrow(
   currentCollateralValueUSD: number,
   currentDebtUSD: number,
-  newBorrowUSD: number
+  newBorrowUSD: number,
 ): { valid: boolean; error?: string; newHealthFactor: number } {
   const newDebt = currentDebtUSD + newBorrowUSD;
-  const newHealthFactor = calculateHealthFactor(currentCollateralValueUSD, newDebt);
+  const newHealthFactor = calculateHealthFactor(
+    currentCollateralValueUSD,
+    newDebt,
+  );
 
   if (newHealthFactor < RISK_PARAMS.MIN_INITIAL_HEALTH_FACTOR) {
     return {
@@ -227,14 +243,14 @@ export function validateBorrow(
 export function validateWithdrawal(
   currentCollateralValueUSD: number,
   currentDebtUSD: number,
-  withdrawalUSD: number
+  withdrawalUSD: number,
 ): { valid: boolean; error?: string; newHealthFactor: number } {
   const newCollateral = currentCollateralValueUSD - withdrawalUSD;
-  
+
   if (newCollateral < 0) {
     return {
       valid: false,
-      error: 'Cannot withdraw more than deposited',
+      error: "Cannot withdraw more than deposited",
       newHealthFactor: 0,
     };
   }
@@ -259,7 +275,7 @@ export function validateWithdrawal(
  */
 export function estimatePriceImpact(
   tradeSize: number,
-  poolLiquidity: number
+  poolLiquidity: number,
 ): number {
   // Simple constant product model: impact ≈ tradeSize / liquidity
   // Real DLMM would be more complex due to bins
@@ -272,11 +288,11 @@ export function estimatePriceImpact(
 export function validatePriceImpact(
   tradeSize: number,
   poolLiquidity: number,
-  maxImpactBps: number = RISK_PARAMS.MAX_PRICE_IMPACT_BPS
+  maxImpactBps: number = RISK_PARAMS.MAX_PRICE_IMPACT_BPS,
 ): { valid: boolean; estimatedImpact: number } {
   const impact = estimatePriceImpact(tradeSize, poolLiquidity);
   const impactBps = impact * 100;
-  
+
   return {
     valid: impactBps <= maxImpactBps,
     estimatedImpact: impact,
@@ -298,7 +314,7 @@ export function calculateEffectiveLeverage(ltv: number): number {
  */
 export function calculateRequiredLTV(targetLeverage: number): number {
   if (targetLeverage <= 1) return 0;
-  return 1 - (1 / targetLeverage);
+  return 1 - 1 / targetLeverage;
 }
 
 /**
@@ -306,11 +322,14 @@ export function calculateRequiredLTV(targetLeverage: number): number {
  */
 export function calculateMaxBorrow(
   collateralValueUSD: number,
-  targetHealthFactor: number = RISK_PARAMS.MIN_INITIAL_HEALTH_FACTOR
+  targetHealthFactor: number = RISK_PARAMS.MIN_INITIAL_HEALTH_FACTOR,
 ): number {
   // HF = (collateral * liquidationThreshold) / debt
   // debt = (collateral * liquidationThreshold) / HF
-  return (collateralValueUSD * RISK_PARAMS.LIQUIDATION_THRESHOLD) / targetHealthFactor;
+  return (
+    (collateralValueUSD * RISK_PARAMS.LIQUIDATION_THRESHOLD) /
+    targetHealthFactor
+  );
 }
 
 // ============ Export ============

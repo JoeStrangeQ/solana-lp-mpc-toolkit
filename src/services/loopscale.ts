@@ -21,12 +21,19 @@ const OraclePriceInfoZ = z.object({
   marketPrice: z.number().nullable(),
 });
 
-export const LoopscaleOraclePricesResponseZ = z.record(z.string(), OraclePriceInfoZ);
+export const LoopscaleOraclePricesResponseZ = z.record(
+  z.string(),
+  OraclePriceInfoZ,
+);
 export const LoopscaleMaxQuoteResponseZ = z.array(MaxQuoteItemZ);
 
 export type MaxQuoteItem = z.infer<typeof MaxQuoteItemZ>;
-export type LoopscaleMaxQuoteResponse = z.infer<typeof LoopscaleMaxQuoteResponseZ>;
-export type LoopscaleOraclePricesResponse = z.infer<typeof LoopscaleOraclePricesResponseZ>;
+export type LoopscaleMaxQuoteResponse = z.infer<
+  typeof LoopscaleMaxQuoteResponseZ
+>;
+export type LoopscaleOraclePricesResponse = z.infer<
+  typeof LoopscaleOraclePricesResponseZ
+>;
 
 export async function getLoopscaleMaxQuote({
   userAddress,
@@ -70,7 +77,9 @@ export async function getLoopscaleMaxQuote({
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`Loopscale max quote API error: ${response.status}: ${errorText}`);
+    throw new Error(
+      `Loopscale max quote API error: ${response.status}: ${errorText}`,
+    );
   }
 
   const responseData = await response.json();
@@ -87,7 +96,9 @@ export async function getLoopscaleOraclePrices(): Promise<LoopscaleOraclePricesR
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`Loopscale oracle prices API error: ${response.status}: ${errorText}`);
+    throw new Error(
+      `Loopscale oracle prices API error: ${response.status}: ${errorText}`,
+    );
   }
 
   const responseData = await response.json();

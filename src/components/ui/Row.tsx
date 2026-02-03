@@ -16,9 +16,23 @@ const justifyMap = {
   evenly: "justify-evenly",
 } as const;
 
-export function Row({ children, className, justify = "between", fullWidth = false, ...rest }: RowProps) {
+export function Row({
+  children,
+  className,
+  justify = "between",
+  fullWidth = false,
+  ...rest
+}: RowProps) {
   return (
-    <div className={cn("flex flex-row items-center", fullWidth && "w-full", justifyMap[justify], className)} {...rest}>
+    <div
+      className={cn(
+        "flex flex-row items-center",
+        fullWidth && "w-full",
+        justifyMap[justify],
+        className,
+      )}
+      {...rest}
+    >
       {children}
     </div>
   );

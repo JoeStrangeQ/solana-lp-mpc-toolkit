@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { Connection, PublicKey, Transaction } from '@solana/web3.js';
-import { buildAtomicLeverageTransaction } from '../services/lendingService';
-import { usePoolState } from '../hooks/usePoolState';
+import React, { useState, useMemo } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { Connection, PublicKey, Transaction } from "@solana/web3.js";
+import { buildAtomicLeverageTransaction } from "../services/lendingService";
+import { usePoolState } from "../hooks/usePoolState";
 
 const LeverageInterface = () => {
   const { publicKey, sendTransaction } = useWallet();
@@ -13,12 +13,15 @@ const LeverageInterface = () => {
   const [error, setError] = useState<string | null>(null);
   const [signature, setSignature] = useState<string | null>(null);
 
-  const connection = useMemo(() => new Connection(process.env.REACT_APP_RPC_URL!, 'confirmed'), []);
+  const connection = useMemo(
+    () => new Connection(process.env.REACT_APP_RPC_URL!, "confirmed"),
+    [],
+  );
 
   const maxLeverage = useMemo(() => {
     if (!poolState) return 1;
     // Max LTV is 80%, so max leverage is 1 / (1 - 0.8) = 5x
-    return 1 / (1 - (poolState.maxLtv / 100));
+    return 1 / (1 - poolState.maxLtv / 100);
   }, [poolState]);
 
   const handleLeverageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -38,7 +41,7 @@ const LeverageInterface = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!publicKey || !poolState) {
-      setError('Wallet not connected or pool state not loaded.');
+      setError("Wallet not connected or pool state not loaded.");
       return;
     }
     setIsSubmitting(true);
@@ -55,12 +58,13 @@ const LeverageInterface = () => {
       });
 
       const txid = await sendTransaction(transaction, connection);
-      console.log('Transaction sent:', txid);
+      console.log("Transaction sent:", txid);
       setSignature(txid);
-
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      setError(
+        err instanceof Error ? err.message : "An unknown error occurred.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -71,7 +75,10 @@ const LeverageInterface = () => {
       <h2 className="text-2xl font-bold mb-4 text-white">Leverage Loop</h2>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
-          <label htmlFor="collateral-amount" className="block text-sm font-medium text-gray-300">
+          <label
+            htmlFor="collateral-amount"
+            className="block text-sm font-medium text-gray-300"
+          >
             Collateral Amount (USDC)
           </label>
           <input
@@ -86,7 +93,10 @@ const LeverageInterface = () => {
         </div>
 
         <div className="mb-4">
-          <label htmlFor="leverage-slider" className="block text-sm font-medium text-gray-300">
+          <label
+            htmlFor="leverage-slider"
+            className="block text-sm font-medium text-gray-300"
+          >
             Leverage: {leverage.toFixed(1)}x
           </label>
           <input
@@ -108,11 +118,15 @@ const LeverageInterface = () => {
         <div className="bg-gray-700 p-4 rounded-md mb-4 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-400">Total Position Size:</span>
-            <span className="text-white font-mono">${(collateralAmount * leverage).toFixed(2)}</span>
+            <span className="text-white font-mono">
+              ${(collateralAmount * leverage).toFixed(2)}
+            </span>
           </div>
           <div className="flex justify-between mt-1">
             <span className="text-gray-400">Amount Borrowed:</span>
-            <span className="text-white font-mono">${(collateralAmount * (leverage - 1)).toFixed(2)}</span>
+            <span className="text-white font-mono">
+              ${(collateralAmount * (leverage - 1)).toFixed(2)}
+            </span>
           </div>
         </div>
 
@@ -121,13 +135,21 @@ const LeverageInterface = () => {
           disabled={isSubmitting || !publicKey}
           className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-500 disabled:cursor-not-allowed"
         >
-          {isSubmitting ? 'Submitting...' : 'Execute Loop'}
+          {isSubmitting ? "Submitting..." : "Execute Loop"}
         </button>
 
         {error && <p className="text-red-500 mt-4">{error}</p>}
         {signature && (
           <p className="text-green-500 mt-4">
-            Success! <a href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`} target="_blank" rel="noopener noreferrer" className="underline">View Transaction</a>
+            Success!{" "}
+            <a
+              href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+            >
+              View Transaction
+            </a>
           </p>
         )}
       </form>

@@ -4,7 +4,11 @@
 import { action, internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "../_generated/api";
-import { vOrder, vOrderDirection, vSupportedMarket } from "../schema/limitOrders";
+import {
+  vOrder,
+  vOrderDirection,
+  vSupportedMarket,
+} from "../schema/limitOrders";
 import { orderExecutionWorkPool } from "../workPools";
 import { mints } from "../utils/solana";
 
@@ -17,11 +21,14 @@ export const triggerOrders = action({
   handler: async (ctx, { market, currentPrice, direction }) => {
     // ---- 1. FIND MATCHING ORDERS ----
 
-    const ordersToTrigger = await ctx.runQuery(api.tables.orders.get.getOrdersToTrigger, {
-      market,
-      direction,
-      currentPrice,
-    });
+    const ordersToTrigger = await ctx.runQuery(
+      api.tables.orders.get.getOrdersToTrigger,
+      {
+        market,
+        direction,
+        currentPrice,
+      },
+    );
 
     if (ordersToTrigger.length === 0) {
       // console.log(`${direction} at ${currentPrice} for ${market} triggered ${ordersToTrigger.length} orders `);
@@ -29,8 +36,10 @@ export const triggerOrders = action({
     }
     await Promise.all(
       ordersToTrigger.map((order) =>
-        ctx.runMutation(internal.tables.orders.mutations.markOrderAsTriggered, { orderId: order._id })
-      )
+        ctx.runMutation(internal.tables.orders.mutations.markOrderAsTriggered, {
+          orderId: order._id,
+        }),
+      ),
     );
 
     const argsArray = ordersToTrigger.map((order) => ({
@@ -52,15 +61,19 @@ export const triggerOrders = action({
         //   base: 2,
         // },
         // onComplete: will add it to log our limit order results
-      }
+      },
     );
 
-    console.log(`${direction} at ${currentPrice} for ${market} triggered ${ordersToTrigger.length} orders `);
+    console.log(
+      `${direction} at ${currentPrice} for ${market} triggered ${ordersToTrigger.length} orders `,
+    );
     console.log(`${workIds.length} workers enqueued`);
   },
 });
 
-type ExecutionResult = { ok: true; activityId: string } | { ok: false; error: string };
+type ExecutionResult =
+  | { ok: true; activityId: string }
+  | { ok: false; error: string };
 
 export const executeOrder = internalAction({
   args: {
@@ -81,12 +94,18 @@ export const executeOrder = internalAction({
 
       // Prevent double execution
       if (order.status === "executed" || order.status === "executing") {
-        console.warn("Order already executed or is currently executing:", orderId);
+        console.warn(
+          "Order already executed or is currently executing:",
+          orderId,
+        );
         return { ok: true, activityId: order.executedActivityId ?? "" };
       }
 
       // --- 3. Mark order as executing ---
-      await ctx.runMutation(internal.tables.orders.mutations.markOrderAsExecuting, { orderId });
+      await ctx.runMutation(
+        internal.tables.orders.mutations.markOrderAsExecuting,
+        { orderId },
+      );
 
       let outputMint = undefined;
       if (order.swapTo === "SOL") outputMint = mints.sol;
@@ -94,17 +113,23 @@ export const executeOrder = internalAction({
       //TODO: handle swap to none , this should swap at all
       // have a flag disable swap for that
 
-      const res = await ctx.runAction(internal.actions.dlmmPosition.removeLiquidity.internalRemoveLiquidity, {
-        positionPubkey,
-        percentageToWithdraw,
-        outputMint,
-        trigger: order.direction,
-        userId: order.userId,
-      });
+      const res = await ctx.runAction(
+        internal.actions.dlmmPosition.removeLiquidity.internalRemoveLiquidity,
+        {
+          positionPubkey,
+          percentageToWithdraw,
+          outputMint,
+          trigger: order.direction,
+          userId: order.userId,
+        },
+      );
 
       if (!res || res.status === "failed") {
         console.error("removeLiquidity with limit order failed", res?.errorMsg);
-        await ctx.runMutation(internal.tables.orders.mutations.markOrderAsRetry, { orderId, errorMsg: res.errorMsg });
+        await ctx.runMutation(
+          internal.tables.orders.mutations.markOrderAsRetry,
+          { orderId, errorMsg: res.errorMsg },
+        );
         //handle errors
         return {
           ok: false,
@@ -115,7 +140,10 @@ export const executeOrder = internalAction({
       const activityId = res.result.activityId;
 
       // --- 5. Update order as completed ---
-      await ctx.runMutation(internal.tables.orders.mutations.markOrderAsExecuted, { orderId, activityId });
+      await ctx.runMutation(
+        internal.tables.orders.mutations.markOrderAsExecuted,
+        { orderId, activityId },
+      );
       console.log("✅ Order executed:", orderId, activityId);
       return { ok: true, activityId };
     } catch (err: any) {

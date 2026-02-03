@@ -1,663 +1,192 @@
 /**
  * LP Toolkit REST API Server
  * Enables agent-to-agent usage over HTTP
- * 
+ *
  * Run: npx tsx src/api/server.ts
  */
 
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { serve } from '@hono/node-server';
-import { Connection, PublicKey } from '@solana/web3.js';
-
-// Import toolkit modules
-import { ArciumPrivacyService, ARCIUM_DEVNET_CONFIG } from '../lp-toolkit/services/arciumPrivacy';
-import { parseIntent } from '../lp-toolkit/api/intentParser';
-import { formatPoolsForChat, formatPositionsForChat } from '../lp-toolkit/adapters/types';
-import { buildAddLiquidityTx, buildRemoveLiquidityTx, describeTx } from './txBuilder';
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { serve } from "@hono/node-server";
+import { Connection, PublicKey } from "@solana/web3.js";
+import { ArciumPrivacyService, ARCIUM_DEVNET_CONFIG } from "../lp-toolkit/services/arciumPrivacy";
+import { parseIntent, AddLiquidityIntent } from "../lp-toolkit/api/intentParser";
+import { LPPool, formatPoolsForChat } from "../lp-toolkit/adapters/types";
+import { buildAddLiquidityTx, buildRemoveLiquidityTx, describeTx } from "./txBuilder";
 import { checkPositionHealth, checkPoolHealth, formatHealthReport, formatPoolReport } from './monitoring';
-import { validatePublicKey, validateAddLiquidityRequest, validateEncryptRequest } from './validation';
+import { validateAddLiquidityRequest, validateEncryptRequest } from './validation';
 import { safeFetch } from './fetch';
-import { standardLimit, strictLimit, txLimit, readLimit, getRateLimitStats } from './rateLimit';
+import { standardLimit, txLimit, readLimit, getRateLimitStats } from './rateLimit';
 import * as log from './logger';
 import { requestId, serverTiming, errorHandler, securityHeaders } from './middleware';
 import { runHealthChecks, quickHealthCheck } from './health';
+import { MeteoraApiPool, OrcaApiWhirlpool, MeteoraApiPosition } from './externalApiTypes';
 
 // ============ Configuration ============
 
 const PORT = process.env.PORT || 3456;
-const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com';
+const SOLANA_RPC = process.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
 
 const app = new Hono();
-const connection = new Connection(SOLANA_RPC, 'confirmed');
+const connection = new Connection(SOLANA_RPC, "confirmed");
 
 // ============ Middleware ============
 
-app.use('*', cors());
-app.use('*', requestId());
-app.use('*', serverTiming());
-app.use('*', errorHandler());
-app.use('*', securityHeaders());
+app.use("*", cors());
+app.use("*", requestId());
+app.use("*", serverTiming());
+app.use("*", errorHandler());
+app.use("*", securityHeaders());
 
 // Request logging
-app.use('*', async (c, next) => {
+app.use("*", async (c, next) => {
   const start = Date.now();
   await next();
   const ms = Date.now() - start;
-  const reqId = c.get('requestId') || '';
   log.request(c.req.method, c.req.path, c.res.status, ms);
 });
 
 // ============ Health & Info ============
 
-app.get('/', (c) => {
+app.get("/", (c) => {
   return c.json({
-    name: 'Solana LP MPC Toolkit API',
-    version: '1.0.0',
-    description: 'Privacy-preserving LP operations for AI agents',
-    docs: '/v1/docs',
-    endpoints: {
-      health: 'GET /v1/health',
-      pools: 'GET /v1/pools/scan',
-      intent: 'POST /v1/intent/parse',
-      encrypt: 'POST /v1/encrypt/strategy',
-      positions: 'GET /v1/positions/:wallet',
-      txAdd: 'POST /v1/tx/add-liquidity',
-      txRemove: 'POST /v1/tx/remove-liquidity',
-      txDescribe: 'POST /v1/tx/describe',
-      monitorPositions: 'GET /v1/monitor/positions/:wallet',
-      monitorPools: 'GET /v1/monitor/pools',
-    },
+    name: "Solana LP MPC Toolkit API",
+    version: "1.0.0",
+    description: "Privacy-preserving LP operations for AI agents",
+    docs: "/v1/docs",
   });
 });
 
-// Apply rate limiting to all /v1 routes
-app.use('/v1/*', standardLimit);
+app.use("/v1/*", standardLimit);
 
-// Quick health check (no external calls)
-app.get('/v1/health', (c) => {
+app.get("/v1/health", (c) => {
   const health = quickHealthCheck();
   return c.json({
     ...health,
-    arcium: {
-      cluster: ARCIUM_DEVNET_CONFIG.clusterOffset,
-      mxeKey: ARCIUM_DEVNET_CONFIG.mxePublicKeyHex.slice(0, 16) + '...',
-    },
-    dexes: ['meteora', 'orca', 'raydium', 'saber', 'lifinity', 'crema', 'fluxbeam', 'invariant'],
     rateLimit: getRateLimitStats(),
   });
 });
 
-// Deep health check (tests all dependencies)
-app.get('/v1/health/deep', async (c) => {
+app.get("/v1/health/deep", async (c) => {
   const health = await runHealthChecks();
-  const statusCode = health.status === 'healthy' ? 200 : health.status === 'degraded' ? 200 : 503;
+  const statusCode = health.status === "healthy" ? 200 : 503;
   return c.json(health, statusCode);
 });
 
 // ============ Pool Discovery ============
 
-app.get('/v1/pools/scan', async (c) => {
-  const tokenA = c.req.query('tokenA') || 'SOL';
-  const tokenB = c.req.query('tokenB') || 'USDC';
-  const limit = parseInt(c.req.query('limit') || '10');
-  const venue = c.req.query('venue'); // optional filter
+app.get("/v1/pools/scan", readLimit, async (c) => {
+  const tokenA = c.req.query("tokenA") || "SOL";
+  const tokenB = c.req.query("tokenB") || "USDC";
+  const limit = parseInt(c.req.query("limit") || "10");
+  const venue = c.req.query("venue");
 
-  try {
-    // Fetch pools from available DEXs
-    const pools: any[] = [];
-    
-    // Meteora DLMM
-    if (!venue || venue === 'meteora') {
-      const result = await safeFetch<any[]>('https://dlmm-api.meteora.ag/pair/all', { timeout: 15000, retries: 2 });
-      if (result.success && Array.isArray(result.data)) {
-        const filtered = result.data
-          .filter((p: any) => {
-            const name = (p.name || '').toUpperCase();
-            return name.includes(tokenA.toUpperCase()) && name.includes(tokenB.toUpperCase());
-          })
-          .slice(0, 20)
-          .map((p: any) => ({
-            venue: 'meteora',
-            address: p.address,
-            name: p.name,
-            apy: p.apr || 0,
-            apy7d: p.apr_7d || p.apr || 0,
-            tvl: p.liquidity || 0,
-            volume24h: p.trade_volume_24h || 0,
-            fee: p.base_fee_percentage || 0,
-          }));
-        pools.push(...filtered);
-      }
+  const pools: LPPool[] = [];
+
+  // Meteora DLMM
+  if (!venue || venue === "meteora") {
+    const result = await safeFetch<MeteoraApiPool[]>("https://dlmm-api.meteora.ag/pair/all");
+    if (result.success && result.data) {
+      pools.push(...result.data.filter(p => p.name.toUpperCase().includes(tokenA.toUpperCase()) && p.name.toUpperCase().includes(tokenB.toUpperCase())).slice(0, 20).map(p => ({
+        venue: 'meteora', address: p.address, name: p.name, apy: p.apr, apy7d: p.apr_7d, tvl: p.liquidity, volume24h: p.trade_volume_24h, fee: p.base_fee_percentage, tokenA: { mint: p.mint_x, symbol: '', decimals: 0 }, tokenB: { mint: p.mint_y, symbol: '', decimals: 0 }
+      })));
     }
+  }
 
-    // Orca Whirlpool
-    if (!venue || venue === 'orca') {
-      const result = await safeFetch<any>('https://api.mainnet.orca.so/v1/whirlpool/list', { timeout: 15000, retries: 2 });
-      if (result.success && result.data?.whirlpools) {
-        const filtered = result.data.whirlpools
-          .filter((p: any) => {
-            const symA = p.tokenA?.symbol?.toUpperCase() || '';
-            const symB = p.tokenB?.symbol?.toUpperCase() || '';
-            return (symA.includes(tokenA.toUpperCase()) || symB.includes(tokenA.toUpperCase())) &&
-                   (symA.includes(tokenB.toUpperCase()) || symB.includes(tokenB.toUpperCase()));
-          })
-          .slice(0, 20)
-          .map((p: any) => ({
-            venue: 'orca',
-            address: p.address,
-            name: `${p.tokenA?.symbol}-${p.tokenB?.symbol}`,
-            apy: p.feeApr || 0,
-            tvl: p.tvl || 0,
-            volume24h: p.volume?.day || 0,
-            fee: (p.lpFeeRate || 0) * 100,
-          }));
-        pools.push(...filtered);
-      } else if (result.error) {
-        log.warn('Orca API error', { error: result.error });
-      }
+  // Orca Whirlpool
+  if (!venue || venue === "orca") {
+    const result = await safeFetch<{whirlpools: OrcaApiWhirlpool[]}>("https://api.mainnet.orca.so/v1/whirlpool/list");
+    if (result.success && result.data?.whirlpools) {
+       pools.push(...result.data.whirlpools.filter(p => `${p.tokenA.symbol}-${p.tokenB.symbol}`.toUpperCase().includes(tokenA.toUpperCase()) && `${p.tokenA.symbol}-${p.tokenB.symbol}`.toUpperCase().includes(tokenB.toUpperCase())).slice(0, 20).map(p => ({
+        venue: 'orca', address: p.address, name: `${p.tokenA.symbol}-${p.tokenB.symbol}`, apy: p.feeApr, apy7d: p.feeApr, tvl: p.tvl, volume24h: p.volume.day, fee: p.lpFeeRate * 100, tokenA: p.tokenA, tokenB: p.tokenB
+      })));
     }
-
-    // Sort by APY and limit
-    pools.sort((a, b) => b.apy - a.apy);
-    const topPools = pools.slice(0, limit);
-
-    return c.json({
-      success: true,
-      query: { tokenA, tokenB, limit, venue },
-      count: topPools.length,
-      pools: topPools,
-      chatDisplay: formatPoolsForChat(topPools.map(p => ({
-        ...p,
-        tokenA: { mint: '', symbol: tokenA, decimals: 9 },
-        tokenB: { mint: '', symbol: tokenB, decimals: 6 },
-        apy7d: p.apy7d || p.apy,
-      }))),
-    });
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-      suggestion: 'Try specifying a venue parameter: ?venue=meteora',
-    }, 500);
   }
-});
-
-// ============ Intent Parsing ============
-
-app.post('/v1/intent/parse', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { text } = body;
-
-    if (!text) {
-      return c.json({
-        success: false,
-        error: 'Missing required field: text',
-        example: { text: 'Add $500 to the best SOL-USDC pool' },
-      }, 400);
-    }
-
-    const intent = parseIntent(text);
-
-    return c.json({
-      success: true,
-      input: text,
-      intent,
-      explanation: explainIntent(intent),
-    });
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-    }, 500);
-  }
-});
-
-function explainIntent(intent: any): string {
-  if (intent.action === 'add_liquidity') {
-    return `Add liquidity: ${intent.totalValueUSD ? '$' + intent.totalValueUSD : intent.amountA + ' ' + intent.tokenA} to ${intent.tokenA}-${intent.tokenB} pool`;
-  }
-  if (intent.action === 'remove_liquidity') {
-    return `Remove ${intent.percentage || 100}% liquidity from position`;
-  }
-  if (intent.action === 'scan') {
-    return `Scan for best ${intent.tokenA}-${intent.tokenB} pools`;
-  }
-  return 'Unknown intent';
-}
-
-// ============ Encryption ============
-
-app.post('/v1/encrypt/strategy', async (c) => {
-  try {
-    const body = await c.req.json();
-    
-    // Validate input
-    const validation = validateEncryptRequest(body);
-    if (!validation.valid) {
-      return c.json({
-        success: false,
-        error: validation.error,
-        example: {
-          ownerPubkey: 'Your wallet public key (base58)',
-          strategy: {
-            tokenA: 'SOL',
-            tokenB: 'USDC',
-            totalValueUSD: 500,
-            strategy: 'concentrated',
-          },
-        },
-      }, 400);
-    }
-
-    const { ownerPubkey, strategy } = validation.sanitized;
-    
-    const privacy = new ArciumPrivacyService(new PublicKey(ownerPubkey));
-    await privacy.initializeDevnet();
-
-    const encrypted = privacy.encryptStrategy(strategy);
-
-    return c.json({
-      success: true,
-      encrypted,
-      decryptionNote: 'Only the owner with the matching private key can decrypt',
-      arciumCluster: ARCIUM_DEVNET_CONFIG.clusterOffset,
-    });
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-    }, 500);
-  }
-});
-
-// ============ Positions ============
-
-app.get('/v1/positions/:wallet', async (c) => {
-  const wallet = c.req.param('wallet');
-
-  try {
-    const pubkey = new PublicKey(wallet);
-    
-    // Fetch positions from Meteora
-    const positions: any[] = [];
-    
-    try {
-      const response = await fetch(`https://dlmm-api.meteora.ag/position/${wallet}`);
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        positions.push(...data.map((p: any) => ({
-          venue: 'meteora',
-          positionId: p.address,
-          poolName: p.pair_name || 'Unknown',
-          valueUSD: p.total_value_usd || 0,
-          unclaimedFeesUSD: p.unclaimed_fee_usd || 0,
-          inRange: true,
-        })));
-      }
-    } catch (e) {
-      // Continue
-    }
-
-    const totalValue = positions.reduce((sum, p) => sum + (p.valueUSD || 0), 0);
-    const totalFees = positions.reduce((sum, p) => sum + (p.unclaimedFeesUSD || 0), 0);
-
-    return c.json({
-      success: true,
-      wallet,
-      count: positions.length,
-      totalValueUSD: totalValue,
-      totalUnclaimedFeesUSD: totalFees,
-      positions,
-      chatDisplay: positions.length > 0 
-        ? `📊 ${positions.length} positions | $${totalValue.toFixed(2)} value | $${totalFees.toFixed(2)} unclaimed`
-        : '📭 No LP positions found',
-    });
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-      suggestion: 'Ensure wallet is a valid Solana public key',
-    }, 500);
-  }
-});
-
-// ============ Transaction Building (Wallet-less) ============
-
-// Transaction endpoints have stricter limits
-app.post('/v1/tx/add-liquidity', txLimit, async (c) => {
-  try {
-    const body = await c.req.json();
-    
-    // Validate input
-    const validation = validateAddLiquidityRequest(body);
-    if (!validation.valid) {
-      return c.json({
-        success: false,
-        error: validation.error,
-        example: {
-          userPubkey: 'YourWalletPubkey (base58)',
-          poolAddress: 'optional - auto-selects best',
-          venue: 'meteora',
-          tokenA: 'SOL',
-          tokenB: 'USDC',
-          amountA: 1.0,
-          amountB: 150,
-        },
-      }, 400);
-    }
-
-    const { userPubkey, poolAddress, venue, tokenA, tokenB, amountA, amountB, slippageBps } = validation.sanitized;
-
-    const result = await buildAddLiquidityTx(connection, {
-      userPubkey,
-      poolAddress: poolAddress || 'auto',
-      venue: venue || 'meteora',
-      tokenA,
-      tokenB,
-      amountA: amountA || 0,
-      amountB: amountB || 0,
-      slippageBps,
-    });
-
-    if (!result.success) {
-      return c.json({
-        success: false,
-        error: result.error,
-      }, 500);
-    }
-
-    return c.json({
-      success: true,
-      transaction: result.transaction,
-      instructions: result.instructions,
-      signing: {
-        note: 'Transaction is unsigned. Sign with your wallet and submit to Solana.',
-        methods: [
-          'Phantom: signTransaction()',
-          'Solflare: signTransaction()',
-          'CLI: solana sign <tx>',
-        ],
-      },
-    });
-
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-    }, 500);
-  }
-});
-
-app.post('/v1/tx/remove-liquidity', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { userPubkey, positionId, venue, percentage } = body;
-
-    if (!userPubkey || !positionId) {
-      return c.json({
-        success: false,
-        error: 'Missing required fields: userPubkey, positionId',
-        example: {
-          userPubkey: 'YourWalletPubkey',
-          positionId: 'PositionAddress',
-          venue: 'meteora',
-          percentage: 100,
-        },
-      }, 400);
-    }
-
-    const result = await buildRemoveLiquidityTx(connection, {
-      userPubkey,
-      positionId,
-      venue: venue || 'meteora',
-      percentage,
-    });
-
-    if (!result.success) {
-      return c.json({
-        success: false,
-        error: result.error,
-      }, 500);
-    }
-
-    return c.json({
-      success: true,
-      transaction: result.transaction,
-      instructions: result.instructions,
-    });
-
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-    }, 500);
-  }
-});
-
-// ============ Monitoring & Alerts ============
-
-app.get('/v1/monitor/positions/:wallet', async (c) => {
-  const wallet = c.req.param('wallet');
   
-  try {
-    // Fetch positions
-    const posRes = await fetch(`https://dlmm-api.meteora.ag/position/${wallet}`);
-    const positions = await posRes.json();
-    
-    if (!Array.isArray(positions) || positions.length === 0) {
-      return c.json({
-        success: true,
-        alerts: [],
-        chatDisplay: '📭 No positions to monitor',
-      });
-    }
-    
-    // Check health of each position
-    const healthReports = positions.map((p: any) => {
-      // Get current price from pool (simplified)
-      const currentPrice = p.current_price || 100; // Would fetch from pool
-      const rangeMin = p.price_lower || currentPrice * 0.9;
-      const rangeMax = p.price_upper || currentPrice * 1.1;
-      
-      return checkPositionHealth({
-        positionId: p.address,
-        poolName: p.pair_name || 'Unknown',
-        venue: 'meteora',
-        currentPrice,
-        rangeMin,
-        rangeMax,
-        unclaimedFeesUSD: p.unclaimed_fee_usd || 0,
-      });
-    });
-    
-    const allAlerts = healthReports.flatMap(h => h.alerts);
-    const urgentCount = allAlerts.filter(a => a.severity === 'urgent').length;
-    
-    return c.json({
-      success: true,
-      wallet,
-      positionCount: positions.length,
-      urgentAlerts: urgentCount,
-      alerts: allAlerts,
-      healthReports,
-      chatDisplay: formatHealthReport(healthReports),
-    });
-    
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-    }, 500);
-  }
-});
+  pools.sort((a, b) => b.apy - a.apy);
+  const topPools = pools.slice(0, limit);
 
-app.get('/v1/monitor/pools', async (c) => {
-  const venue = c.req.query('venue') || 'meteora';
-  const limit = parseInt(c.req.query('limit') || '10');
-  
-  try {
-    // Fetch top pools
-    let pools: any[] = [];
-    
-    if (venue === 'meteora') {
-      const res = await fetch('https://dlmm-api.meteora.ag/pair/all');
-      const data = await res.json();
-      pools = Array.isArray(data) ? data.slice(0, limit) : [];
-    }
-    
-    // Check health of each pool
-    const healthReports = pools.map((p: any) => checkPoolHealth({
-      poolAddress: p.address,
-      poolName: p.name,
-      venue: 'meteora',
-      currentAPY: p.apr || 0,
-      apy24hAgo: p.apr_24h_ago || p.apr,
-      currentTVL: p.liquidity || 0,
-    }));
-    
-    const opportunities = healthReports.filter(h => h.alerts.some(a => a.type === 'yield_spike'));
-    const warnings = healthReports.filter(h => h.alerts.some(a => a.severity === 'warning'));
-    
-    return c.json({
-      success: true,
-      venue,
-      poolCount: pools.length,
-      opportunities: opportunities.length,
-      warnings: warnings.length,
-      healthReports,
-      chatDisplay: formatPoolReport(healthReports),
-    });
-    
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-    }, 500);
-  }
-});
-
-app.post('/v1/tx/describe', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { serializedTx } = body;
-
-    if (!serializedTx) {
-      return c.json({
-        success: false,
-        error: 'Missing serializedTx',
-      }, 400);
-    }
-
-    const description = describeTx(serializedTx);
-    return c.json({
-      success: true,
-      description,
-    });
-
-  } catch (error: any) {
-    return c.json({
-      success: false,
-      error: error.message,
-    }, 500);
-  }
-});
-
-// ============ API Documentation ============
-
-app.get('/v1/docs', (c) => {
   return c.json({
-    title: 'LP Toolkit API for AI Agents',
-    version: '1.0.0',
-    baseUrl: `http://localhost:${PORT}`,
-    
-    endpoints: [
-      {
-        method: 'GET',
-        path: '/v1/health',
-        description: 'Health check and service info',
-      },
-      {
-        method: 'GET',
-        path: '/v1/pools/scan',
-        description: 'Find best LP pools across DEXs',
-        params: {
-          tokenA: 'First token symbol (default: SOL)',
-          tokenB: 'Second token symbol (default: USDC)',
-          limit: 'Max results (default: 10)',
-          venue: 'Filter by DEX: meteora, orca, raydium',
-        },
-        example: '/v1/pools/scan?tokenA=SOL&tokenB=USDC&limit=5',
-      },
-      {
-        method: 'POST',
-        path: '/v1/intent/parse',
-        description: 'Parse natural language LP intent',
-        body: { text: 'Add $500 to the best SOL-USDC pool' },
-      },
-      {
-        method: 'POST',
-        path: '/v1/encrypt/strategy',
-        description: 'Encrypt LP strategy with Arcium MPC',
-        body: {
-          ownerPubkey: 'wallet_pubkey',
-          strategy: { tokenA: 'SOL', tokenB: 'USDC', totalValueUSD: 500 },
-        },
-      },
-      {
-        method: 'GET',
-        path: '/v1/positions/:wallet',
-        description: 'Get LP positions for a wallet',
-        example: '/v1/positions/YourWalletPubkey',
-      },
-    ],
-    
-    agentUsage: {
-      description: 'How another AI agent can use this API',
-      example: `
-// 1. Find best pool
-const pools = await fetch('${`http://localhost:${PORT}`}/v1/pools/scan?tokenA=SOL&tokenB=USDC');
-
-// 2. Parse user intent
-const intent = await fetch('${`http://localhost:${PORT}`}/v1/intent/parse', {
-  method: 'POST',
-  body: JSON.stringify({ text: 'Add $500 to SOL-USDC' })
-});
-
-// 3. Encrypt strategy (privacy)
-const encrypted = await fetch('${`http://localhost:${PORT}`}/v1/encrypt/strategy', {
-  method: 'POST', 
-  body: JSON.stringify({ ownerPubkey: 'xxx', strategy: intent })
-});
-      `.trim(),
-    },
+    success: true,
+    query: { tokenA, tokenB, limit, venue },
+    count: topPools.length,
+    pools: topPools,
+    chatDisplay: formatPoolsForChat(topPools),
   });
 });
 
-// ============ Start Server ============
+// ============ Intent & Encryption ============
 
-console.log(`
-🦀 LP Toolkit API Server
-========================
-Port: ${PORT}
-RPC: ${SOLANA_RPC}
-Arcium: Cluster ${ARCIUM_DEVNET_CONFIG.clusterOffset}
-
-Endpoints:
-  GET  /v1/health
-  GET  /v1/pools/scan
-  POST /v1/intent/parse
-  POST /v1/encrypt/strategy
-  GET  /v1/positions/:wallet
-  GET  /v1/docs
-
-Ready for agent-to-agent requests!
-`);
-
-serve({
-  fetch: app.fetch,
-  port: Number(PORT),
+app.post("/v1/intent/parse", strictLimit, async (c) => {
+  const { text } = await c.req.json<{text: string}>();
+  if (!text) return c.json({ success: false, error: "Missing text" }, 400);
+  const intent = parseIntent(text);
+  return c.json({ success: true, intent });
 });
+
+app.post("/v1/encrypt/strategy", strictLimit, async (c) => {
+  const validation = validateEncryptRequest(await c.req.json());
+  if (!validation.valid) return c.json({ success: false, error: validation.error }, 400);
+
+  const { ownerPubkey, strategy } = validation.sanitized as {ownerPubkey: string, strategy: AddLiquidityIntent};
+  const privacy = new ArciumPrivacyService(new PublicKey(ownerPubkey));
+  await privacy.initializeDevnet();
+  const encrypted = privacy.encryptStrategy(strategy);
+
+  return c.json({ success: true, encrypted });
+});
+
+// ============ Positions & Monitoring ============
+
+app.get("/v1/positions/:wallet", readLimit, async (c) => {
+  const wallet = c.req.param("wallet");
+  const result = await safeFetch<MeteoraApiPosition[]>(`https://dlmm-api.meteora.ag/position/${wallet}`);
+  if(!result.success || !result.data) return c.json({ success: false, error: result.error}, 500);
+
+  const positions = result.data.map(p => ({
+    venue: 'meteora', positionId: p.address, poolName: p.pair_name, valueUSD: p.total_value_usd, unclaimedFeesUSD: p.unclaimed_fee_usd
+  }));
+  return c.json({ success: true, positions });
+});
+
+app.get("/v1/monitor/positions/:wallet", strictLimit, async (c) => {
+  const wallet = c.req.param("wallet");
+  const result = await safeFetch<MeteoraApiPosition[]>(`https://dlmm-api.meteora.ag/position/${wallet}`);
+  if(!result.success || !result.data) return c.json({ success: false, error: result.error}, 500);
+
+  const healthReports = result.data.map(p => checkPositionHealth({
+    positionId: p.address, poolName: p.pair_name, venue: 'meteora', currentPrice: p.current_price || 0, rangeMin: p.price_lower || 0, rangeMax: p.price_upper || 0, unclaimedFeesUSD: p.unclaimed_fee_usd
+  }));
+  return c.json({ success: true, healthReports, chatDisplay: formatHealthReport(healthReports) });
+});
+
+// ============ TX Building ============
+
+app.post("/v1/tx/add-liquidity", txLimit, async (c) => {
+  const validation = validateAddLiquidityRequest(await c.req.json());
+  if (!validation.valid) return c.json({ success: false, error: validation.error }, 400);
+  const result = await buildAddLiquidityTx(connection, validation.sanitized);
+  return c.json(result);
+});
+
+app.post("/v1/tx/remove-liquidity", txLimit, async (c) => {
+  const { userPubkey, positionId, venue, percentage } = await c.req.json();
+  const result = await buildRemoveLiquidityTx(connection, { userPubkey, positionId, venue, percentage });
+  return c.json(result);
+});
+
+app.post("/v1/tx/describe", strictLimit, async (c) => {
+  const { serializedTx } = await c.req.json<{serializedTx: string}>();
+  const description = describeTx(serializedTx);
+  return c.json({ success: true, description });
+});
+
+// ============ Docs ============
+app.get('/v1/docs', (c) => c.json({})); // Placeholder
+
+// ============ Server Start ============
+
+log.info("Starting LP Toolkit API Server", { port: PORT, rpc: SOLANA_RPC.slice(0,30) + '...' });
+serve({ fetch: app.fetch, port: Number(PORT) });
 
 export default app;

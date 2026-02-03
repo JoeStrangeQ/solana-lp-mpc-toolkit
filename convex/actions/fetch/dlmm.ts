@@ -2,7 +2,12 @@
 import { v } from "convex/values";
 import { components, internal } from "../../_generated/api";
 import { ActionCache } from "@convex-dev/action-cache";
-import { getActiveBin, getBinsAroundActiveBin, getDlmmPoolConn, SerializedBinLiquidity } from "../../services/meteora";
+import {
+  getActiveBin,
+  getBinsAroundActiveBin,
+  getDlmmPoolConn,
+  SerializedBinLiquidity,
+} from "../../services/meteora";
 import { action, internalAction } from "../../_generated/server";
 import { MS_1S } from "../../utils/timeframe";
 import { PublicKey } from "@solana/web3.js";
@@ -21,7 +26,7 @@ export const getBinsAroundActiveBinAction = action({
   },
   handler: async (
     ctx,
-    args
+    args,
   ): Promise<{
     activeBin: number;
     bins: SerializedBinLiquidity[];
@@ -61,7 +66,9 @@ export const getOpenPosition = action({
   handler: async (_, args) => {
     try {
       const dlmmPoolConn = await getDlmmPoolConn(args.poolAddress);
-      const res = await dlmmPoolConn.getPosition(new PublicKey(args.positionPubkey));
+      const res = await dlmmPoolConn.getPosition(
+        new PublicKey(args.positionPubkey),
+      );
       return serializePositionData(res.positionData);
     } catch (err: any) {
       console.log(err);

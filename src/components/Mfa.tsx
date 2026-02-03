@@ -11,7 +11,8 @@ import { useDisableBackgroundScroll } from "~/hooks/useDisableBackgroundScroll";
 
 export function MfaReminderModal() {
   const { user } = usePrivy();
-  const { showMfaEnrollmentModal, closeMfaEnrollmentModal } = useMfaEnrollment();
+  const { showMfaEnrollmentModal, closeMfaEnrollmentModal } =
+    useMfaEnrollment();
   const [showConfirmation, setShowConfirmation] = useState(false);
   const isOpen = useMfaReminderStore((s) => s.isOpen);
   const close = useMfaReminderStore((s) => s.close);
@@ -138,7 +139,11 @@ export function MfaReminderModal() {
                       No, Set Up MFA
                     </Button>
 
-                    <Button variant="danger" className="py-1.5 px-3 rounded-lg text-xs" onClick={close}>
+                    <Button
+                      variant="danger"
+                      className="py-1.5 px-3 rounded-lg text-xs"
+                      onClick={close}
+                    >
                       Yes, don’t protect my wallet
                     </Button>
                   </>

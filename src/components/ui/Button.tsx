@@ -40,7 +40,14 @@ const variantsHover: Record<ButtonVariant, string> = {
   liquidDanger: "hover:bg-red/15",
 };
 
-export function Button({ children, onClick, variant = "primary", loading, disabled, className }: ButtonProps) {
+export function Button({
+  children,
+  onClick,
+  variant = "primary",
+  loading,
+  disabled,
+  className,
+}: ButtonProps) {
   return (
     <motion.button
       initial={{ opacity: 0, scale: 0.95 }}
@@ -51,8 +58,10 @@ export function Button({ children, onClick, variant = "primary", loading, disabl
       className={cn(
         "flex items-center justify-center py-3 px-4  h-min rounded-full select-none whitespace-nowrap font-semibold gap-2",
         variants[variant],
-        disabled ? "opacity-20" : `cursor-pointer hover-effect active:scale-95 ${variantsHover[variant]}`,
-        className
+        disabled
+          ? "opacity-20"
+          : `cursor-pointer hover-effect active:scale-95 ${variantsHover[variant]}`,
+        className,
       )}
       disabled={disabled}
     >

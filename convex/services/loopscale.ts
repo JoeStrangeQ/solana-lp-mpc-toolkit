@@ -5,7 +5,8 @@ import z from "zod";
 import { vLoopscaleQuote } from "../actions/dlmmPosition/createPosition";
 
 export const LOOPSCALE_BASE_URL = "https://case.loopscale.com/v1";
-export const LOOPSCALE_PROGRAM_ID = "sboXjDPocEasbTKokLUiNb1NrnikbBBZCooXKrjZkZd";
+export const LOOPSCALE_PROGRAM_ID =
+  "sboXjDPocEasbTKokLUiNb1NrnikbBBZCooXKrjZkZd";
 
 type flashBorrowReq = {
   depositMint: Address;
@@ -94,7 +95,9 @@ const LoopscaleFlashBorrowResponseZ = z.object({
   loanAddress: z.string(),
 });
 
-type LoopscaleFlashBorrowResponse = z.infer<typeof LoopscaleFlashBorrowResponseZ>;
+type LoopscaleFlashBorrowResponse = z.infer<
+  typeof LoopscaleFlashBorrowResponseZ
+>;
 
 // -------------------- Repay types --------------------
 type RepayParam = {
@@ -184,7 +187,11 @@ export async function flashBorrow({
             strategyParameters: {
               minBinId: lowerBinId,
               maxBinId: upperBinId,
-              strategyType: toStrategyType({ liquidityShape, xRawAmount, yRawAmount }),
+              strategyType: toStrategyType({
+                liquidityShape,
+                xRawAmount,
+                yRawAmount,
+              }),
               parameteres: new Array(64).fill(0),
             },
           },
@@ -205,18 +212,23 @@ export async function flashBorrow({
   console.log("flashBorrow request (object)", requestBody);
   console.log("wallet address...:", userAddress);
   console.log("req", JSON.stringify(requestBody));
-  const response = await fetch(`${LOOPSCALE_BASE_URL}/markets/creditbook/flash_borrow`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "user-wallet": userAddress,
+  const response = await fetch(
+    `${LOOPSCALE_BASE_URL}/markets/creditbook/flash_borrow`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "user-wallet": userAddress,
+      },
+      body: JSON.stringify(requestBody),
     },
-    body: JSON.stringify(requestBody),
-  });
+  );
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`Loopscale flash_borrow API error: ${response.status}: ${errorText}`);
+    throw new Error(
+      `Loopscale flash_borrow API error: ${response.status}: ${errorText}`,
+    );
   }
 
   const responseData = await response.json();
@@ -247,7 +259,9 @@ export async function repayLoan({
   const requestBody: RepayReq = {
     loan: loanAddress,
     repayParams,
-    collateralWithdrawalParams: collateralWithdrawalParams.length ? collateralWithdrawalParams : undefined,
+    collateralWithdrawalParams: collateralWithdrawalParams.length
+      ? collateralWithdrawalParams
+      : undefined,
     cpiIxs: cpiIxs.length ? cpiIxs : [],
     unifySetup: unifySetup || undefined,
   };
@@ -256,18 +270,23 @@ export async function repayLoan({
   console.log("wallet address...:", userAddress);
   console.log("repay req", JSON.stringify(requestBody));
 
-  const response = await fetch(`${LOOPSCALE_BASE_URL}/markets/creditbook/repay`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "user-wallet": userAddress,
+  const response = await fetch(
+    `${LOOPSCALE_BASE_URL}/markets/creditbook/repay`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "user-wallet": userAddress,
+      },
+      body: JSON.stringify(requestBody),
     },
-    body: JSON.stringify(requestBody),
-  });
+  );
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`Loopscale repay API error: ${response.status}: ${errorText}`);
+    throw new Error(
+      `Loopscale repay API error: ${response.status}: ${errorText}`,
+    );
   }
 
   const responseData = await response.json();
@@ -287,18 +306,23 @@ export async function loopscaleClaimDlmmFees({
     loan: loanAddress,
     positionAddress: positionPubkey,
   };
-  const response = await fetch(`${LOOPSCALE_BASE_URL}/markets/creditbook/collateral/dlmm/claim_fees`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "user-wallet": userAddress,
+  const response = await fetch(
+    `${LOOPSCALE_BASE_URL}/markets/creditbook/collateral/dlmm/claim_fees`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "user-wallet": userAddress,
+      },
+      body: JSON.stringify(requestBody),
     },
-    body: JSON.stringify(requestBody),
-  });
+  );
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`Loopscale repay API error: ${response.status}: ${errorText}`);
+    throw new Error(
+      `Loopscale repay API error: ${response.status}: ${errorText}`,
+    );
   }
 
   const responseData = await response.json();

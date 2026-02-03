@@ -14,7 +14,10 @@ const JitoBundleResponseZ = z.object({
 export const JitoTipInfoZ = z.object({
   time: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/, "Invalid ISO timestamp"),
+    .regex(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})$/,
+      "Invalid ISO timestamp",
+    ),
   landed_tips_25th_percentile: z.number(),
   landed_tips_50th_percentile: z.number(),
   landed_tips_75th_percentile: z.number(),
@@ -66,7 +69,10 @@ const SimulateBundleErrorZ = z.object({
 });
 
 // ---- Union the two ----
-export const SimulateBundleResponseZ = z.union([SimulateBundleSuccessZ, SimulateBundleErrorZ]);
+export const SimulateBundleResponseZ = z.union([
+  SimulateBundleSuccessZ,
+  SimulateBundleErrorZ,
+]);
 
 const JitoBundleStatusZ = z.object({
   jsonrpc: z.string(),
@@ -83,7 +89,7 @@ const JitoBundleStatusZ = z.object({
           slot: z.number(),
           confirmation_status: z.enum(["processed", "confirmed", "finalized"]),
           err: z.record(z.any()).nullable(),
-        })
+        }),
       )
       .nullable(),
   }),
@@ -179,7 +185,9 @@ export async function simulateBundle(txs: string[]) {
   const txResults = parsed.data.result.value.transactionResults;
   const failedTx = txResults.find((r) => r.err);
   if (failedTx) {
-    throw new Error(`Simulation failed: ${failedTx.err?.message ?? JSON.stringify(failedTx.err)}`);
+    throw new Error(
+      `Simulation failed: ${failedTx.err?.message ?? JSON.stringify(failedTx.err)}`,
+    );
   }
 
   return parsed.data.result.value;
@@ -195,7 +203,9 @@ export async function getJitoTipInfo(): Promise<JitoTipInfo> {
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to fetch Jito tip info: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `Failed to fetch Jito tip info: ${res.status} ${res.statusText}`,
+    );
   }
 
   const json = await res.json();
@@ -226,7 +236,9 @@ export async function getJitoBundleStatus(bundleId: string) {
   });
 
   if (!res.ok) {
-    throw new Error(`getBundleStatuses failed: ${res.status} ${res.statusText}`);
+    throw new Error(
+      `getBundleStatuses failed: ${res.status} ${res.statusText}`,
+    );
   }
 
   const json = await res.json();
@@ -276,7 +288,8 @@ export async function getJitoInflightBundleStatus(bundleId: string) {
     }),
   });
 
-  if (!res.ok) throw new Error(`getInflightBundleStatuses failed: ${res.status}`);
+  if (!res.ok)
+    throw new Error(`getInflightBundleStatuses failed: ${res.status}`);
 
   const json = await res.json();
   console.log("inflight", JSON.stringify(json));

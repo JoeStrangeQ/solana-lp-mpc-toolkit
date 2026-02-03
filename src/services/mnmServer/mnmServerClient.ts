@@ -14,7 +14,10 @@ export class MnMServerClient {
   private _isConnected = false;
   private _isConnecting = false;
   private _connectPromise: Promise<void> | null = null;
-  private quoteListeners = new Map<string, (update: QuoteUpdateMessage) => void>();
+  private quoteListeners = new Map<
+    string,
+    (update: QuoteUpdateMessage) => void
+  >();
 
   private onErrorCallback?: (msg: string) => void;
   private onHelloCallback?: (address: string) => void;
@@ -69,7 +72,9 @@ export class MnMServerClient {
       this.ws.onmessage = async (evt) => {
         try {
           const buffer =
-            evt.data instanceof Blob ? new Uint8Array(await evt.data.arrayBuffer()) : new Uint8Array(evt.data);
+            evt.data instanceof Blob
+              ? new Uint8Array(await evt.data.arrayBuffer())
+              : new Uint8Array(evt.data);
           const decoded = decode(buffer);
           const msg = ServerMessageZ.parse(decoded);
           this.handleMessage(msg);
@@ -118,7 +123,10 @@ export class MnMServerClient {
 
   /* ---------------- EVENT HANDLERS ---------------- */
 
-  onQuoteUpdate(streamKey: string, callback: (update: QuoteUpdateMessage) => void) {
+  onQuoteUpdate(
+    streamKey: string,
+    callback: (update: QuoteUpdateMessage) => void,
+  ) {
     this.quoteListeners.set(streamKey, callback);
   }
 

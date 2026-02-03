@@ -71,7 +71,9 @@ export async function simulateAndGetTokensBalance({
   //
   // SOL CHANGES – use sim.preBalances/postBalances (lamports)
   //
-  const accountKeys = versionedTx.message.staticAccountKeys.map((k) => k.toBase58());
+  const accountKeys = versionedTx.message.staticAccountKeys.map((k) =>
+    k.toBase58(),
+  );
   const userIndex = accountKeys.indexOf(userAddress);
   if (userIndex === -1) throw new Error("Couldn't find user index");
 

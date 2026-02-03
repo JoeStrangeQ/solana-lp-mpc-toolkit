@@ -3,7 +3,7 @@
  * Protects against abuse and ensures fair usage
  */
 
-import { Context, Next } from 'hono';
+import { Context, Next } from "hono";
 
 // ============ Types ============
 
@@ -13,9 +13,9 @@ interface RateLimitEntry {
 }
 
 interface RateLimitConfig {
-  windowMs: number;       // Time window in milliseconds
-  maxRequests: number;    // Max requests per window
-  keyPrefix?: string;     // Prefix for rate limit key
+  windowMs: number; // Time window in milliseconds
+  maxRequests: number; // Max requests per window
+  keyPrefix?: string; // Prefix for rate limit key
 }
 
 // ============ In-Memory Store ============
@@ -39,7 +39,7 @@ setInterval(() => {
  * Create a rate limiting middleware
  */
 export function rateLimit(config: RateLimitConfig) {
-  const { windowMs, maxRequests, keyPrefix = 'rl' } = config;
+  const { windowMs, maxRequests, keyPrefix = "rl" } = config;
 
   return async (c: Context, next: Next) => {
     // Get client identifier (IP or API key)
@@ -62,21 +62,27 @@ export function rateLimit(config: RateLimitConfig) {
     rateLimitStore.set(key, entry);
 
     // Add rate limit headers
-    c.header('X-RateLimit-Limit', String(maxRequests));
-    c.header('X-RateLimit-Remaining', String(Math.max(0, maxRequests - entry.count)));
-    c.header('X-RateLimit-Reset', String(Math.ceil(entry.resetTime / 1000)));
+    c.header("X-RateLimit-Limit", String(maxRequests));
+    c.header(
+      "X-RateLimit-Remaining",
+      String(Math.max(0, maxRequests - entry.count)),
+    );
+    c.header("X-RateLimit-Reset", String(Math.ceil(entry.resetTime / 1000)));
 
     // Check if over limit
     if (entry.count > maxRequests) {
       const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
-      c.header('Retry-After', String(retryAfter));
+      c.header("Retry-After", String(retryAfter));
 
-      return c.json({
-        success: false,
-        error: 'Rate limit exceeded',
-        suggestion: `Too many requests. Try again in ${retryAfter} seconds.`,
-        retryAfterSeconds: retryAfter,
-      }, 429);
+      return c.json(
+        {
+          success: false,
+          error: "Rate limit exceeded",
+          suggestion: `Too many requests. Try again in ${retryAfter} seconds.`,
+          retryAfterSeconds: retryAfter,
+        },
+        429,
+      );
     }
 
     await next();
@@ -88,18 +94,18 @@ export function rateLimit(config: RateLimitConfig) {
  */
 function getClientId(c: Context): string {
   // Check for API key header first
-  const apiKey = c.req.header('X-API-Key');
+  const apiKey = c.req.header("X-API-Key");
   if (apiKey) {
     return `key:${apiKey}`;
   }
 
   // Fall back to IP address
-  const forwarded = c.req.header('X-Forwarded-For');
+  const forwarded = c.req.header("X-Forwarded-For");
   if (forwarded) {
-    return `ip:${forwarded.split(',')[0].trim()}`;
+    return `ip:${forwarded.split(",")[0].trim()}`;
   }
 
-  const ip = c.req.header('X-Real-IP') || 'unknown';
+  const ip = c.req.header("X-Real-IP") || "unknown";
   return `ip:${ip}`;
 }
 
@@ -111,7 +117,7 @@ function getClientId(c: Context): string {
 export const standardLimit = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   maxRequests: 100,
-  keyPrefix: 'std',
+  keyPrefix: "std",
 });
 
 /**
@@ -120,7 +126,7 @@ export const standardLimit = rateLimit({
 export const strictLimit = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   maxRequests: 20,
-  keyPrefix: 'strict',
+  keyPrefix: "strict",
 });
 
 /**
@@ -129,7 +135,7 @@ export const strictLimit = rateLimit({
 export const txLimit = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   maxRequests: 10,
-  keyPrefix: 'tx',
+  keyPrefix: "tx",
 });
 
 /**
@@ -138,7 +144,7 @@ export const txLimit = rateLimit({
 export const readLimit = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   maxRequests: 200,
-  keyPrefix: 'read',
+  keyPrefix: "read",
 });
 
 // ============ Usage Stats ============
@@ -151,9 +157,9 @@ export function getRateLimitStats(): {
   keysByPrefix: Record<string, number>;
 } {
   const stats: Record<string, number> = {};
-  
+
   for (const key of rateLimitStore.keys()) {
-    const prefix = key.split(':')[0];
+    const prefix = key.split(":")[0];
     stats[prefix] = (stats[prefix] || 0) + 1;
   }
 

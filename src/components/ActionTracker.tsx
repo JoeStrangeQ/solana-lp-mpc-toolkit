@@ -4,7 +4,10 @@ import { Spinner } from "./ui/Spinner";
 import { ArrowUpRight, Check, X } from "lucide-react";
 import { create } from "zustand";
 import { ActivityType } from "../../convex/schema/activities";
-import { ActionRes, ActionSuccessPayloads } from "../../convex/types/actionResults";
+import {
+  ActionRes,
+  ActionSuccessPayloads,
+} from "../../convex/types/actionResults";
 
 type TrackerStates = "loading" | "success" | "failed";
 
@@ -31,7 +34,10 @@ export type Tracker = TrackerMap[ActivityType];
 interface ActionTrackerState {
   trackers: Tracker[];
   addTracker: (tracker: Omit<Tracker, "id">) => string;
-  updateTracker: <T extends ActivityType>(id: string, updates: Partial<Extract<Tracker, { type: T }>>) => void;
+  updateTracker: <T extends ActivityType>(
+    id: string,
+    updates: Partial<Extract<Tracker, { type: T }>>,
+  ) => void;
   removeTracker: (id: string) => void;
 }
 export const useActionTrackerStore = create<ActionTrackerState>()((set) => ({
@@ -46,7 +52,9 @@ export const useActionTrackerStore = create<ActionTrackerState>()((set) => ({
   },
   updateTracker: (id, updates) =>
     set((s) => ({
-      trackers: s.trackers.map((t) => (t.id === id ? ({ ...t, ...updates } as Tracker) : t)),
+      trackers: s.trackers.map((t) =>
+        t.id === id ? ({ ...t, ...updates } as Tracker) : t,
+      ),
     })),
   removeTracker: (id) =>
     set((s) => ({
@@ -67,7 +75,8 @@ export async function startTrackingAction<T extends ActivityType>({
   onSuccess?: () => void;
   onFailed?: () => void;
 }) {
-  const { addTracker, updateTracker, removeTracker } = useActionTrackerStore.getState();
+  const { addTracker, updateTracker, removeTracker } =
+    useActionTrackerStore.getState();
 
   const id = addTracker({
     type,
@@ -106,11 +115,29 @@ export function ActionTracker() {
       <AnimatePresence>
         {trackers.map((t) => {
           if (t.type === "create_position") {
-            return <CreatePositionTracker key={t.id} tracker={t} onClose={() => removeTracker(t.id)} />;
+            return (
+              <CreatePositionTracker
+                key={t.id}
+                tracker={t}
+                onClose={() => removeTracker(t.id)}
+              />
+            );
           } else if (t.type === "close_position") {
-            return <ClosePositionTracker key={t.id} tracker={t} onClose={() => removeTracker(t.id)} />;
+            return (
+              <ClosePositionTracker
+                key={t.id}
+                tracker={t}
+                onClose={() => removeTracker(t.id)}
+              />
+            );
           } else if (t.type === "claim_fees") {
-            return <ClaimFeesTracker key={t.id} tracker={t} onClose={() => removeTracker(t.id)} />;
+            return (
+              <ClaimFeesTracker
+                key={t.id}
+                tracker={t}
+                onClose={() => removeTracker(t.id)}
+              />
+            );
           }
           return null;
         })}
@@ -178,10 +205,17 @@ function CreatePositionTracker({
           <div className="text-text text-sm leading-none">Position Created</div>
           <div
             className="flex flex-row items-center gap-0.5 group cursor-pointer active:scale-95"
-            onClick={() => window.open(`https://solscan.io/tx/${createPositionTxId}`, "_blank")}
+            onClick={() =>
+              window.open(
+                `https://solscan.io/tx/${createPositionTxId}`,
+                "_blank",
+              )
+            }
           >
             <ArrowUpRight className="w-3 h-3 text-primary" />
-            <div className="text-primary text-xs group-hover:underline">View transaction</div>
+            <div className="text-primary text-xs group-hover:underline">
+              View transaction
+            </div>
           </div>
         </div>
       </TrackerToast>
@@ -192,8 +226,12 @@ function CreatePositionTracker({
     return (
       <TrackerToast status="failed" onClose={onClose}>
         <div className="flex flex-col items-start justify-start gap-1 max-w-[340px]">
-          <div className="text-text text-sm leading-none">Failed To Create Position</div>
-          <div className="text-textSecondary text-xs wrap-break-word">{errorMsg}</div>
+          <div className="text-text text-sm leading-none">
+            Failed To Create Position
+          </div>
+          <div className="text-textSecondary text-xs wrap-break-word">
+            {errorMsg}
+          </div>
         </div>
       </TrackerToast>
     );
@@ -226,10 +264,14 @@ function ClosePositionTracker({
           <div className="text-text text-sm leading-none">Position Closed!</div>
           <div
             className="flex flex-row items-center gap-0.5 group cursor-pointer active:scale-95"
-            onClick={() => window.open(`https://solscan.io/tx/${closedPositionId}`, "_blank")}
+            onClick={() =>
+              window.open(`https://solscan.io/tx/${closedPositionId}`, "_blank")
+            }
           >
             <ArrowUpRight className="w-3 h-3 text-primary" />
-            <div className="text-primary text-xs group-hover:underline">View transaction</div>
+            <div className="text-primary text-xs group-hover:underline">
+              View transaction
+            </div>
           </div>
         </div>
       </TrackerToast>
@@ -240,8 +282,12 @@ function ClosePositionTracker({
     return (
       <TrackerToast status="failed" onClose={onClose}>
         <div className="flex flex-col items-start justify-start gap-1 max-w-[340px]">
-          <div className="text-text text-sm leading-none">Failed To Close Position</div>
-          <div className="text-textSecondary text-xs wrap-break-word">{errorMsg}</div>
+          <div className="text-text text-sm leading-none">
+            Failed To Close Position
+          </div>
+          <div className="text-textSecondary text-xs wrap-break-word">
+            {errorMsg}
+          </div>
         </div>
       </TrackerToast>
     );
@@ -274,10 +320,14 @@ function ClaimFeesTracker({
           <div className="text-text text-sm leading-none">Fees Claimed!</div>
           <div
             className="flex flex-row items-center gap-0.5 group cursor-pointer active:scale-95"
-            onClick={() => window.open(`https://solscan.io/tx/${claimFeeTxId}`, "_blank")}
+            onClick={() =>
+              window.open(`https://solscan.io/tx/${claimFeeTxId}`, "_blank")
+            }
           >
             <ArrowUpRight className="w-3 h-3 text-primary" />
-            <div className="text-primary text-xs group-hover:underline">View transaction</div>
+            <div className="text-primary text-xs group-hover:underline">
+              View transaction
+            </div>
           </div>
         </div>
       </TrackerToast>
@@ -288,8 +338,12 @@ function ClaimFeesTracker({
     return (
       <TrackerToast status="failed" onClose={onClose}>
         <div className="flex flex-col items-start justify-start gap-1 max-w-[340px]">
-          <div className="text-text text-sm leading-none">Failed To Claim Fees</div>
-          <div className="text-textSecondary text-xs wrap-break-word">{errorMsg}</div>
+          <div className="text-text text-sm leading-none">
+            Failed To Claim Fees
+          </div>
+          <div className="text-textSecondary text-xs wrap-break-word">
+            {errorMsg}
+          </div>
         </div>
       </TrackerToast>
     );

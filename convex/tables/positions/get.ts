@@ -6,7 +6,9 @@ export const getPositionByPubkey = query({
   handler: async (ctx, { positionPubkey }) => {
     return await ctx.db
       .query("positions")
-      .withIndex("by_position_pk", (q) => q.eq("positionPubkey", positionPubkey))
+      .withIndex("by_position_pk", (q) =>
+        q.eq("positionPubkey", positionPubkey),
+      )
       .unique();
   },
 });
@@ -18,7 +20,9 @@ export const getUserOpenPositions = query({
   handler: async (ctx, { userId }) => {
     return await ctx.db
       .query("positions")
-      .withIndex("by_active", (q) => q.eq("userId", userId).eq("isActive", true))
+      .withIndex("by_active", (q) =>
+        q.eq("userId", userId).eq("isActive", true),
+      )
       .collect();
   },
 });

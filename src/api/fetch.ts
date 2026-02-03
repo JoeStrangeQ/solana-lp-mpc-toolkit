@@ -6,9 +6,9 @@
 // ============ Types ============
 
 export interface FetchOptions {
-  timeout?: number;          // Timeout in ms (default: 10000)
-  retries?: number;          // Number of retries (default: 2)
-  retryDelay?: number;       // Delay between retries in ms (default: 1000)
+  timeout?: number; // Timeout in ms (default: 10000)
+  retries?: number; // Number of retries (default: 2)
+  retryDelay?: number; // Delay between retries in ms (default: 1000)
   headers?: Record<string, string>;
 }
 
@@ -28,7 +28,7 @@ export interface FetchResult<T> {
  */
 export async function safeFetch<T = any>(
   url: string,
-  options: FetchOptions = {}
+  options: FetchOptions = {},
 ): Promise<FetchResult<T>> {
   const {
     timeout = 10000,
@@ -38,7 +38,7 @@ export async function safeFetch<T = any>(
   } = options;
 
   const startTime = Date.now();
-  let lastError: string = '';
+  let lastError: string = "";
   let retryCount = 0;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -50,8 +50,8 @@ export async function safeFetch<T = any>(
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'LP-Toolkit/1.0',
+          Accept: "application/json",
+          "User-Agent": "LP-Toolkit/1.0",
           ...headers,
         },
       });
@@ -61,7 +61,7 @@ export async function safeFetch<T = any>(
       // Check response status
       if (!response.ok) {
         lastError = `HTTP ${response.status}: ${response.statusText}`;
-        
+
         // Don't retry on client errors (4xx)
         if (response.status >= 400 && response.status < 500) {
           return {
@@ -71,7 +71,7 @@ export async function safeFetch<T = any>(
             durationMs: Date.now() - startTime,
           };
         }
-        
+
         // Retry on server errors (5xx)
         if (attempt < retries) {
           retryCount++;
@@ -90,14 +90,13 @@ export async function safeFetch<T = any>(
         retryCount,
         durationMs: Date.now() - startTime,
       };
-
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (error.name === "AbortError") {
         lastError = `Request timeout after ${timeout}ms`;
-      } else if (error.message?.includes('fetch failed')) {
-        lastError = 'Network error: Unable to reach server';
+      } else if (error.message?.includes("fetch failed")) {
+        lastError = "Network error: Unable to reach server";
       } else {
-        lastError = error.message || 'Unknown error';
+        lastError = error.message || "Unknown error";
       }
 
       // Retry
@@ -123,7 +122,7 @@ export async function safeFetch<T = any>(
 export async function safePost<T = any>(
   url: string,
   body: any,
-  options: FetchOptions = {}
+  options: FetchOptions = {},
 ): Promise<FetchResult<T>> {
   const {
     timeout = 10000,
@@ -133,7 +132,7 @@ export async function safePost<T = any>(
   } = options;
 
   const startTime = Date.now();
-  let lastError: string = '';
+  let lastError: string = "";
   let retryCount = 0;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -142,12 +141,12 @@ export async function safePost<T = any>(
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
       const response = await fetch(url, {
-        method: 'POST',
+        method: "POST",
         signal: controller.signal,
         headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'User-Agent': 'LP-Toolkit/1.0',
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": "LP-Toolkit/1.0",
           ...headers,
         },
         body: JSON.stringify(body),
@@ -157,7 +156,7 @@ export async function safePost<T = any>(
 
       if (!response.ok) {
         lastError = `HTTP ${response.status}: ${response.statusText}`;
-        
+
         if (response.status >= 400 && response.status < 500) {
           return {
             success: false,
@@ -166,7 +165,7 @@ export async function safePost<T = any>(
             durationMs: Date.now() - startTime,
           };
         }
-        
+
         if (attempt < retries) {
           retryCount++;
           await sleep(retryDelay);
@@ -183,12 +182,11 @@ export async function safePost<T = any>(
         retryCount,
         durationMs: Date.now() - startTime,
       };
-
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      if (error.name === "AbortError") {
         lastError = `Request timeout after ${timeout}ms`;
       } else {
-        lastError = error.message || 'Unknown error';
+        lastError = error.message || "Unknown error";
       }
 
       if (attempt < retries) {
@@ -214,27 +212,27 @@ export async function safePost<T = any>(
  */
 export async function fetchFirst<T = any>(
   urls: string[],
-  options: FetchOptions = {}
+  options: FetchOptions = {},
 ): Promise<FetchResult<T>> {
   const startTime = Date.now();
   const errors: string[] = [];
 
   for (const url of urls) {
     const result = await safeFetch<T>(url, { ...options, retries: 0 });
-    
+
     if (result.success) {
       return {
         ...result,
         durationMs: Date.now() - startTime,
       };
     }
-    
+
     errors.push(`${url}: ${result.error}`);
   }
 
   return {
     success: false,
-    error: `All endpoints failed: ${errors.join('; ')}`,
+    error: `All endpoints failed: ${errors.join("; ")}`,
     durationMs: Date.now() - startTime,
   };
 }
@@ -244,15 +242,15 @@ export async function fetchFirst<T = any>(
  */
 export async function fetchAll<T = any>(
   urls: string[],
-  options: FetchOptions = {}
+  options: FetchOptions = {},
 ): Promise<FetchResult<T>[]> {
-  return Promise.all(urls.map(url => safeFetch<T>(url, options)));
+  return Promise.all(urls.map((url) => safeFetch<T>(url, options)));
 }
 
 // ============ Helpers ============
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ============ RPC Specific ============
@@ -263,26 +261,35 @@ function sleep(ms: number): Promise<void> {
 export async function safeRpcCall<T = any>(
   rpcUrl: string,
   method: string,
-  params: any[]
+  params: any[],
 ): Promise<FetchResult<T>> {
-  return safePost<{ result: T }>(rpcUrl, {
-    jsonrpc: '2.0',
-    id: 1,
-    method,
-    params,
-  }).then(result => {
-    if (result.success && result.data?.result) {
-      return {
-        ...result,
-        data: result.data.result,
-      };
-    }
+  const response = await safePost<{ result?: T; error?: { message: string } }>(
+    rpcUrl,
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params,
+    },
+  );
+
+  if (response.success && response.data?.result !== undefined) {
     return {
-      ...result,
-      success: false,
-      error: result.data?.error?.message || result.error,
+      success: true,
+      data: response.data.result,
+      status: response.status,
+      retryCount: response.retryCount,
+      durationMs: response.durationMs,
     };
-  });
+  }
+
+  return {
+    success: false,
+    error: response.data?.error?.message || response.error || "RPC call failed",
+    status: response.status,
+    retryCount: response.retryCount,
+    durationMs: response.durationMs,
+  };
 }
 
 export default {

@@ -75,7 +75,9 @@ const dlmmPoolRoute = createRoute({
     // Address is valid here
     const validAddress = parsed.data;
 
-    useLastVisitedPool.getState().setLastVisited({ poolAddress: validAddress, protocol: "dlmm" });
+    useLastVisitedPool
+      .getState()
+      .setLastVisited({ poolAddress: validAddress, protocol: "dlmm" });
 
     return { poolAddress: validAddress };
   },
@@ -94,7 +96,9 @@ const clmmPoolRoute = createRoute({
   loader: async ({ params }) => {
     const { poolAddress } = params;
 
-    useLastVisitedPool.getState().setLastVisited({ poolAddress, protocol: "clmm" });
+    useLastVisitedPool
+      .getState()
+      .setLastVisited({ poolAddress, protocol: "clmm" });
 
     return { poolAddress };
   },
@@ -143,5 +147,5 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
 
     {/* <SpeedInsights /> */}
-  </>
+  </>,
 );

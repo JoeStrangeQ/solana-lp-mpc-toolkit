@@ -7,7 +7,9 @@ import { Address, zAddress } from "../../convex/utils/solana";
 import { useToken } from "./tokens";
 
 export function useBalances({ address }: { address: Address }) {
-  const fetchBalance = useAction(api.actions.fetch.walletBalances.getWalletBalances);
+  const fetchBalance = useAction(
+    api.actions.fetch.walletBalances.getWalletBalances,
+  );
 
   return useSuspenseQuery({
     queryKey: ["tokenBalances", address],
@@ -17,7 +19,13 @@ export function useBalances({ address }: { address: Address }) {
   });
 }
 
-export function useTokenBalance({ address, mint }: { address: string; mint: Address }) {
+export function useTokenBalance({
+  address,
+  mint,
+}: {
+  address: string;
+  mint: Address;
+}) {
   const { data } = useBalances({ address: zAddress.parse(address) });
   const tokenMetadata = useToken({ mint });
 

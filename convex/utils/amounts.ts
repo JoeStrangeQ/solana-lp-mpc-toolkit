@@ -24,7 +24,7 @@ export function safeBigIntToNumber(value: bigint | BN, label?: string): number {
 
   if (big > max || big < min) {
     throw new Error(
-      `Unsafe number conversion${label ? ` for ${label}` : ""}: bigint ${big} is outside JS safe integer range`
+      `Unsafe number conversion${label ? ` for ${label}` : ""}: bigint ${big} is outside JS safe integer range`,
     );
   }
 

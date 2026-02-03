@@ -7,7 +7,10 @@ export const getOrCreateUser = internalMutation({
     privyUserId: v.string(),
     address: v.string(),
   },
-  handler: async (ctx, args): Promise<{ user: Doc<"users">; wasCreated: boolean }> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ user: Doc<"users">; wasCreated: boolean }> => {
     const existing = await ctx.db
       .query("users")
       .withIndex("by_privyUserId", (q) => q.eq("privyUserId", args.privyUserId))

@@ -5,9 +5,13 @@ export const vActivityType = v.union(
   v.literal("create_position"),
   v.literal("close_position"),
   v.literal("claim_fees"),
-  v.literal("transfer")
+  v.literal("transfer"),
 );
-export const vTriggerType = v.union(v.literal("manual"), v.literal("sl"), v.literal("tp"));
+export const vTriggerType = v.union(
+  v.literal("manual"),
+  v.literal("sl"),
+  v.literal("tp"),
+);
 export const vTransactionId = v.object({
   description: v.string(),
   id: v.string(),
@@ -71,7 +75,9 @@ export const vClosePositionDetails = v.object({
   }),
 });
 // Helper for union variants
-function createActivityInputVariant<D extends ReturnType<typeof v.object>>(details: D) {
+function createActivityInputVariant<D extends ReturnType<typeof v.object>>(
+  details: D,
+) {
   return v.object({
     details,
     relatedPositionPubkey: v.optional(v.string()),
@@ -98,10 +104,13 @@ export const vActivityInput = v.union(
   v.object({
     type: v.literal("transfer"),
     ...createActivityInputVariant(vTransferActivityDetails).fields,
-  })
+  }),
 );
 
-function createActivityVariant<T extends ActivityType, D extends ReturnType<typeof v.object>>(type: T, details: D) {
+function createActivityVariant<
+  T extends ActivityType,
+  D extends ReturnType<typeof v.object>,
+>(type: T, details: D) {
   return v.object({
     _id: v.id("activities"),
     type: v.literal(type),
@@ -117,12 +126,14 @@ export const vActivity = v.union(
   createActivityVariant("create_position", vCreatePositionActivityDetails),
   createActivityVariant("close_position", vClosePositionDetails),
   createActivityVariant("claim_fees", vClaimFeesDetails),
-  createActivityVariant("transfer", vTransferActivityDetails)
+  createActivityVariant("transfer", vTransferActivityDetails),
 );
 
 ///////   **type exports** /////////
 export type TransferActivityDetails = Infer<typeof vTransferActivityDetails>;
-export type CreatePositionActivityDetails = Infer<typeof vCreatePositionActivityDetails>;
+export type CreatePositionActivityDetails = Infer<
+  typeof vCreatePositionActivityDetails
+>;
 
 export type ActivityType = Infer<typeof vActivityType>;
 export type ActivityTransactionId = Infer<typeof vTransactionId>;

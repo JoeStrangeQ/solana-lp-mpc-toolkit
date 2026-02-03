@@ -22,12 +22,18 @@ export const EncodedQuoteUpdateMessageZ = z.object({
   payload: z.custom<EncodedSwapQuotes>(),
   streamKey: z.string(),
 });
-export type EncodedQuoteUpdateMessage = z.infer<typeof EncodedQuoteUpdateMessageZ>;
+export type EncodedQuoteUpdateMessage = z.infer<
+  typeof EncodedQuoteUpdateMessageZ
+>;
 
 export type QuoteUpdateMessage = Omit<EncodedQuoteUpdateMessage, "payload"> & {
   payload: SwapQuotes;
 };
-export const ServerMessageZ = z.discriminatedUnion("type", [HelloMessageZ, ErrorMessageZ, EncodedQuoteUpdateMessageZ]);
+export const ServerMessageZ = z.discriminatedUnion("type", [
+  HelloMessageZ,
+  ErrorMessageZ,
+  EncodedQuoteUpdateMessageZ,
+]);
 export type ServerMessage = z.infer<typeof ServerMessageZ>;
 
 export const SubscribeQuotesPayloadZ = z.object({
@@ -177,13 +183,21 @@ export interface SwapQuotes {
   quotes: Record<string, SwapRoute>;
 }
 
-export interface SwapRoute extends Omit<EncodedSwapRoute, "steps" | "instructions" | "addressLookupTables"> {
+export interface SwapRoute
+  extends Omit<
+    EncodedSwapRoute,
+    "steps" | "instructions" | "addressLookupTables"
+  > {
   steps: RoutePlanStep[];
   instructions: Instruction[];
   addressLookupTables: string[];
 }
 
-export interface RoutePlanStep extends Omit<EncodedRoutePlanStep, "ammKey" | "inputMint" | "outputMint" | "feeMint"> {
+export interface RoutePlanStep
+  extends Omit<
+    EncodedRoutePlanStep,
+    "ammKey" | "inputMint" | "outputMint" | "feeMint"
+  > {
   ammKey: string;
   inputMint: string;
   outputMint: string;

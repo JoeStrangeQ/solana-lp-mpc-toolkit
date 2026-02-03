@@ -14,7 +14,9 @@ export function useBinsAroundActiveBin({
   numberOfBinsToTheLeft?: number;
   numberOfBinsToTheRight?: number;
 }) {
-  const getBinsAroundActiveBin = useAction(api.actions.fetch.dlmm.getBinsAroundActiveBinAction);
+  const getBinsAroundActiveBin = useAction(
+    api.actions.fetch.dlmm.getBinsAroundActiveBinAction,
+  );
 
   const { data } = useSuspenseQuery({
     queryKey: [`poolActiveBinRange-${poolAddress}-${numberOfBinsToTheLeft}`],
@@ -25,11 +27,16 @@ export function useBinsAroundActiveBin({
         numberOfBinsToTheRight,
       });
 
-      const activeIndex = binsAroundActiveBin.bins.findIndex((b) => b.binId === binsAroundActiveBin.activeBin);
+      const activeIndex = binsAroundActiveBin.bins.findIndex(
+        (b) => b.binId === binsAroundActiveBin.activeBin,
+      );
       // 69 bins with current price bin centered
       const half = 34; // 34 left + active + 34 right = 69
       const start = Math.max(0, activeIndex - half);
-      const end = Math.min(binsAroundActiveBin.bins.length, activeIndex + half + 1);
+      const end = Math.min(
+        binsAroundActiveBin.bins.length,
+        activeIndex + half + 1,
+      );
 
       const initialBins = binsAroundActiveBin.bins.slice(start, end);
 

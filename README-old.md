@@ -47,31 +47,31 @@ npm test
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [DLMM_LEVERAGE.md](./docs/DLMM_LEVERAGE.md) | How the leverage system works |
-| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Technical architecture & flows |
+| Document                                    | Description                    |
+| ------------------------------------------- | ------------------------------ |
+| [DLMM_LEVERAGE.md](./docs/DLMM_LEVERAGE.md) | How the leverage system works  |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md)   | Technical architecture & flows |
 
 ---
 
 ## Supported Pools
 
-| Pool | Status |
-|------|--------|
-| SOL/USDC | ✅ Active |
+| Pool      | Status    |
+| --------- | --------- |
+| SOL/USDC  | ✅ Active |
 | USDC/USDT | ✅ Active |
-| SOL/USDT | ✅ Active |
+| SOL/USDT  | ✅ Active |
 
 ---
 
 ## Risk Parameters
 
-| Parameter | Value |
-|-----------|-------|
-| Max LTV | 80% |
-| Liquidation Threshold | 85% |
-| Liquidation Penalty | 5% |
-| Max Leverage | 5x |
+| Parameter             | Value |
+| --------------------- | ----- |
+| Max LTV               | 80%   |
+| Liquidation Threshold | 85%   |
+| Liquidation Penalty   | 5%    |
+| Max Leverage          | 5x    |
 
 ---
 
@@ -103,12 +103,12 @@ mnm-leverage/
 
 ## Status
 
-| Milestone | Status |
-|-----------|--------|
-| Core Services | ✅ Complete |
-| Frontend Components | ✅ Complete |
-| Devnet Deployment | ✅ Deployed |
-| Mainnet | 🔜 Pending Audit |
+| Milestone           | Status           |
+| ------------------- | ---------------- |
+| Core Services       | ✅ Complete      |
+| Frontend Components | ✅ Complete      |
+| Devnet Deployment   | ✅ Deployed      |
+| Mainnet             | 🔜 Pending Audit |
 
 ---
 

@@ -20,7 +20,10 @@ export function normalizeSwapQuotes(quotes: EncodedSwapQuotes): SwapQuotes {
     swapMode: quotes.swapMode,
     amount: quotes.amount,
     quotes: Object.fromEntries(
-      Object.entries(quotes.quotes).map(([provider, route]) => [provider, normalizeSwapRoute(route)])
+      Object.entries(quotes.quotes).map(([provider, route]) => [
+        provider,
+        normalizeSwapRoute(route),
+      ]),
     ),
   };
 }

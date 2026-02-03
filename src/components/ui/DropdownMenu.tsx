@@ -1,6 +1,13 @@
 "use client"; // @NOTE: Add in case you are using Next.js
 
-import { useState, createContext, useContext, useEffect, RefObject, useRef } from "react";
+import {
+  useState,
+  createContext,
+  useContext,
+  useEffect,
+  RefObject,
+  useRef,
+} from "react";
 
 import { AnimatePresence, motion, type Variants } from "motion/react";
 
@@ -40,10 +47,17 @@ const item: Variants = {
 
 type DropdownMenuProps = React.ComponentProps<"nav">;
 
-export function DropdownMenu({ className, children, ...props }: DropdownMenuProps) {
+export function DropdownMenu({
+  className,
+  children,
+  ...props
+}: DropdownMenuProps) {
   return (
     <DropdownMenuProvider>
-      <nav className={cn("mx-auto w-full max-w-[200px] ", className)} {...props}>
+      <nav
+        className={cn("mx-auto w-full max-w-[200px] ", className)}
+        {...props}
+      >
         {children}
       </nav>
     </DropdownMenuProvider>
@@ -54,13 +68,22 @@ type DropdownMenuTriggerProps = {
   asChild?: boolean;
 } & React.ComponentProps<"button">;
 
-export function DropdownMenuTrigger({ asChild = false, children, className, ...props }: DropdownMenuTriggerProps) {
+export function DropdownMenuTrigger({
+  asChild = false,
+  children,
+  className,
+  ...props
+}: DropdownMenuTriggerProps) {
   const { setIsOpen } = useDropdownMenu();
 
   const Comp = asChild ? Slot : "button";
 
   return (
-    <Comp className={className} onClick={() => setIsOpen((prev) => !prev)} {...props}>
+    <Comp
+      className={className}
+      onClick={() => setIsOpen((prev) => !prev)}
+      {...props}
+    >
       {children}
     </Comp>
   );
@@ -81,7 +104,9 @@ export function DropdownMenuContent({
   const { isOpen, setIsOpen } = useDropdownMenu();
   const dropdownRef = useRef<HTMLUListElement>(null);
 
-  useOnClickOutside(dropdownRef as RefObject<HTMLElement>, () => setIsOpen(false));
+  useOnClickOutside(dropdownRef as RefObject<HTMLElement>, () =>
+    setIsOpen(false),
+  );
   return (
     <AnimatePresence>
       {isOpen && (
@@ -93,7 +118,7 @@ export function DropdownMenuContent({
             "bg-white/15 inner-white backdrop-blur-3xl",
             floating ? "absolute" : "relative",
             alignment === "left" ? "left-0" : "right-0",
-            className
+            className,
           )}
           variants={content}
           initial="hidden"
@@ -113,7 +138,12 @@ type DropdownMenuItemProps = {
   asChild?: boolean;
 } & React.ComponentProps<"button">;
 
-export function DropdownMenuItem({ asChild = false, children, className, ...props }: DropdownMenuItemProps) {
+export function DropdownMenuItem({
+  asChild = false,
+  children,
+  className,
+  ...props
+}: DropdownMenuItemProps) {
   const { setIsOpen } = useDropdownMenu(); // 👈 access context
   const Comp = asChild ? Slot : "button";
 
@@ -128,7 +158,7 @@ export function DropdownMenuItem({ asChild = false, children, className, ...prop
       <Comp
         className={cn(
           "flex flex-row w-full items-center py-1.5 px-2 hover-effect hover:bg-white/5 rounded-xl overflow-hidden cursor-pointer active:scale-95",
-          className
+          className,
         )}
         {...props}
       >
@@ -141,7 +171,7 @@ const Context = createContext(
   {} as {
     isOpen: boolean;
     setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  }
+  },
 );
 
 function DropdownMenuProvider({ children }: { children: React.ReactNode }) {
@@ -159,7 +189,9 @@ function DropdownMenuProvider({ children }: { children: React.ReactNode }) {
 export function useDropdownMenu() {
   const context = useContext(Context);
   if (!context) {
-    throw new Error("useDropdownMenu must be used within a DropdownMenuProvider");
+    throw new Error(
+      "useDropdownMenu must be used within a DropdownMenuProvider",
+    );
   }
   return context;
 }

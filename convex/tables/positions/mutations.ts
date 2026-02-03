@@ -3,13 +3,18 @@ import { internalMutation } from "../../_generated/server";
 import { vPosition } from "../../schema/positions";
 
 export const insertPosition = internalMutation({
-  args: { input: vPosition.omit("closedAt", "isActive", "userId"), userId: v.id("users") },
+  args: {
+    input: vPosition.omit("closedAt", "isActive", "userId"),
+    userId: v.id("users"),
+  },
 
   handler: async (ctx, args) => {
     const { userId, input } = args;
     const existing = await ctx.db
       .query("positions")
-      .withIndex("by_position_pk", (q) => q.eq("positionPubkey", input.positionPubkey))
+      .withIndex("by_position_pk", (q) =>
+        q.eq("positionPubkey", input.positionPubkey),
+      )
       .unique();
 
     if (existing) {
@@ -48,7 +53,9 @@ export const closePositionByPubkey = internalMutation({
   handler: async (ctx, { positionPubkey }) => {
     const pos = await ctx.db
       .query("positions")
-      .withIndex("by_position_pk", (q) => q.eq("positionPubkey", positionPubkey))
+      .withIndex("by_position_pk", (q) =>
+        q.eq("positionPubkey", positionPubkey),
+      )
       .unique();
 
     if (!pos) {
@@ -66,6 +73,11 @@ export const closePositionByPubkey = internalMutation({
       closedAt: now,
     });
 
-    return { id: pos._id, isActive: false, closedAt: now, alreadyClosed: false };
+    return {
+      id: pos._id,
+      isActive: false,
+      closedAt: now,
+      alreadyClosed: false,
+    };
   },
 });

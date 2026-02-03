@@ -48,7 +48,10 @@ export function DlmmHeaderSkeleton() {
           </div>
         </div>
 
-        <Skeleton className="ml-5 rounded-lg" style={{ width: 28, height: 28 }} />
+        <Skeleton
+          className="ml-5 rounded-lg"
+          style={{ width: 28, height: 28 }}
+        />
       </div>
 
       <div className="flex flex-col lg:items-end gap-1">
@@ -76,12 +79,22 @@ function DlmmHeader({ poolAddress }: { poolAddress: Address }) {
   return (
     <div className="flex flex-col gap-4 lg:gap-0 lg:flex-row lg:items-center lg:justify-between w-full">
       <div className="flex flex-row items-center">
-        <PoolTokenIcons xIcon={tokenX.icon} size={44} yIcon={tokenY.icon} dex="Meteora" />
+        <PoolTokenIcons
+          xIcon={tokenX.icon}
+          size={44}
+          yIcon={tokenY.icon}
+          dex="Meteora"
+        />
         <div className="flex flex-col ml-3 -space-y-1">
           <div className="text-text text-2xl">{pool.name}</div>
           <div className="flex flex-row items-center gap-2">
             <LabelValue label={"Bin Step"} value={pool.bin_step} />
-            <LabelValue label={"Base Fee"} value={abbreviateAmount(pool.base_fee_percentage, { type: "percentage" })} />
+            <LabelValue
+              label={"Base Fee"}
+              value={abbreviateAmount(pool.base_fee_percentage, {
+                type: "percentage",
+              })}
+            />
           </div>
         </div>
 
@@ -105,12 +118,21 @@ function DlmmHeader({ poolAddress }: { poolAddress: Address }) {
             label={"Price"}
             value={
               <div className="flex flex-row items-center gap-0.5">
-                <FormattedBinPrice value={pool.current_price} significantDigits={4} />
+                <FormattedBinPrice
+                  value={pool.current_price}
+                  significantDigits={4}
+                />
               </div>
             }
           />
-          <LabelValue label={"TVL"} value={`$${abbreviateAmount(pool.liquidity, { type: "usd" })}`} />
-          <LabelValue label={"24h Vol"} value={`$${abbreviateAmount(pool.trade_volume_24h, { type: "usd" })}`} />
+          <LabelValue
+            label={"TVL"}
+            value={`$${abbreviateAmount(pool.liquidity, { type: "usd" })}`}
+          />
+          <LabelValue
+            label={"24h Vol"}
+            value={`$${abbreviateAmount(pool.trade_volume_24h, { type: "usd" })}`}
+          />
           <LabelValue
             label={"24h Fees"}
             value={`$${abbreviateAmount(pool.fees_24h, { type: "usd" })}`}

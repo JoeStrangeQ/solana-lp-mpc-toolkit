@@ -10,7 +10,7 @@ export const vLinkedAccountType = v.union(
   v.literal("google"),
   v.literal("discord"),
   v.literal("twitter"),
-  v.literal("external wallet")
+  v.literal("external wallet"),
 );
 export type LinkedAccountType = Infer<typeof vLinkedAccountType>;
 
@@ -21,7 +21,9 @@ export const vUser = v.object({
 export type User = Infer<typeof vUser>;
 
 export default defineSchema({
-  users: defineTable(vUser).index("by_address", ["address"]).index("by_privyUserId", ["privyUserId"]),
+  users: defineTable(vUser)
+    .index("by_address", ["address"])
+    .index("by_privyUserId", ["privyUserId"]),
   activities: defineTable(vActivity)
     .index("by_user", ["userId"])
     .index("by_position_type", ["relatedPositionPubkey", "type"])
@@ -34,7 +36,7 @@ export default defineSchema({
     .index("by_market_direction_price", ["market", "direction", "triggerPrice"])
     .index("by_position_pk", ["positionPubkey"])
     .index("by_user", ["userId"]),
-  
+
   // LP Toolkit tables
   lpPositions: defineTable(vLPPosition)
     .index("by_owner", ["ownerAddress"])
@@ -42,7 +44,7 @@ export default defineSchema({
     .index("by_venue", ["venue"])
     .index("by_position_id", ["positionId"])
     .index("by_pool", ["poolAddress"]),
-  
+
   lpOperations: defineTable(vLPOperation)
     .index("by_owner", ["ownerAddress"])
     .index("by_position", ["positionId"])

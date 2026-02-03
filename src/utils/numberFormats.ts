@@ -1,4 +1,7 @@
-export function tokenAmountFormatter(options?: { maximumFractionDigits: number; minimumFractionDigits?: number }) {
+export function tokenAmountFormatter(options?: {
+  maximumFractionDigits: number;
+  minimumFractionDigits?: number;
+}) {
   // Clamp to valid Intl range (0..20)
   const max = Math.min(Math.max(options?.maximumFractionDigits ?? 5, 0), 20);
   const min = Math.min(Math.max(options?.minimumFractionDigits ?? 0, 0), max);
@@ -17,7 +20,7 @@ export function formatUsdValue(
     renderCurrency?: boolean;
     minimumFractionDigits?: number;
     maximumFractionDigits?: number;
-  }
+  },
 ) {
   return formatFiatValue(value, {
     minimumFractionDigits: options?.minimumFractionDigits,
@@ -32,12 +35,21 @@ export function formatFiatValue(
     renderCurrency?: boolean;
     minimumFractionDigits?: number;
     maximumFractionDigits?: number;
-  }
+  },
 ) {
   const renderCurrency = options?.renderCurrency ?? true;
 
-  const clampedMin = Math.min(Math.max(options?.minimumFractionDigits ?? 0, 0), 20);
-  const clampedMax = Math.min(Math.max(options?.maximumFractionDigits ?? Math.max(2, clampedMin), clampedMin), 20);
+  const clampedMin = Math.min(
+    Math.max(options?.minimumFractionDigits ?? 0, 0),
+    20,
+  );
+  const clampedMax = Math.min(
+    Math.max(
+      options?.maximumFractionDigits ?? Math.max(2, clampedMin),
+      clampedMin,
+    ),
+    20,
+  );
 
   return new Intl.NumberFormat("en", {
     style: renderCurrency ? "currency" : "decimal",
@@ -49,7 +61,10 @@ export function formatFiatValue(
 
 export function abbreviateAmount(
   value: number,
-  { type, decimals = 2 }: { type: "usd" | "percentage" | "token"; decimals?: number }
+  {
+    type,
+    decimals = 2,
+  }: { type: "usd" | "percentage" | "token"; decimals?: number },
 ) {
   const absValue = Math.abs(value);
 
@@ -88,7 +103,7 @@ export function formatTokenAmount(
     roundingMode?: "floor" | "ceil";
     filterSmallAmounts?: boolean;
     abbreviate?: boolean;
-  }
+  },
 ) {
   const shouldFilterSmallAmount = options?.filterSmallAmounts ?? false;
 
@@ -130,14 +145,19 @@ export function formatTokenAmount(
 
   const maximumFractionDigits = Math.max(
     0,
-    Math.min(options?.maximumFractionDigits ?? defaultMaximumFractionDigits, 20)
+    Math.min(
+      options?.maximumFractionDigits ?? defaultMaximumFractionDigits,
+      20,
+    ),
   );
 
   const roundedValue =
     options?.roundingMode === "floor"
-      ? Math.floor(value * 10 ** maximumFractionDigits) / 10 ** maximumFractionDigits
+      ? Math.floor(value * 10 ** maximumFractionDigits) /
+        10 ** maximumFractionDigits
       : options?.roundingMode === "ceil"
-        ? Math.ceil(value * 10 ** maximumFractionDigits) / 10 ** maximumFractionDigits
+        ? Math.ceil(value * 10 ** maximumFractionDigits) /
+          10 ** maximumFractionDigits
         : value;
 
   return `${tokenAmountFormatter({
@@ -153,5 +173,7 @@ export function formatAmountInputWithSeparators(input: string) {
     maximumFractionDigits: 0,
   }).format(parseInt(integer || "0", 10));
 
-  return decimal !== undefined ? `${formattedInteger}.${decimal}` : formattedInteger;
+  return decimal !== undefined
+    ? `${formattedInteger}.${decimal}`
+    : formattedInteger;
 }

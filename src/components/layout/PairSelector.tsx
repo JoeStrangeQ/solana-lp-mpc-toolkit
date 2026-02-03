@@ -1,5 +1,10 @@
 import { Protocol, useLastVisitedPool } from "~/providers/useLastVisitedPool";
-import { Address, BaseTokenMetadata, mints, tokensMetadata } from "../../../convex/utils/solana";
+import {
+  Address,
+  BaseTokenMetadata,
+  mints,
+  tokensMetadata,
+} from "../../../convex/utils/solana";
 import { PoolTokenIcons } from "../TokenIcon";
 import { useNavigate } from "@tanstack/react-router";
 import { cn } from "~/utils/cn";
@@ -30,14 +35,24 @@ export function getPairKey(x: BaseTokenMetadata, y: BaseTokenMetadata) {
   return `${x.symbol}-${y.symbol}`;
 }
 
-export function PairSelector({ currentPoolAddress, protocol }: { currentPoolAddress: Address; protocol: Protocol }) {
+export function PairSelector({
+  currentPoolAddress,
+  protocol,
+}: {
+  currentPoolAddress: Address;
+  protocol: Protocol;
+}) {
   const navigate = useNavigate();
 
   const pool = usePool({ poolAddress: currentPoolAddress, protocol });
   const { setLastByPairKey, getLastByPairKey } = useLastVisitedPool();
 
   useEffect(() => {
-    setLastByPairKey({ pairKey: pool.name.toLowerCase(), poolAddress: pool.address, protocol });
+    setLastByPairKey({
+      pairKey: pool.name.toLowerCase(),
+      poolAddress: pool.address,
+      protocol,
+    });
   }, [pool.address, protocol]);
   return (
     <div className="flex flex-row items-center bg-backgroundSecondary rounded-full p-1">
@@ -50,11 +65,15 @@ export function PairSelector({ currentPoolAddress, protocol }: { currentPoolAddr
             key={key}
             onClick={() => {
               const last = getLastByPairKey(key);
-              navigate({ to: `/${last?.protocol ?? "dlmm"}/${last?.poolAddress ?? defaultDlmmPool}` });
+              navigate({
+                to: `/${last?.protocol ?? "dlmm"}/${last?.poolAddress ?? defaultDlmmPool}`,
+              });
             }}
             className={cn(
               "flex items-center gap-1 px-3 py-1 rounded-full cursor-pointer transition text-sm",
-              isSelected ? "bg-white/5 text-text" : "text-textSecondary hover:brightness-110"
+              isSelected
+                ? "bg-white/5 text-text"
+                : "text-textSecondary hover:brightness-110",
             )}
           >
             <PoolTokenIcons xIcon={tokenX.icon} yIcon={tokenY.icon} size={18} />
@@ -75,7 +94,7 @@ export function PairSelectorSkeleton() {
             key={`${p.tokenX}-${p.tokenY}`}
             className={cn(
               "flex items-center gap-1 px-3 py-1 rounded-full cursor-pointer transition",
-              "text-textSecondary hover:brightness-110"
+              "text-textSecondary hover:brightness-110",
             )}
           >
             <PoolTokenIcons isLoading size={18} />
