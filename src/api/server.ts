@@ -22,6 +22,7 @@ import * as log from './logger';
 import { requestId, serverTiming, errorHandler, securityHeaders } from './middleware';
 import { runHealthChecks, quickHealthCheck } from './health';
 import { MeteoraApiPool, OrcaApiWhirlpool, MeteoraApiPosition } from './externalApiTypes';
+import apiDocs from './docs';
 
 // ============ Configuration ============
 
@@ -183,7 +184,7 @@ app.post("/v1/tx/describe", txLimit, async (c) => {
 });
 
 // ============ Docs ============
-app.get('/v1/docs', (c) => c.json({})); // Placeholder
+app.get('/v1/docs', (c) => c.json(apiDocs));
 
 // ============ Server Start ============
 
