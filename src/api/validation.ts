@@ -292,6 +292,16 @@ export function validateAddLiquidityRequest(body: any): ValidationResult {
     errors.push(`userPubkey: ${pubkeyResult.error}`);
   } else {
     sanitized.userPubkey = pubkeyResult.sanitized;
+  // Required: pool address
+  if (body.pool) {
+    const poolResult = validatePublicKey(body.pool);
+    if (!poolResult.valid) {
+      errors.push(`pool: ${poolResult.error}`);
+    } else {
+      sanitized.pool = poolResult.sanitized;
+    }
+  }
+
   }
 
   // Required: tokenA
