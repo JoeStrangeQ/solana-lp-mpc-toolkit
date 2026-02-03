@@ -1,11 +1,12 @@
 /**
  * Private Executor
- * Wraps all LP operations with Arcium privacy layer
+ * Executes LP operations through Arcium's MXE (Multi-party eXecution Environment)
  * 
- * Every transaction goes through MPC encryption:
- * - Strategy params are encrypted
- * - Position sizes are hidden
- * - Execution intent is private
+ * Uses @arcium-hq/client SDK for:
+ * - x25519 key exchange with MXE
+ * - RescueCipher encryption of strategy params
+ * - Private computation on encrypted data
+ * - Hidden execution intent (prevent front-running)
  */
 
 import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js';

@@ -1,75 +1,157 @@
-# LP Agent Toolkit
+# Solana LP MPC Toolkit
 
-**A unified interface for AI agents to manage liquidity positions across Solana DEXs**
+**A unified, privacy-preserving interface for AI agents to manage LP positions across Solana DEXs**
 
 Built for the [Colosseum Agent Hackathon](https://www.colosseum.org/) (Feb 2026)
+
+[![Arcium](https://img.shields.io/badge/Privacy-Arcium%20MPC-blue)]()
+[![DEXs](https://img.shields.io/badge/DEXs-9%20Supported-green)]()
 
 ---
 
 ## What is this?
 
-LP Agent Toolkit lets AI assistants (chatbots, agents, automated systems) discover and manage LP positions across multiple Solana DEXs through a simple, unified API.
+LP MPC Toolkit lets AI agents (chatbots, automated systems) discover and manage liquidity positions across **9 Solana DEXs** through a unified API with **privacy-preserving execution via Arcium**.
 
 Instead of learning each DEX's SDK separately, agents can:
-- Scan for the best yield opportunities across venues
-- Add/remove liquidity with consistent parameters
-- Track positions and unclaimed fees
-- Execute strategies with privacy via Arcium
+- Scan for the best yield opportunities across all venues
+- Execute LP operations with encrypted parameters
+- Track positions with natural language updates
+- Receive alerts when positions need attention
 
 ---
 
-## Supported DEXs
+## Key Features
 
-| DEX | Type | Status |
-|-----|------|--------|
-| Meteora | DLMM (Concentrated) | ✅ |
-| Orca | Whirlpool (Concentrated) | ✅ |
-| Raydium | CLMM (Concentrated) | ✅ |
-| Phoenix | CLOB | 🔜 |
+### 🔐 Privacy via Arcium MPC
+- **Real SDK integration** - x25519 key exchange, RescueCipher encryption
+- Strategy parameters encrypted before execution
+- Position sizes hidden from observers
+- Prevents front-running and copy-trading
+
+### 🤖 Agent-Native Design
+- Natural language intent parsing ("put 2 SOL to work")
+- Yield updates formatted for chat ("Earning ~$1.80/day")
+- Position alerts ("⚠️ Your Meteora position is out of range")
+- Agent-to-Agent API for bot-to-bot communication
+
+### 📊 9 DEX Adapters
+| DEX | Type | IL Risk |
+|-----|------|---------|
+| Meteora DLMM | Concentrated | Standard |
+| Meteora DAMM v2 | Full Range | Lower |
+| Orca Whirlpool | Concentrated | Standard |
+| Raydium CLMM | Concentrated | Standard |
+| Lifinity | Oracle-based | ~60% reduced |
+| Saber | Stable Swap | ~90% reduced |
+| Crema | Concentrated | Standard |
+| FluxBeam | Concentrated | Standard |
+| Invariant | CLMM | Standard |
 
 ---
 
-## Example Usage
+## Quick Start
 
 ```typescript
-import { adapters, getAllAdapters } from './lp-toolkit/adapters';
+import { 
+  createYieldScanner, 
+  parseIntent,
+  formatPoolRecommendation,
+  ArciumPrivacyService,
+  createYieldMonitor,
+} from 'solana-lp-mpc-toolkit';
 
-// Scan all DEXs for best SOL-USDC opportunities
-const pools = await Promise.all(
-  getAllAdapters().map(a => a.getPools(connection))
-);
-const allPools = pools.flat().filter(p => p.name === 'SOL-USDC');
-const best = allPools.sort((a, b) => b.apy - a.apy)[0];
+// 1. Natural language parsing
+const intent = parseIntent("put 2 SOL to work");
+// { type: 'add_liquidity', params: { amount: 400, tokenA: 'SOL' } }
 
-// Add liquidity to the best pool
-const { transaction, positionId } = await adapters[best.venue].addLiquidity(
-  connection,
-  wallet,
-  { poolAddress: best.address, totalValueUSD: 500, strategy: 'balanced' }
-);
+// 2. Find best pool across all DEXs
+const scanner = createYieldScanner(connection);
+const { pools, recommended } = await scanner.scanPools({
+  tokenA: intent.params.tokenA,
+  minApy: 10,
+});
+
+// 3. Format for chat (agent-native)
+const message = formatPoolRecommendation(pools, intent.params.amount);
+// "🥇 Meteora SOL-USDC - 45% APY → ~$1.80/day"
+
+// 4. Execute with privacy
+const privacy = new ArciumPrivacyService(userPubkey);
+await privacy.initialize(connection, programId);
+const encrypted = privacy.encryptStrategy(intent);
+
+// 5. Monitor and get natural language updates
+const monitor = createYieldMonitor(connection, userPubkey);
+const updates = await monitor.checkAndReport();
+// "💰 SOL-USDC: You have $42.50 in fees ready to claim"
 ```
 
 ---
 
-## Chat Commands (WIP)
-
-Designed for chat-native interaction:
+## Architecture
 
 ```
-/lp scan              → Show top LP opportunities
-/lp add 500 SOL-USDC  → Add $500 to best SOL-USDC pool
-/lp positions         → Show all your positions
-/lp yield             → Show unclaimed fees
+┌─────────────────────────────────────────────────────────────┐
+│                    CHAT INTERFACE                            │
+│  "LP $500 into best SOL-USDC pool"                          │
+│  Intent Parser → Natural Language Understanding              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 ARCIUM PRIVACY LAYER                         │
+│  x25519 Key Exchange → RescueCipher → MXE Execution         │
+│  Strategy params encrypted, position sizes hidden            │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│              UNIFIED DEX ADAPTER LAYER (9 DEXs)             │
+│  Meteora │ Orca │ Raydium │ Lifinity │ Saber │ + 4 more    │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│               YIELD MONITOR (Agent Updates)                  │
+│  Natural language alerts, position tracking, fee reminders   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Privacy with Arcium
+## Agent-to-Agent API
 
-Strategy parameters can be encrypted via Arcium's MPC network:
-- Hide which pools you're targeting
-- Keep position sizes private
-- Encrypted agent-to-agent communication
+Other bots can use the toolkit via REST API:
+
+```bash
+# Get best pools
+GET /pools?tokenA=SOL&tokenB=USDC
+
+# Get quote with fee calculation
+POST /quote { tokenA: "SOL", amountUSD: 500 }
+
+# Execute LP operation (requires auth)
+POST /execute { action: "add", venue: "meteora", ... }
+
+# Natural language interpretation
+POST /interpret { text: "find me some yield" }
+```
+
+**Fee Structure:** 0.1% per LP transaction (70% treasury, 30% referrer)
+
+---
+
+## LP Strategies
+
+| Strategy | Range | Best For |
+|----------|-------|----------|
+| Balanced | ±20% | Beginners, set-and-forget |
+| Concentrated | ±5% | Active traders, fee maximizers |
+| Yield-Max | ±50% | Passive income, volatile pairs |
+| Delta-Neutral | ±30% | Risk-averse, hedged positions |
+| Bid-Heavy | Skewed buy | DCA, accumulating token A |
+| Ask-Heavy | Skewed sell | Taking profits, exit strategy |
 
 ---
 
@@ -77,35 +159,53 @@ Strategy parameters can be encrypted via Arcium's MPC network:
 
 ```
 src/lp-toolkit/
-├── adapters/
-│   ├── meteora.ts    # Meteora DLMM adapter
-│   ├── orca.ts       # Orca Whirlpool adapter
-│   ├── raydium.ts    # Raydium CLMM adapter
-│   └── types.ts      # Unified interfaces
+├── adapters/           # 9 DEX adapters
+│   ├── meteora.ts
+│   ├── meteora-damm.ts
+│   ├── orca.ts
+│   ├── raydium.ts
+│   ├── lifinity.ts
+│   ├── saber.ts
+│   ├── crema.ts
+│   ├── fluxbeam.ts
+│   └── invariant.ts
 ├── services/
-│   ├── yieldScanner.ts    # Cross-DEX yield comparison
-│   └── arciumPrivacy.ts   # Encryption layer
-└── api/
-    └── chatCommands.ts    # Chat interface
+│   ├── yieldScanner.ts     # Cross-DEX yield comparison
+│   ├── arciumPrivacy.ts    # Arcium SDK integration
+│   ├── privateExecutor.ts  # Private LP execution
+│   └── yieldMonitor.ts     # Natural language updates
+├── api/
+│   ├── chatCommands.ts     # /lp commands
+│   ├── intentParser.ts     # Natural language parsing
+│   ├── chatDisplay.ts      # Agent-native formatting
+│   └── agentApi.ts         # Bot-to-bot API
+├── strategies/
+│   └── templates.ts        # 6 LP strategies
+├── fees/
+│   └── feeCollector.ts     # Protocol fee collection
+└── index.ts                # Main exports
 ```
 
 ---
 
 ## Tech Stack
 
-- TypeScript
-- Solana Web3.js
-- Meteora DLMM SDK
-- Orca Whirlpools SDK
-- Raydium SDK v2
-- Arcium Client
-- Convex (state persistence)
+- **Privacy**: Arcium MPC (x25519, RescueCipher)
+- **Blockchain**: Solana Web3.js
+- **DEX SDKs**: Meteora, Orca, Raydium, Lifinity, Saber
+- **State**: Convex (position tracking)
+- **Language**: TypeScript
 
 ---
 
 ## Status
 
-This is a hackathon project in active development. Core adapters are implemented; integration testing and chat interface are in progress.
+This is a hackathon project. Core functionality is implemented:
+- ✅ 9 DEX adapters
+- ✅ Arcium privacy integration
+- ✅ Natural language parsing
+- ✅ Yield monitoring
+- ✅ Agent API
 
 ---
 
