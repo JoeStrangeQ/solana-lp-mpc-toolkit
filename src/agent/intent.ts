@@ -18,7 +18,8 @@ const DEX_ALIASES: Record<string, DEX> = {
 };
 
 const PAIR_PATTERNS = [
-  /\b(SOL|USDC|USDT|ETH|BTC|JUP|BONK|WIF|JTO|PYTH)[-\/](SOL|USDC|USDT|ETH|BTC|JUP|BONK|WIF|JTO|PYTH)\b/gi,
+  // USDC-SOL, BONK/WIF, etc.
+  /\b([A-Z]{2,6})[-\/]([A-Z]{2,6})\b/gi,
 ];
 
 const AMOUNT_PATTERNS = [
@@ -32,19 +33,19 @@ export function parseIntent(text: string): LPIntent {
   // Determine action
   let action: LPIntent['action'] = 'positions';
   
-  if (/\b(scan|search|find|best|top|opportunities?)\b/.test(lower)) {
+  if (/\b(scan|search|find|best|top|opportunities?|show me)\b/.test(lower)) {
     action = 'scan';
-  } else if (/\b(add|put|deposit|lp|provide|open)\b/.test(lower) && /\b(liquidity|position)\b/.test(lower)) {
+  } else if (/\b(add|put|deposit|lp|provide|open|invest)\b/.test(lower) && (/\b(liquidity|position)\b/.test(lower) || amount)) {
     action = 'open';
-  } else if (/\b(close|exit|withdraw all)\b/.test(lower)) {
+  } else if (/\b(close|exit|withdraw all|remove all)\b/.test(lower)) {
     action = 'close';
-  } else if (/\b(add more|increase)\b/.test(lower)) {
+  } else if (/\b(add more|increase|top up)\b/.test(lower)) {
     action = 'add';
-  } else if (/\b(remove|withdraw|take out)\b/.test(lower) && !/all/.test(lower)) {
+  } else if (/\b(remove|withdraw|take out|pull out)\b/.test(lower) && !/all/.test(lower)) {
     action = 'remove';
-  } else if (/\b(collect|claim|harvest)\b/.test(lower) && /\b(fees?|rewards?)\b/.test(lower)) {
+  } else if (/\b(collect|claim|harvest|get)\b/.test(lower) && /\b(fees?|rewards?)\b/.test(lower)) {
     action = 'collect';
-  } else if (/\b(show|list|my|positions?|portfolio)\b/.test(lower)) {
+  } else if (/\b(show|list|my|positions?|portfolio|what are)\b/.test(lower)) {
     action = 'positions';
   }
 
@@ -69,11 +70,15 @@ export function parseIntent(text: string): LPIntent {
 
   // Extract amount
   let amount: number | undefined;
-  for (const pattern of AMOUNT_PATTERNS) {
-    const match = text.match(pattern);
+  // Look for explicit dollar amounts first
+  let match = text.match(/\$?([\d,]+(?:\.\d+)?)\s*(?:dollars?|usd)/i);
+  if (match) {
+    amount = parseFloat(match[1].replace(/,/g, ''));
+  } else {
+    // Look for numbers that aren't part of a pair or percentage
+    match = text.match(/(?<![-\/])\b([\d,]+(?:\.\d+)?)\b(?![-/]|%)/);
     if (match) {
       amount = parseFloat(match[1].replace(/,/g, ''));
-      break;
     }
   }
 
