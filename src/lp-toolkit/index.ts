@@ -43,6 +43,19 @@ export {
   formatOperationResult,
 } from './api/chatDisplay';
 
+// ============ Strategies ============
+export {
+  STRATEGIES,
+  recommendStrategy,
+  getStrategy,
+  listStrategies,
+  applyStrategy,
+  needsRebalance,
+  formatStrategyForChat,
+  formatStrategyMenu,
+} from './strategies/templates';
+export type { StrategyTemplate, StrategyRecommendation } from './strategies/templates';
+
 // ============ Fee Collection ============
 export {
   PROTOCOL_FEE_BPS,
