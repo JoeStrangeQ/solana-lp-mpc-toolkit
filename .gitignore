@@ -26,3 +26,4 @@ _archive/
 
 # Lock files (optional, uncomment if needed)
 # package-lock.json
+.vercel
