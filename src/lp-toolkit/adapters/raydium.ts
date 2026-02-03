@@ -44,29 +44,54 @@ export class RaydiumAdapter implements DEXAdapter {
 
   /**
    * Get all available CLMM pools
+   * Tries multiple endpoints with fallback to hardcoded data
    */
   async getPools(connection: Connection): Promise<LPPool[]> {
-    try {
-      const pools: LPPool[] = [];
-      
-      // Fetch from Raydium API
-      const response = await fetch('https://api-v3.raydium.io/pools/info/list?poolType=concentrated&sort=tvl&order=desc&pageSize=50');
-      const data = await response.json();
-      
-      if (data.success && data.data?.data) {
-        for (const pool of data.data.data) {
-          const parsed = this.parsePoolData(pool);
-          if (parsed && parsed.tvl > 10000) {
-            pools.push(parsed);
+    const endpoints = [
+      'https://api-v3.raydium.io/pools/info/list?poolType=concentrated&sort=tvl&order=desc&pageSize=50',
+      'https://api.raydium.io/v2/main/pairs',
+      'https://raydium.io/api/pools',
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch(endpoint, { 
+          signal: controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        clearTimeout(timeout);
+        
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        const pools: LPPool[] = [];
+        
+        // Handle different response formats
+        const poolData = data.data?.data || data.data || data.pairs || data || [];
+        
+        if (Array.isArray(poolData)) {
+          for (const pool of poolData.slice(0, 100)) {
+            const parsed = this.parsePoolData(pool);
+            if (parsed && parsed.tvl > 10000) {
+              pools.push(parsed);
+            }
           }
         }
+        
+        if (pools.length > 0) {
+          return pools.sort((a, b) => b.tvl - a.tvl);
+        }
+      } catch (error) {
+        console.warn(`Raydium endpoint ${endpoint} failed:`, error);
+        continue;
       }
-      
-      return pools.sort((a, b) => b.tvl - a.tvl);
-    } catch (error) {
-      console.error('Failed to fetch Raydium pools:', error);
-      return this.getHardcodedPools();
     }
+    
+    console.warn('All Raydium endpoints failed, using hardcoded data');
+    return this.getHardcodedPools();
   }
 
   /**
