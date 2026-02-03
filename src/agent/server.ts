@@ -109,6 +109,81 @@ app.get('/health', async (c) => {
   });
 });
 
+// ============ Arcium Encryption ============
+
+app.get('/encrypt/info', async (c) => {
+  await arciumPrivacy.initialize();
+  const info = arciumPrivacy.getMxeInfo();
+  
+  return c.json({
+    status: 'ready',
+    algorithm: 'x25519-aes256gcm',
+    mxe: {
+      cluster: info.cluster,
+      network: 'devnet',
+      publicKey: info.publicKey,
+    },
+    description: 'Strategy parameters are encrypted before execution to prevent front-running',
+  });
+});
+
+app.post('/encrypt', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { strategy } = body;
+    
+    if (!strategy) {
+      return c.json({ error: 'Missing strategy object' }, 400);
+    }
+    
+    // Validate strategy has required fields
+    if (!strategy.pair || !strategy.amount) {
+      return c.json({ error: 'Strategy must include pair and amount' }, 400);
+    }
+    
+    await arciumPrivacy.initialize();
+    const encrypted = await arciumPrivacy.encryptStrategy(strategy);
+    
+    return c.json({
+      success: true,
+      encrypted: {
+        ciphertext: encrypted.ciphertext,
+        nonce: encrypted.nonce,
+        ephemeralPublicKey: encrypted.publicKey,
+        algorithm: encrypted.algorithm,
+        mxeCluster: encrypted.mxeCluster,
+        timestamp: encrypted.timestamp,
+      },
+      message: 'Strategy encrypted with Arcium. Only MXE can decrypt.',
+    });
+  } catch (error) {
+    console.error('[/encrypt] Error:', error);
+    return c.json({ 
+      error: 'Encryption failed', 
+      details: error instanceof Error ? error.message : 'Unknown error' 
+    }, 500);
+  }
+});
+
+app.get('/encrypt/test', async (c) => {
+  try {
+    await arciumPrivacy.initialize();
+    const passed = await arciumPrivacy.selfTest();
+    
+    return c.json({
+      success: passed,
+      message: passed ? 'Arcium encryption self-test passed' : 'Self-test failed',
+      algorithm: 'x25519-aes256gcm',
+      mxeCluster: 456,
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }, 500);
+  }
+});
+
 // ============ Wallet Management ============
 
 app.post('/wallet/create', async (c) => {
