@@ -16,6 +16,7 @@ import type {
   RemoveLiquidityParams,
   CollectFeesParams,
   TransactionResult,
+  MeteoraPool,
 } from './types';
 
 export class GatewayClient {
@@ -53,13 +54,51 @@ export class GatewayClient {
   // ============ Pool Discovery ============
 
   async fetchPools(dex: DEX, tokenA?: string, tokenB?: string): Promise<PoolInfo[]> {
-    const params = new URLSearchParams({
-      network: this.network,
-      ...(tokenA && { tokenA }),
-      ...(tokenB && { tokenB }),
-    });
+    // Use direct DEX APIs for pool discovery (Gateway routes differ by version)
+    try {
+      if (dex === 'meteora') {
+        return this.fetchMeteoraPoolsDirect(tokenA, tokenB);
+      }
+      // Fallback to Gateway for other DEXs
+      const params = new URLSearchParams({
+        network: this.network,
+        ...(tokenA && { tokenA }),
+        ...(tokenB && { tokenB }),
+      });
+      return this.request<PoolInfo[]>('GET', `/connectors/${dex}/clmm/fetch-pools?${params}`);
+    } catch {
+      return [];
+    }
+  }
 
-    return this.request<PoolInfo[]>('GET', `/connectors/${dex}/clmm/fetch-pools?${params}`);
+  private async fetchMeteoraPoolsDirect(tokenA?: string, tokenB?: string): Promise<PoolInfo[]> {
+    // Use Meteora's public API directly
+    const response = await fetch('https://dlmm-api.meteora.ag/pair/all_with_pagination?page=0&limit=50');
+    if (!response.ok) return [];
+    
+    const data = await response.json() as { pairs: MeteoraPool[] };
+    
+    // Filter by tokens if specified
+    let pools = data.pairs || [];
+    if (tokenA || tokenB) {
+      const tokenSymbols = [tokenA?.toUpperCase(), tokenB?.toUpperCase()].filter(Boolean);
+      pools = pools.filter((p: MeteoraPool) => {
+        const name = p.name.toUpperCase();
+        return tokenSymbols.every(t => name.includes(t!));
+      });
+    }
+
+    // Map to our PoolInfo format
+    return pools.slice(0, 10).map((p: MeteoraPool) => ({
+      address: p.address,
+      tokenA: { symbol: p.name.split('-')[0], mint: p.mint_x, decimals: 9 },
+      tokenB: { symbol: p.name.split('-')[1], mint: p.mint_y, decimals: 6 },
+      liquidity: p.liquidity,
+      fee: parseFloat(p.base_fee_percentage) / 100,
+      currentPrice: p.current_price,
+      apy: p.apy,
+      volume24h: p.trade_volume_24h,
+    }));
   }
 
   async getPoolInfo(dex: DEX, poolAddress: string): Promise<PoolInfo> {
