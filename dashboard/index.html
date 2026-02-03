@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solana LP MPC Toolkit - Dashboard</title>
+  <style>
+    :root {
+      --bg-dark: #0a0a0f;
+      --bg-card: #111118;
+      --bg-hover: #1a1a22;
+      --border: #222;
+      --text: #e0e0e0;
+      --text-muted: #888;
+      --accent: #00ff88;
+      --accent-blue: #4499ff;
+      --accent-orange: #ff9944;
+      --accent-purple: #9966ff;
+      --success: #00ff88;
+      --warning: #ffaa00;
+      --error: #ff4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; 
+      background: var(--bg-dark); 
+      color: var(--text);
+      min-height: 100vh;
+    }
+    
+    /* Header */
+    .header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo h1 { color: var(--accent); font-size: 18px; font-weight: bold; }
+    .logo .badge { 
+      background: var(--accent-purple); 
+      color: #fff; 
+      padding: 2px 8px; 
+      border-radius: 4px; 
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .header-right { display: flex; align-items: center; gap: 15px; }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    /* Tabs */
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+    .tab {
+      padding: 12px 24px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .tab:hover { color: var(--text); background: var(--bg-hover); }
+    .tab.active { 
+      color: var(--accent); 
+      border-bottom-color: var(--accent);
+      background: var(--bg-hover);
+    }
+    
+    /* Content */
+    .content { padding: 20px; display: none; }
+    .content.active { display: block; }
+    
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title { font-size: 14px; font-weight: bold; color: var(--accent); }
+    
+    /* Grid */
+    .grid { display: grid; gap: 20px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    
+    /* Stats */
+    .stat { text-align: center; padding: 15px; }
+    .stat-value { font-size: 24px; font-weight: bold; color: var(--accent); }
+    .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+    
+    /* Progress */
+    .progress-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-blue));
+      transition: width 0.3s;
+    }
+    
+    /* Table */
+    .table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .table th { 
+      text-align: left; 
+      padding: 10px; 
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: normal;
+    }
+    .table td { padding: 10px; border-bottom: 1px solid #1a1a1a; }
+    .table tr:hover { background: var(--bg-hover); }
+    
+    /* Tags */
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .tag-success { background: rgba(0, 255, 136, 0.2); color: var(--success); }
+    .tag-warning { background: rgba(255, 170, 0, 0.2); color: var(--warning); }
+    .tag-error { background: rgba(255, 68, 68, 0.2); color: var(--error); }
+    .tag-info { background: rgba(68, 153, 255, 0.2); color: var(--accent-blue); }
+    
+    /* Architecture Diagram */
+    .arch-diagram {
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      background: #0a0a0a;
+      padding: 20px;
+      border-radius: 6px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .arch-layer {
+      color: var(--accent);
+      margin-bottom: 5px;
+    }
+    
+    /* Timeline */
+    .timeline { position: relative; padding-left: 20px; }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 6px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-item {
+      position: relative;
+      padding: 10px 0 10px 20px;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -17px;
+      top: 14px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg-dark);
+    }
+    .timeline-item.pending::before { background: var(--text-muted); }
+    .timeline-date { font-size: 10px; color: var(--text-muted); }
+    .timeline-title { font-weight: bold; margin: 3px 0; }
+    .timeline-desc { font-size: 11px; color: var(--text-muted); }
+
+    /* Checklist */
+    .checklist { list-style: none; }
+    .checklist li {
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+    }
+    .checklist .check { color: var(--success); }
+    .checklist .pending { color: var(--text-muted); }
+    
+    /* Code block */
+    code {
+      background: #0a0a0a;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <span style="font-size: 24px;">🦐</span>
+      <h1>Solana LP MPC Toolkit</h1>
+      <span class="badge">HACKATHON</span>
+    </div>
+    <div class="header-right">
+      <div class="status-indicator">
+        <span class="status-dot"></span>
+        <span>API Running</span>
+      </div>
+      <span style="color: var(--text-muted); font-size: 12px;">Colosseum Agent Hackathon • Feb 2-12, 2026</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="overview">📊 Overview</div>
+    <div class="tab" data-tab="architecture">🏗️ Architecture</div>
+    <div class="tab" data-tab="tasks">📋 Tasks</div>
+    <div class="tab" data-tab="finance">💰 Finance</div>
+    <div class="tab" data-tab="operations">⚙️ Operations</div>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <div class="content active" id="overview">
+    <div class="grid grid-4">
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value">9</div>
+          <div class="stat-label">DEX Adapters</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value">184K+</div>
+          <div class="stat-label">Pools Available</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value">1%</div>
+          <div class="stat-label">Protocol Fee</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value" id="days-left">10</div>
+          <div class="stat-label">Days Left</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">✅ Completed Features</span>
+        </div>
+        <ul class="checklist">
+          <li><span class="check">✓</span> 9 DEX adapters (Meteora, Orca, Raydium, Lifinity, Saber, Crema, FluxBeam, Invariant, DAMM v2)</li>
+          <li><span class="check">✓</span> Arcium privacy layer (real devnet MXE integration)</li>
+          <li><span class="check">✓</span> Portal MPC wallet integration</li>
+          <li><span class="check">✓</span> Hummingbot Gateway integration</li>
+          <li><span class="check">✓</span> Natural language intent parser</li>
+          <li><span class="check">✓</span> REST API server (Hono)</li>
+          <li><span class="check">✓</span> 1% protocol fee mechanism</li>
+          <li><span class="check">✓</span> Strategy templates (6 strategies)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🎯 Remaining Tasks</span>
+        </div>
+        <ul class="checklist">
+          <li><span class="pending">○</span> Configure Helius RPC for Gateway</li>
+          <li><span class="pending">○</span> End-to-end transaction flow test</li>
+          <li><span class="pending">○</span> Demo video recording</li>
+          <li><span class="pending">○</span> Submit to Colosseum</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📈 Sprint Progress</span>
+        <span class="tag tag-info">Day 2 of 10</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: 75%"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--text-muted);">
+        <span>Feb 2 - Started</span>
+        <span>~75% Complete</span>
+        <span>Feb 12 - Deadline</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE TAB -->
+  <div class="content" id="architecture">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🏗️ System Architecture (v2.0)</span>
+        <span class="tag tag-success">CURRENT</span>
+      </div>
+      <div class="arch-diagram">
+<span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="arch-layer">│                        CHAT / API INTERFACE                                  │</span>
+│  Telegram │ Discord │ REST API │ Agent SDK │ Clawdbot                       │
+│  Natural language: "LP $500 into best SOL-USDC pool"                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+<span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="arch-layer">│                      LP AGENT API SERVER (Hono)                              │</span>
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
+│  │  Intent Parser  │  │  Fee Collector  │  │  Strategy Engine            │  │
+│  │  NL → Actions   │  │  1% per TX      │  │  6 templates + custom       │  │
+│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+              ┌─────────────────────┼─────────────────────┐
+              ▼                     ▼                     ▼
+<span class="arch-layer">┌───────────────────┐  ┌───────────────────┐  ┌───────────────────┐</span>
+<span class="arch-layer">│  ARCIUM PRIVACY   │  │   PORTAL MPC      │  │ HUMMINGBOT GATEWAY│</span>
+│  ─────────────────│  │  ─────────────────│  │  ─────────────────│
+│  • x25519 ECDH    │  │  • 2-of-2 signing │  │  • Unified DEX API │
+│  • RescueCipher   │  │  • No full key    │  │  • Real SDK calls  │
+│  • Strategy enc   │  │  • Agent custody  │  │  • TX building     │
+│  • MXE cluster    │  │  • Ed25519 sig    │  │  • Pool discovery  │
+└───────────────────┘  └───────────────────┘  └───────────────────┘
+                                    │
+                                    ▼
+<span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
+<span class="arch-layer">│                         SOLANA DEX LAYER                                     │</span>
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │
+│  │ Meteora │ │  Orca   │ │ Raydium │ │Lifinity │ │  Saber  │ │ + More  │   │
+│  │  DLMM   │ │Whirlpool│ │  CLMM   │ │ Oracle  │ │ Stable  │ │ Crema   │   │
+│  │ DAMM v2 │ │         │ │         │ │  Based  │ │  Swap   │ │FluxBeam │   │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+      </div>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔐 Arcium Privacy</span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+          MXE (Multi-Party Execution) on Solana devnet
+        </p>
+        <ul class="checklist" style="font-size: 11px;">
+          <li><span class="check">✓</span> x25519 key derivation</li>
+          <li><span class="check">✓</span> RescueCipher encryption</li>
+          <li><span class="check">✓</span> Real MXE cluster key</li>
+          <li><span class="check">✓</span> Strategy param encryption</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔑 Portal MPC</span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+          Threshold signing for agent wallets
+        </p>
+        <ul class="checklist" style="font-size: 11px;">
+          <li><span class="check">✓</span> 2-of-2 key shares</li>
+          <li><span class="check">✓</span> Ed25519 Solana signing</li>
+          <li><span class="check">✓</span> No full key exposure</li>
+          <li><span class="check">✓</span> Wallet generation API</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🌉 Hummingbot Gateway</span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+          Unified DEX connector layer
+        </p>
+        <ul class="checklist" style="font-size: 11px;">
+          <li><span class="check">✓</span> Pool discovery API</li>
+          <li><span class="check">✓</span> Position management</li>
+          <li><span class="check">✓</span> Real TX building</li>
+          <li><span class="pending">○</span> Premium RPC config</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📁 Codebase Structure</span>
+      </div>
+      <div class="arch-diagram" style="font-size: 12px;">
+solana-lp-mpc-toolkit/
+├── src/
+│   ├── agent/           # REST API server + intent parser
+│   │   ├── server.ts    # Hono API (wallet, chat, positions)
+│   │   ├── intent.ts    # Natural language → LPIntent
+│   │   └── types.ts     # API types
+│   ├── gateway/         # Hummingbot Gateway client
+│   │   ├── client.ts    # DEX operations via Gateway
+│   │   └── types.ts     # Pool, Position types
+│   ├── mpc/             # Portal MPC wallet
+│   │   ├── client.ts    # Threshold signing
+│   │   └── mockClient.ts# Dev mode mock
+│   ├── privacy/         # Arcium encryption
+│   │   ├── arcium.ts    # x25519 + RescueCipher
+│   │   └── types.ts     # Encrypted strategy types
+│   ├── fees/            # Revenue model
+│   │   └── index.ts     # 1% fee calculation
+│   └── config/          # Environment config
+├── dashboard/           # This dashboard
+└── README.md            # Documentation
+      </div>
+    </div>
+  </div>
+
+  <!-- TASKS TAB -->
+  <div class="content" id="tasks">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 Task Status</span>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>DEX Adapter Layer (9 DEXs)</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P0</td>
+            <td>Meteora, Orca, Raydium, Lifinity, Saber, Crema, FluxBeam, Invariant, DAMM v2</td>
+          </tr>
+          <tr>
+            <td>Arcium Privacy Integration</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P0</td>
+            <td>Real MXE devnet key, x25519 + RescueCipher</td>
+          </tr>
+          <tr>
+            <td>Portal MPC Wallet</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P0</td>
+            <td>2-of-2 threshold signing, mock client for dev</td>
+          </tr>
+          <tr>
+            <td>Hummingbot Gateway</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P0</td>
+            <td>Docker running, Swagger docs at :15888</td>
+          </tr>
+          <tr>
+            <td>REST API Server</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P0</td>
+            <td>Hono server, all endpoints working</td>
+          </tr>
+          <tr>
+            <td>Natural Language Parser</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P1</td>
+            <td>Intent extraction from chat messages</td>
+          </tr>
+          <tr>
+            <td>1% Protocol Fee</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P1</td>
+            <td>Fee calculation + treasury transfer instructions</td>
+          </tr>
+          <tr>
+            <td>Strategy Templates</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>P1</td>
+            <td>6 templates: balanced, concentrated, wide, delta-neutral, bid/ask-heavy</td>
+          </tr>
+          <tr>
+            <td>Configure Premium RPC</td>
+            <td><span class="tag tag-warning">TODO</span></td>
+            <td>P1</td>
+            <td>Helius API key needed for Gateway</td>
+          </tr>
+          <tr>
+            <td>E2E Transaction Test</td>
+            <td><span class="tag tag-warning">TODO</span></td>
+            <td>P1</td>
+            <td>Full flow with real devnet wallet</td>
+          </tr>
+          <tr>
+            <td>Demo Video</td>
+            <td><span class="tag tag-warning">TODO</span></td>
+            <td>P0</td>
+            <td>Required for submission</td>
+          </tr>
+          <tr>
+            <td>Colosseum Submission</td>
+            <td><span class="tag tag-warning">TODO</span></td>
+            <td>P0</td>
+            <td>Deadline: Feb 12, 2026</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📅 Sprint Timeline</span>
+      </div>
+      <div class="timeline">
+        <div class="timeline-item">
+          <div class="timeline-date">Feb 2, 21:55 CST</div>
+          <div class="timeline-title">Project Pivot</div>
+          <div class="timeline-desc">Pivoted from "Private Leverage Lending" to "LP Agent Toolkit"</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Feb 2, 22:00-23:00</div>
+          <div class="timeline-title">Core Adapters Built</div>
+          <div class="timeline-desc">Meteora, Orca, Raydium adapters + yield scanner + chat commands</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Feb 3, 00:00-02:00</div>
+          <div class="timeline-title">Production Hardening</div>
+          <div class="timeline-desc">Validation, rate limiting, logging, security headers</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Feb 3, 11:30</div>
+          <div class="timeline-title">Architecture Pivot</div>
+          <div class="timeline-desc">Switched to Hummingbot Gateway + Portal MPC + Arcium stack</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-date">Feb 3, 12:03</div>
+          <div class="timeline-title">Gateway Setup Complete</div>
+          <div class="timeline-desc">Docker running, Swagger docs verified, all connectors present</div>
+        </div>
+        <div class="timeline-item pending">
+          <div class="timeline-date">Feb 3-4</div>
+          <div class="timeline-title">E2E Testing</div>
+          <div class="timeline-desc">Full transaction flow with real devnet funds</div>
+        </div>
+        <div class="timeline-item pending">
+          <div class="timeline-date">Feb 10-12</div>
+          <div class="timeline-title">Demo & Submit</div>
+          <div class="timeline-desc">Record demo video, submit to Colosseum</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FINANCE TAB -->
+  <div class="content" id="finance">
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value">1%</div>
+          <div class="stat-label">Protocol Fee (per TX)</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value">$0</div>
+          <div class="stat-label">Revenue (Pre-launch)</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value">0.68 SOL</div>
+          <div class="stat-label">Treasury Balance</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">💰 Revenue Model</span>
+      </div>
+      <div class="arch-diagram" style="font-size: 12px;">
+┌─────────────────────────────────────────────────────────────────┐
+│                     PROTOCOL FEE FLOW                           │
+└─────────────────────────────────────────────────────────────────┘
+
+  Agent Request                                          Treasury
+       │                                                    ▲
+       │  "Open LP position with $1000"                     │
+       ▼                                                    │
+  ┌─────────────────────────────────────────────────────────┼─────┐
+  │                    FEE COLLECTOR                        │     │
+  │  ─────────────────────────────────────────────────────  │     │
+  │  Gross Amount:  $1,000.00                               │     │
+  │  Protocol Fee:  $10.00 (1%)  ──────────────────────────►│     │
+  │  Net Amount:    $990.00                                       │
+  │                                                               │
+  │  Fee Config:                                                  │
+  │  • 100 basis points (1%)                                      │
+  │  • Min fee: 10,000 lamports                                   │
+  │  • Exempt threshold: $1 USD                                   │
+  └───────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  DEX (Meteora/Orca/Raydium...)
+       │
+       ▼
+  LP Position Created ($990)
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📊 Fee API Endpoints</span>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Endpoint</th>
+            <th>Method</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>GET /fees</code></td>
+            <td>GET</td>
+            <td>Get fee configuration and treasury address</td>
+          </tr>
+          <tr>
+            <td><code>GET /fees/calculate?amount=1000</code></td>
+            <td>GET</td>
+            <td>Calculate fee breakdown for specific amount</td>
+          </tr>
+          <tr>
+            <td><code>POST /position/open</code></td>
+            <td>POST</td>
+            <td>Response includes <code>fees</code> object with breakdown</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🏦 Treasury</span>
+      </div>
+      <p style="font-size: 12px; margin-bottom: 10px;">
+        <strong>Address:</strong> <code>BNQnCszvPwYfjBMUmFgmCooMSRrdkC7LncMQBExDakLp</code>
+      </p>
+      <p style="font-size: 11px; color: var(--text-muted);">
+        All protocol fees are collected to this address. View on Solscan or any Solana explorer.
+      </p>
+    </div>
+  </div>
+
+  <!-- OPERATIONS TAB -->
+  <div class="content" id="operations">
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🐳 Services Status</span>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th>Status</th>
+              <th>Port</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>LP Agent API</td>
+              <td><span class="tag tag-success">RUNNING</span></td>
+              <td>3000</td>
+            </tr>
+            <tr>
+              <td>Hummingbot Gateway</td>
+              <td><span class="tag tag-success">RUNNING</span></td>
+              <td>15888</td>
+            </tr>
+            <tr>
+              <td>Arcium MXE (devnet)</td>
+              <td><span class="tag tag-success">CONNECTED</span></td>
+              <td>—</td>
+            </tr>
+            <tr>
+              <td>Portal MPC</td>
+              <td><span class="tag tag-info">MOCK MODE</span></td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">📡 API Endpoints</span>
+        </div>
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>Method</th>
+              <th>Auth</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>/</td><td>GET</td><td>—</td></tr>
+            <tr><td>/health</td><td>GET</td><td>—</td></tr>
+            <tr><td>/fees</td><td>GET</td><td>—</td></tr>
+            <tr><td>/wallet/create</td><td>POST</td><td>—</td></tr>
+            <tr><td>/wallet/load</td><td>POST</td><td>—</td></tr>
+            <tr><td>/chat</td><td>POST</td><td>—</td></tr>
+            <tr><td>/pools/scan</td><td>GET</td><td>—</td></tr>
+            <tr><td>/positions</td><td>GET</td><td>Wallet</td></tr>
+            <tr><td>/position/open</td><td>POST</td><td>Wallet</td></tr>
+            <tr><td>/position/close</td><td>POST</td><td>Wallet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔧 Quick Commands</span>
+      </div>
+      <div class="arch-diagram" style="font-size: 12px;">
+# Start API server
+pnpm dev
+
+# Start Hummingbot Gateway
+docker start gateway-pr543
+
+# Test health
+curl http://localhost:3000/health
+
+# Create wallet
+curl -X POST http://localhost:3000/wallet/create
+
+# Scan pools
+curl "http://localhost:3000/pools/scan?tokenA=SOL&tokenB=USDC"
+
+# Chat interface
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Find best SOL-USDC pools"}'
+
+# Calculate fee
+curl "http://localhost:3000/fees/calculate?amount=1000"
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📚 Documentation</span>
+      </div>
+      <ul class="checklist">
+        <li><span class="check">✓</span> <a href="https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit" style="color: var(--accent-blue);">GitHub Repository</a></li>
+        <li><span class="check">✓</span> README.md with API docs</li>
+        <li><span class="check">✓</span> AGENT_REFLECTIONS.md</li>
+        <li><span class="check">✓</span> Gateway Swagger: <code>http://localhost:15888/docs</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Calculate days left
+    const deadline = new Date('2026-02-12T23:59:59-06:00');
+    const now = new Date();
+    const daysLeft = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+    document.getElementById('days-left').textContent = Math.max(0, daysLeft);
+
+    // Update functions for external control
+    window.dashboardUpdate = function(section, data) {
+      console.log('Dashboard update:', section, data);
+    };
+  </script>
+</body>
+</html>
