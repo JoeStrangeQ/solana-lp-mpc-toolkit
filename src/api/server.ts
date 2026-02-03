@@ -16,6 +16,7 @@ import { parseIntent } from '../lp-toolkit/api/intentParser';
 import { formatPoolsForChat, formatPositionsForChat } from '../lp-toolkit/adapters/types';
 import { buildAddLiquidityTx, buildRemoveLiquidityTx, describeTx } from './txBuilder';
 import { checkPositionHealth, checkPoolHealth, formatHealthReport, formatPoolReport } from './monitoring';
+import { validatePublicKey, validateAddLiquidityRequest, validateEncryptRequest } from './validation';
 
 // ============ Configuration ============
 
@@ -217,14 +218,15 @@ function explainIntent(intent: any): string {
 app.post('/v1/encrypt/strategy', async (c) => {
   try {
     const body = await c.req.json();
-    const { ownerPubkey, strategy } = body;
-
-    if (!ownerPubkey || !strategy) {
+    
+    // Validate input
+    const validation = validateEncryptRequest(body);
+    if (!validation.valid) {
       return c.json({
         success: false,
-        error: 'Missing required fields: ownerPubkey, strategy',
+        error: validation.error,
         example: {
-          ownerPubkey: 'Your wallet public key',
+          ownerPubkey: 'Your wallet public key (base58)',
           strategy: {
             tokenA: 'SOL',
             tokenB: 'USDC',
@@ -235,6 +237,8 @@ app.post('/v1/encrypt/strategy', async (c) => {
       }, 400);
     }
 
+    const { ownerPubkey, strategy } = validation.sanitized;
+    
     const privacy = new ArciumPrivacyService(new PublicKey(ownerPubkey));
     await privacy.initializeDevnet();
 
@@ -310,14 +314,15 @@ app.get('/v1/positions/:wallet', async (c) => {
 app.post('/v1/tx/add-liquidity', async (c) => {
   try {
     const body = await c.req.json();
-    const { userPubkey, poolAddress, venue, tokenA, tokenB, amountA, amountB, slippageBps } = body;
-
-    if (!userPubkey || !tokenA || !tokenB) {
+    
+    // Validate input
+    const validation = validateAddLiquidityRequest(body);
+    if (!validation.valid) {
       return c.json({
         success: false,
-        error: 'Missing required fields: userPubkey, tokenA, tokenB',
+        error: validation.error,
         example: {
-          userPubkey: 'YourWalletPubkey',
+          userPubkey: 'YourWalletPubkey (base58)',
           poolAddress: 'optional - auto-selects best',
           venue: 'meteora',
           tokenA: 'SOL',
@@ -327,6 +332,8 @@ app.post('/v1/tx/add-liquidity', async (c) => {
         },
       }, 400);
     }
+
+    const { userPubkey, poolAddress, venue, tokenA, tokenB, amountA, amountB, slippageBps } = validation.sanitized;
 
     const result = await buildAddLiquidityTx(connection, {
       userPubkey,
