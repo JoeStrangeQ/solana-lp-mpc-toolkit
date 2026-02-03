@@ -10,9 +10,18 @@ interface TokenIconProps {
   style?: React.CSSProperties;
 }
 
-export function TokenIcon({ icon, style, className = "h-7 w-7" }: TokenIconProps) {
+export function TokenIcon({
+  icon,
+  style,
+  className = "h-7 w-7",
+}: TokenIconProps) {
   return icon && icon !== "" ? (
-    <img src={icon} draggable={false} className={`rounded-full select-none object-cover ${className}`} style={style} />
+    <img
+      src={icon}
+      draggable={false}
+      className={`rounded-full select-none object-cover ${className}`}
+      style={style}
+    />
   ) : (
     <div
       className={`flex items-center select-none justify-center rounded-full bg-backgroundSecondary border border-white/10 ${className} p-1.5`}
@@ -58,7 +67,11 @@ export function PoolTokenIcons({
       ) : (
         <div className="flex items-center">
           <TokenIcon icon={xIcon} className="w-(--s) h-(--s) z-1" />
-          <TokenIcon icon={yIcon} className="w-(--s) h-(--s) z-0" style={{ marginLeft: "var(--space)" }} />
+          <TokenIcon
+            icon={yIcon}
+            className="w-(--s) h-(--s) z-0"
+            style={{ marginLeft: "var(--space)" }}
+          />
         </div>
       )}
 

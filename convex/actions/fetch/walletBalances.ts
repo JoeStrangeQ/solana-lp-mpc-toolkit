@@ -5,7 +5,11 @@ import { v } from "convex/values";
 import { connection } from "../../convexEnv";
 import { Address, mints } from "../../utils/solana";
 import { fetchTokensMetadata } from "../../services/jupiter";
-import { AccountLayout, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import {
+  AccountLayout,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
 import z from "zod";
 
 export const tokenBalanceZ = z.object({
@@ -31,8 +35,16 @@ export const getWalletBalances = action({
     const owner = new PublicKey(args.address);
 
     const [legacy, v2022] = await Promise.all([
-      connection.getTokenAccountsByOwner(owner, { programId: TOKEN_PROGRAM_ID }, "confirmed"),
-      connection.getTokenAccountsByOwner(owner, { programId: TOKEN_2022_PROGRAM_ID }, "confirmed"),
+      connection.getTokenAccountsByOwner(
+        owner,
+        { programId: TOKEN_PROGRAM_ID },
+        "confirmed",
+      ),
+      connection.getTokenAccountsByOwner(
+        owner,
+        { programId: TOKEN_2022_PROGRAM_ID },
+        "confirmed",
+      ),
     ]);
 
     const tokenAccounts = [...legacy.value, ...v2022.value];
@@ -59,7 +71,7 @@ export const getWalletBalances = action({
           owner: string;
           amountRaw: bigint;
         }
-      >
+      >,
     );
 
     const solBalance = await fetchSolBalance({
@@ -67,46 +79,59 @@ export const getWalletBalances = action({
       ctx,
     });
 
-    const tokensMetadata = await fetchTokensMetadata({ mints: Object.keys(userTokenData) });
-
-    const mapped = Object.values(tokensMetadata).map<TokenBalance | null>((asset) => {
-      const mint = asset.address;
-      const decoded = userTokenData[mint];
-      if (!decoded) return null;
-
-      const decimals = asset.decimals;
-      const rawAmount = decoded.amountRaw;
-
-      const balance = Number(rawAmount) / Math.pow(10, decimals);
-      const usdPrice = asset.usdPrice ?? 0;
-      const usdBalance = balance * usdPrice;
-
-      const priceChange = asset.stats24h?.priceChange ?? 0;
-
-      return {
-        mint,
-        decimals,
-        name: asset.name,
-        symbol: asset.symbol,
-        icon: asset.icon,
-        tokenAccount: decoded.pubkey,
-        balance,
-        tokenProgram: asset.tokenProgram,
-        usdPrice,
-        usdBalance,
-        priceChange,
-      };
+    const tokensMetadata = await fetchTokensMetadata({
+      mints: Object.keys(userTokenData),
     });
 
-    // Predicate compatible with parameter type because `mapped` is (TokenBalance|null)[]
-    const tokens = mapped.filter((t): t is TokenBalance => t !== null && t.usdBalance >= 0.0025);
+    const mapped = Object.values(tokensMetadata).map<TokenBalance | null>(
+      (asset) => {
+        const mint = asset.address;
+        const decoded = userTokenData[mint];
+        if (!decoded) return null;
 
-    const sortedTokenByUsdValue = tokens.sort((a: TokenBalance, b: TokenBalance) => b.usdBalance - a.usdBalance);
+        const decimals = asset.decimals;
+        const rawAmount = decoded.amountRaw;
+
+        const balance = Number(rawAmount) / Math.pow(10, decimals);
+        const usdPrice = asset.usdPrice ?? 0;
+        const usdBalance = balance * usdPrice;
+
+        const priceChange = asset.stats24h?.priceChange ?? 0;
+
+        return {
+          mint,
+          decimals,
+          name: asset.name,
+          symbol: asset.symbol,
+          icon: asset.icon,
+          tokenAccount: decoded.pubkey,
+          balance,
+          tokenProgram: asset.tokenProgram,
+          usdPrice,
+          usdBalance,
+          priceChange,
+        };
+      },
+    );
+
+    // Predicate compatible with parameter type because `mapped` is (TokenBalance|null)[]
+    const tokens = mapped.filter(
+      (t): t is TokenBalance => t !== null && t.usdBalance >= 0.0025,
+    );
+
+    const sortedTokenByUsdValue = tokens.sort(
+      (a: TokenBalance, b: TokenBalance) => b.usdBalance - a.usdBalance,
+    );
     return [solBalance, ...sortedTokenByUsdValue];
   },
 });
 
-async function fetchSolBalance({ address }: { address: Address; ctx: ActionCtx }) {
+async function fetchSolBalance({
+  address,
+}: {
+  address: Address;
+  ctx: ActionCtx;
+}) {
   const balance = await connection.getBalance(new PublicKey(address), {
     commitment: "confirmed",
   });

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Address, mints, tokensMetadata } from "../../convex/utils/solana";
 import { useTokenPrice } from "~/states/tokens";
-import { formatAmountInputWithSeparators, formatTokenAmount, formatUsdValue } from "~/utils/numberFormats";
+import {
+  formatAmountInputWithSeparators,
+  formatTokenAmount,
+  formatUsdValue,
+} from "~/utils/numberFormats";
 import { useTokenBalance } from "~/states/balances";
 import { motion } from "motion/react";
 import { RENT_LAMPORTS_DLMM } from "../../convex/services/meteora";
@@ -18,7 +22,8 @@ import { TokenBalance } from "../../convex/actions/fetch/walletBalances";
 const ESTIMATE_NOZOMI_TIP = 1_050_000 * 3;
 
 export const AMOUNTS_TO_OPEN_DLMM_POSITION =
-  rawAmountToAmount(RENT_LAMPORTS_DLMM, 9) + rawAmountToAmount(ESTIMATE_NOZOMI_TIP, 9);
+  rawAmountToAmount(RENT_LAMPORTS_DLMM, 9) +
+  rawAmountToAmount(ESTIMATE_NOZOMI_TIP, 9);
 export function CollateralDepositInput({
   initialCollateralMint = mints.usdc,
   value,
@@ -31,7 +36,9 @@ export function CollateralDepositInput({
   onCollateralMintChange?: (newMint: Address) => void;
 }) {
   const { convexUser } = useConvexUser();
-  const [collateralMint, setCollateralMint] = useState<Address>(initialCollateralMint);
+  const [collateralMint, setCollateralMint] = useState<Address>(
+    initialCollateralMint,
+  );
   const [depositAmount, setDepositAmount] = useState("");
 
   const lastExternalValue = useRef<number | undefined>(undefined);
@@ -73,14 +80,32 @@ export function CollateralDepositInput({
               />
             </MnMSuspense>
           ) : (
-            <div className="text-textSecondary text-xs">Please Connect Wallet</div>
+            <div className="text-textSecondary text-xs">
+              Please Connect Wallet
+            </div>
           )}
         </div>
 
         <SlidingSelect
           options={[
-            { id: mints.usdc, element: <TokenIcon className="w-5 h-5" icon={tokensMetadata[mints.usdc].icon} /> },
-            { id: mints.sol, element: <TokenIcon className="w-5 h-5" icon={tokensMetadata[mints.sol].icon} /> },
+            {
+              id: mints.usdc,
+              element: (
+                <TokenIcon
+                  className="w-5 h-5"
+                  icon={tokensMetadata[mints.usdc].icon}
+                />
+              ),
+            },
+            {
+              id: mints.sol,
+              element: (
+                <TokenIcon
+                  className="w-5 h-5"
+                  icon={tokensMetadata[mints.sol].icon}
+                />
+              ),
+            },
           ]}
           value={collateralMint}
           onChange={(newMint) => {
@@ -114,7 +139,9 @@ function DepositedUsdAmount({
     mint: mints.sol,
   });
 
-  const formattedDepositedUsdValue = formatUsdValue(depositUiAmount * collateralTokenPrice);
+  const formattedDepositedUsdValue = formatUsdValue(
+    depositUiAmount * collateralTokenPrice,
+  );
 
   // 1. Normal insufficient balance for the selected token
   const insufficientBalance = depositUiAmount > collateralTokenBalance.balance;
@@ -157,7 +184,11 @@ function DepositedUsdAmount({
     );
   }
 
-  return <div className="text-textSecondary text-xs">{depositUiAmount > 0 ? formattedDepositedUsdValue : "$0.00"}</div>;
+  return (
+    <div className="text-textSecondary text-xs">
+      {depositUiAmount > 0 ? formattedDepositedUsdValue : "$0.00"}
+    </div>
+  );
 }
 
 export function MaxBalance({
@@ -182,7 +213,10 @@ export function MaxBalance({
     >
       <WalletMinimal className="w-3 h-3 text-textSecondary group-hover:text-text hover-effect" />
       <div className="text-textSecondary text-xs group-hover:text-text hover-effect">
-        {formatTokenAmount(collateralTokenBalance.balance, collateralTokenBalance.symbol)}
+        {formatTokenAmount(
+          collateralTokenBalance.balance,
+          collateralTokenBalance.symbol,
+        )}
       </div>
     </Row>
   );

@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState, PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  PointerEvent as ReactPointerEvent,
+} from "react";
 import { useToken, useTokenPrice } from "~/states/tokens";
 import { SerializedBinLiquidity } from "../../convex/services/meteora";
 import { rawToAmountBN } from "../../convex/utils/amounts";
@@ -18,7 +24,10 @@ interface Props {
   maxBarHeight: number;
   sideBins: number;
   buffer: number;
-  onRangeChange: (lower: SerializedBinLiquidity, upper: SerializedBinLiquidity) => void;
+  onRangeChange: (
+    lower: SerializedBinLiquidity,
+    upper: SerializedBinLiquidity,
+  ) => void;
 }
 
 type DragMode = "none" | "lower" | "upper" | "track";
@@ -110,19 +119,29 @@ export default function BinRangeSelector({
     return { visibleStart: start, visibleEnd: end };
   }, [allBins.length, activeIndex, sideBins, buffer]);
 
-  const visibleBins = useMemo(() => allBins.slice(visibleStart, visibleEnd + 1), [allBins, visibleStart, visibleEnd]);
+  const visibleBins = useMemo(
+    () => allBins.slice(visibleStart, visibleEnd + 1),
+    [allBins, visibleStart, visibleEnd],
+  );
 
   const totalVisible = visibleBins.length;
 
   // 4) Visible selection indices (relative to visible window)
-  const visibleLowerIndex = Math.min(Math.max(lowerIndex - visibleStart, 0), Math.max(totalVisible - 1, 0));
-  const visibleUpperIndex = Math.min(Math.max(upperIndex - visibleStart, 0), Math.max(totalVisible - 1, 0));
+  const visibleLowerIndex = Math.min(
+    Math.max(lowerIndex - visibleStart, 0),
+    Math.max(totalVisible - 1, 0),
+  );
+  const visibleUpperIndex = Math.min(
+    Math.max(upperIndex - visibleStart, 0),
+    Math.max(totalVisible - 1, 0),
+  );
 
   // 5) OBSERVE WIDTH
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const updateWidth = () => setContainerWidth(containerRef.current?.clientWidth ?? 0);
+    const updateWidth = () =>
+      setContainerWidth(containerRef.current?.clientWidth ?? 0);
 
     updateWidth();
     const ro = new ResizeObserver(updateWidth);
@@ -133,7 +152,7 @@ export default function BinRangeSelector({
 
   const unitWidth = useMemo(
     () => (totalVisible > 0 ? containerWidth / totalVisible : 0),
-    [containerWidth, totalVisible]
+    [containerWidth, totalVisible],
   );
   const trackHeight = maxBarHeight + 32;
 
@@ -191,7 +210,12 @@ export default function BinRangeSelector({
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragStart.current || unitWidth === 0 || !totalVisible) return;
 
-    const { mode, lowerIndex: startLower, upperIndex: startUpper, x: startX } = dragStart.current;
+    const {
+      mode,
+      lowerIndex: startLower,
+      upperIndex: startUpper,
+      x: startX,
+    } = dragStart.current;
     const dx = e.clientX - startX;
     const deltaBins = Math.round(dx / unitWidth);
 
@@ -277,8 +301,14 @@ export default function BinRangeSelector({
   const visibleLower = lowerIndex - visibleStart;
   const visibleUpper = upperIndex - visibleStart;
 
-  const safeVisibleLower = Math.min(Math.max(visibleLower, 0), visibleBins.length - 1);
-  const safeVisibleUpper = Math.min(Math.max(visibleUpper, 0), visibleBins.length - 1);
+  const safeVisibleLower = Math.min(
+    Math.max(visibleLower, 0),
+    visibleBins.length - 1,
+  );
+  const safeVisibleUpper = Math.min(
+    Math.max(visibleUpper, 0),
+    visibleBins.length - 1,
+  );
 
   return (
     <div className="relative w-full select-none">
@@ -296,7 +326,8 @@ export default function BinRangeSelector({
             const globalIndex = visibleStart + idx;
             const h = getBinHeight(globalIndex);
 
-            const isSelected = globalIndex >= lowerIndex && globalIndex <= upperIndex;
+            const isSelected =
+              globalIndex >= lowerIndex && globalIndex <= upperIndex;
             const isActive = bin.binId === activeBinId;
             const isTokenX = bin.binId > activeBinId; // adjust if you consider X on which side
 
@@ -317,7 +348,7 @@ export default function BinRangeSelector({
                 className={cn(
                   "absolute bottom-0 rounded-xs hover-effect",
                   bgColor,
-                  isActive ? "opacity-100" : "opacity-40"
+                  isActive ? "opacity-100" : "opacity-40",
                 )}
                 style={{ left, width: barWidth, height: h }}
               />
@@ -421,10 +452,17 @@ function RangeHandle({
           bg-white/5  backdrop-blur-sm text-white shadow
           transition-all duration-150
         `,
-              isDragging && "scale-110"
+              isDragging && "scale-110",
             )}
           >
-            {label ? label : <FormattedBinPrice value={Number(bin.pricePerToken)} significantDigits={6} />}
+            {label ? (
+              label
+            ) : (
+              <FormattedBinPrice
+                value={Number(bin.pricePerToken)}
+                significantDigits={6}
+              />
+            )}
           </div>
         ))}
 
@@ -433,7 +471,7 @@ function RangeHandle({
         <div
           className={cn(
             "absolute inset-0 bg-[linear-gradient(to_bottom,var(--color-text)_50%,transparent_50%)] transition-transform",
-            isDragging && "scale-110"
+            isDragging && "scale-110",
           )}
           style={{
             backgroundSize: "2px 10px",
@@ -462,7 +500,10 @@ export function BinRangeSelectorSkeleton() {
     <div className="flex flex-col w-full">
       <div className="flex flex-row items-end justify-between gap-1 w-full">
         {Array.from({ length: 54 }).map((_, i) => (
-          <Skeleton key={i} className={cn(" rounded-xs hover-effect bg-text/10 h-16 w-full")} />
+          <Skeleton
+            key={i}
+            className={cn(" rounded-xs hover-effect bg-text/10 h-16 w-full")}
+          />
         ))}
       </div>
 

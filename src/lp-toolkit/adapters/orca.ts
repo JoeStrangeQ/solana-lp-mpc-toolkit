@@ -1,12 +1,12 @@
 /**
  * Orca Whirlpool DEX Adapter
  * Concentrated liquidity on Solana
- * 
+ *
  * SDK: @orca-so/whirlpools-sdk
  * Docs: https://orca-so.gitbook.io/orca-developer-portal/whirlpools
  */
 
-import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js';
+import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
 import {
   DEXAdapter,
   DEXVenue,
@@ -15,34 +15,38 @@ import {
   AddLiquidityIntent,
   RemoveLiquidityIntent,
   LPOperationResult,
-} from './types';
+} from "./types";
 
 // Orca Whirlpool Program IDs
-const WHIRLPOOL_PROGRAM_ID = new PublicKey('whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc');
-const ORCA_WHIRLPOOL_CONFIG = new PublicKey('2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ');
+const WHIRLPOOL_PROGRAM_ID = new PublicKey(
+  "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc",
+);
+const ORCA_WHIRLPOOL_CONFIG = new PublicKey(
+  "2LecshUwdy9xi7meFgHtFJQNSKk4KdTrcpvaB56dP2NQ",
+);
 
 // Common Whirlpool Addresses
 const WHIRLPOOLS = {
-  'SOL-USDC': new PublicKey('HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ'),
-  'SOL-USDT': new PublicKey('4fuUiYxTQ6QCrdSq9ouBYcTM7bqSwYTSyLueGZLTy4T4'),
-  'mSOL-SOL': new PublicKey('9vqYJjDUFecLL2xPUC4Rc7hyCtZ6iJ4mDiVZX7aFXoAe'),
-  'stSOL-SOL': new PublicKey('EfK84vYELT3K3zJ2L4S6xxx3KHqNKKqMETi6khVMfY8b'),
-  'BONK-SOL': new PublicKey('Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crLCEgK8Kb'),
-  'JTO-SOL': new PublicKey('EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMx'),
-  'JUP-SOL': new PublicKey('H1xnHfHxLk5rqBnX2q2VdRoAtbTTpJHxJwwPzX4AdEKM'),
-  'PYTH-SOL': new PublicKey('B3mSaqMCg73LSBxdaKJ2cqSVgmzv7YuDjNdvYrLiYZ8Q'),
+  "SOL-USDC": new PublicKey("HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ"),
+  "SOL-USDT": new PublicKey("4fuUiYxTQ6QCrdSq9ouBYcTM7bqSwYTSyLueGZLTy4T4"),
+  "mSOL-SOL": new PublicKey("9vqYJjDUFecLL2xPUC4Rc7hyCtZ6iJ4mDiVZX7aFXoAe"),
+  "stSOL-SOL": new PublicKey("EfK84vYELT3K3zJ2L4S6xxx3KHqNKKqMETi6khVMfY8b"),
+  "BONK-SOL": new PublicKey("Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crLCEgK8Kb"),
+  "JTO-SOL": new PublicKey("EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMx"),
+  "JUP-SOL": new PublicKey("H1xnHfHxLk5rqBnX2q2VdRoAtbTTpJHxJwwPzX4AdEKM"),
+  "PYTH-SOL": new PublicKey("B3mSaqMCg73LSBxdaKJ2cqSVgmzv7YuDjNdvYrLiYZ8Q"),
 };
 
 // Tick spacing configurations for different fee tiers
 const TICK_SPACING = {
-  '0.01%': 1,     // Stable pairs
-  '0.05%': 8,     // Stable-ish pairs  
-  '0.30%': 64,    // Standard pairs
-  '1.00%': 128,   // Volatile pairs
+  "0.01%": 1, // Stable pairs
+  "0.05%": 8, // Stable-ish pairs
+  "0.30%": 64, // Standard pairs
+  "1.00%": 128, // Volatile pairs
 };
 
 export class OrcaAdapter implements DEXAdapter {
-  venue: DEXVenue = 'orca';
+  venue: DEXVenue = "orca";
 
   /**
    * Get all available Whirlpools
@@ -50,25 +54,29 @@ export class OrcaAdapter implements DEXAdapter {
   async getPools(connection: Connection): Promise<LPPool[]> {
     try {
       const pools: LPPool[] = [];
-      
+
       // Fetch pool data via Orca API for efficiency
-      const response = await fetch('https://api.mainnet.orca.so/v1/whirlpool/list');
+      const response = await fetch(
+        "https://api.mainnet.orca.so/v1/whirlpool/list",
+      );
       const data = await response.json();
-      
+
       if (data.whirlpools) {
-        for (const wp of data.whirlpools.slice(0, 50)) { // Top 50 pools
+        for (const wp of data.whirlpools.slice(0, 50)) {
+          // Top 50 pools
           const pool = this.parseWhirlpoolData(wp);
-          if (pool && pool.tvl > 10000) { // Filter small pools
+          if (pool && pool.tvl > 10000) {
+            // Filter small pools
             pools.push(pool);
           }
         }
       }
-      
+
       // Sort by TVL descending
       return pools.sort((a, b) => b.tvl - a.tvl);
     } catch (error) {
-      console.error('Failed to fetch Orca pools:', error);
-      
+      console.error("Failed to fetch Orca pools:", error);
+
       // Fallback: return hardcoded top pools with estimated data
       return this.getHardcodedPools();
     }
@@ -77,17 +85,22 @@ export class OrcaAdapter implements DEXAdapter {
   /**
    * Get specific pool by address
    */
-  async getPool(connection: Connection, address: string): Promise<LPPool | null> {
+  async getPool(
+    connection: Connection,
+    address: string,
+  ): Promise<LPPool | null> {
     try {
-      const response = await fetch(`https://api.mainnet.orca.so/v1/whirlpool/${address}`);
+      const response = await fetch(
+        `https://api.mainnet.orca.so/v1/whirlpool/${address}`,
+      );
       const data = await response.json();
-      
+
       if (data) {
         return this.parseWhirlpoolData(data);
       }
       return null;
     } catch (error) {
-      console.error('Failed to fetch pool:', error);
+      console.error("Failed to fetch pool:", error);
       return null;
     }
   }
@@ -95,48 +108,55 @@ export class OrcaAdapter implements DEXAdapter {
   /**
    * Get user's Whirlpool positions
    */
-  async getPositions(connection: Connection, user: PublicKey): Promise<LPPosition[]> {
+  async getPositions(
+    connection: Connection,
+    user: PublicKey,
+  ): Promise<LPPosition[]> {
     try {
       const positions: LPPosition[] = [];
-      
+
       // Orca positions are stored as NFTs
       // Query via Orca API or on-chain
       const response = await fetch(
-        `https://api.mainnet.orca.so/v1/position/list?wallet=${user.toBase58()}`
+        `https://api.mainnet.orca.so/v1/position/list?wallet=${user.toBase58()}`,
       );
       const data = await response.json();
-      
+
       if (data.positions) {
         for (const pos of data.positions) {
           positions.push({
-            venue: 'orca',
+            venue: "orca",
             positionId: pos.address,
             poolAddress: pos.whirlpool,
-            poolName: pos.tokenA?.symbol && pos.tokenB?.symbol 
-              ? `${pos.tokenA.symbol}-${pos.tokenB.symbol}`
-              : 'Unknown Pool',
+            poolName:
+              pos.tokenA?.symbol && pos.tokenB?.symbol
+                ? `${pos.tokenA.symbol}-${pos.tokenB.symbol}`
+                : "Unknown Pool",
             owner: user.toBase58(),
-            tokenAAmount: pos.tokenAAmount || '0',
-            tokenBAmount: pos.tokenBAmount || '0',
+            tokenAAmount: pos.tokenAAmount || "0",
+            tokenBAmount: pos.tokenBAmount || "0",
             valueUSD: pos.valueUSD || 0,
             unclaimedFees: {
-              tokenA: pos.fees?.tokenA || '0',
-              tokenB: pos.fees?.tokenB || '0',
+              tokenA: pos.fees?.tokenA || "0",
+              tokenB: pos.fees?.tokenB || "0",
               totalUSD: pos.fees?.totalUSD || 0,
             },
-            priceRange: pos.tickLowerPrice && pos.tickUpperPrice ? {
-              lower: pos.tickLowerPrice,
-              upper: pos.tickUpperPrice,
-            } : undefined,
+            priceRange:
+              pos.tickLowerPrice && pos.tickUpperPrice
+                ? {
+                    lower: pos.tickLowerPrice,
+                    upper: pos.tickUpperPrice,
+                  }
+                : undefined,
             inRange: pos.inRange ?? true,
             createdAt: pos.createdAt,
           });
         }
       }
-      
+
       return positions;
     } catch (error) {
-      console.error('Failed to fetch Orca positions:', error);
+      console.error("Failed to fetch Orca positions:", error);
       return [];
     }
   }
@@ -144,39 +164,48 @@ export class OrcaAdapter implements DEXAdapter {
   /**
    * Get specific position
    */
-  async getPosition(connection: Connection, positionId: string): Promise<LPPosition | null> {
+  async getPosition(
+    connection: Connection,
+    positionId: string,
+  ): Promise<LPPosition | null> {
     try {
-      const response = await fetch(`https://api.mainnet.orca.so/v1/position/${positionId}`);
+      const response = await fetch(
+        `https://api.mainnet.orca.so/v1/position/${positionId}`,
+      );
       const data = await response.json();
-      
+
       if (data) {
         return {
-          venue: 'orca',
+          venue: "orca",
           positionId: data.address,
           poolAddress: data.whirlpool,
-          poolName: data.tokenA?.symbol && data.tokenB?.symbol
-            ? `${data.tokenA.symbol}-${data.tokenB.symbol}`
-            : 'Unknown Pool',
-          owner: data.owner || '',
-          tokenAAmount: data.tokenAAmount || '0',
-          tokenBAmount: data.tokenBAmount || '0',
+          poolName:
+            data.tokenA?.symbol && data.tokenB?.symbol
+              ? `${data.tokenA.symbol}-${data.tokenB.symbol}`
+              : "Unknown Pool",
+          owner: data.owner || "",
+          tokenAAmount: data.tokenAAmount || "0",
+          tokenBAmount: data.tokenBAmount || "0",
           valueUSD: data.valueUSD || 0,
           unclaimedFees: {
-            tokenA: data.fees?.tokenA || '0',
-            tokenB: data.fees?.tokenB || '0',
+            tokenA: data.fees?.tokenA || "0",
+            tokenB: data.fees?.tokenB || "0",
             totalUSD: data.fees?.totalUSD || 0,
           },
-          priceRange: data.tickLowerPrice && data.tickUpperPrice ? {
-            lower: data.tickLowerPrice,
-            upper: data.tickUpperPrice,
-          } : undefined,
+          priceRange:
+            data.tickLowerPrice && data.tickUpperPrice
+              ? {
+                  lower: data.tickLowerPrice,
+                  upper: data.tickUpperPrice,
+                }
+              : undefined,
           inRange: data.inRange ?? true,
           createdAt: data.createdAt,
         };
       }
       return null;
     } catch (error) {
-      console.error('Failed to fetch position:', error);
+      console.error("Failed to fetch position:", error);
       return null;
     }
   }
@@ -187,11 +216,11 @@ export class OrcaAdapter implements DEXAdapter {
   async addLiquidity(
     connection: Connection,
     user: Keypair,
-    params: AddLiquidityIntent
+    params: AddLiquidityIntent,
   ): Promise<{ transaction: Transaction; positionId: string }> {
     // In production, use @orca-so/whirlpools-sdk
     // This is a reference implementation
-    
+
     const {
       poolAddress,
       tokenA,
@@ -199,7 +228,7 @@ export class OrcaAdapter implements DEXAdapter {
       amountA,
       amountB,
       totalValueUSD,
-      strategy = 'balanced',
+      strategy = "balanced",
       slippageBps = 100,
     } = params;
 
@@ -221,7 +250,7 @@ export class OrcaAdapter implements DEXAdapter {
     // Build the transaction
     // Using SDK: WhirlpoolIx.openPositionWithMetadataIx()
     const transaction = new Transaction();
-    
+
     // 1. Open position (creates NFT)
     // const openPositionIx = await WhirlpoolIx.openPositionWithMetadataIx(ctx, {
     //   whirlpool: new PublicKey(targetPool),
@@ -230,7 +259,7 @@ export class OrcaAdapter implements DEXAdapter {
     //   tickUpperIndex: tickUpper,
     //   funder: user.publicKey,
     // });
-    
+
     // 2. Increase liquidity
     // const increaseLiquidityIx = await WhirlpoolIx.increaseLiquidityIx(ctx, {
     //   whirlpool: new PublicKey(targetPool),
@@ -241,13 +270,15 @@ export class OrcaAdapter implements DEXAdapter {
     //   tokenMaxA: maxAmountA,
     //   tokenMaxB: maxAmountB,
     // });
-    
+
     // For now, return placeholder
     const positionId = `orca_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    
+
     console.log(`[Orca] Creating position in pool ${targetPool}`);
-    console.log(`[Orca] Strategy: ${strategy}, Tick range: ${tickLower} - ${tickUpper}`);
-    
+    console.log(
+      `[Orca] Strategy: ${strategy}, Tick range: ${tickLower} - ${tickUpper}`,
+    );
+
     return {
       transaction,
       positionId,
@@ -260,12 +291,12 @@ export class OrcaAdapter implements DEXAdapter {
   async removeLiquidity(
     connection: Connection,
     user: Keypair,
-    params: RemoveLiquidityIntent
+    params: RemoveLiquidityIntent,
   ): Promise<Transaction> {
     const { positionId, percentage = 100, claimFees = true } = params;
-    
+
     const transaction = new Transaction();
-    
+
     // 1. Decrease liquidity
     // const decreaseLiquidityIx = await WhirlpoolIx.decreaseLiquidityIx(ctx, {
     //   whirlpool: pool,
@@ -276,19 +307,21 @@ export class OrcaAdapter implements DEXAdapter {
     //   tokenMinA: minAmountA,
     //   tokenMinB: minAmountB,
     // });
-    
+
     // 2. Collect fees if requested
     if (claimFees) {
       // const collectFeesIx = await WhirlpoolIx.collectFeesIx(ctx, {...});
     }
-    
+
     // 3. Close position if 100%
     if (percentage === 100) {
       // const closePositionIx = await WhirlpoolIx.closePositionIx(ctx, {...});
     }
-    
-    console.log(`[Orca] Removing ${percentage}% liquidity from position ${positionId}`);
-    
+
+    console.log(
+      `[Orca] Removing ${percentage}% liquidity from position ${positionId}`,
+    );
+
     return transaction;
   }
 
@@ -298,10 +331,10 @@ export class OrcaAdapter implements DEXAdapter {
   async claimFees(
     connection: Connection,
     user: Keypair,
-    positionId: string
+    positionId: string,
   ): Promise<Transaction> {
     const transaction = new Transaction();
-    
+
     // const collectFeesIx = await WhirlpoolIx.collectFeesIx(ctx, {
     //   whirlpool: pool,
     //   position: new PublicKey(positionId),
@@ -311,12 +344,12 @@ export class OrcaAdapter implements DEXAdapter {
     //   tokenVaultA: poolTokenVaultA,
     //   tokenVaultB: poolTokenVaultB,
     // });
-    
+
     // Also collect rewards if any
     // const collectRewardsIx = await WhirlpoolIx.collectRewardIx(ctx, {...});
-    
+
     console.log(`[Orca] Claiming fees for position ${positionId}`);
-    
+
     return transaction;
   }
 
@@ -337,7 +370,7 @@ export class OrcaAdapter implements DEXAdapter {
     // Simplified: IL = 2 * sqrt(priceRatio) / (1 + priceRatio) - 1
     const ratio = 1 + priceChange;
     if (ratio <= 0) return -1; // Total loss
-    
+
     const il = (2 * Math.sqrt(ratio)) / (1 + ratio) - 1;
     return Math.abs(il);
   }
@@ -346,23 +379,24 @@ export class OrcaAdapter implements DEXAdapter {
 
   private parseWhirlpoolData(wp: any): LPPool | null {
     if (!wp) return null;
-    
+
     try {
       return {
-        venue: 'orca',
-        address: wp.address || '',
-        name: wp.tokenA?.symbol && wp.tokenB?.symbol 
-          ? `${wp.tokenA.symbol}-${wp.tokenB.symbol}`
-          : 'Unknown',
+        venue: "orca",
+        address: wp.address || "",
+        name:
+          wp.tokenA?.symbol && wp.tokenB?.symbol
+            ? `${wp.tokenA.symbol}-${wp.tokenB.symbol}`
+            : "Unknown",
         tokenA: {
-          mint: wp.tokenA?.mint || '',
-          symbol: wp.tokenA?.symbol || 'UNKNOWN',
+          mint: wp.tokenA?.mint || "",
+          symbol: wp.tokenA?.symbol || "UNKNOWN",
           decimals: wp.tokenA?.decimals || 9,
           logoURI: wp.tokenA?.logoURI,
         },
         tokenB: {
-          mint: wp.tokenB?.mint || '',
-          symbol: wp.tokenB?.symbol || 'UNKNOWN',
+          mint: wp.tokenB?.mint || "",
+          symbol: wp.tokenB?.symbol || "UNKNOWN",
           decimals: wp.tokenB?.decimals || 6,
           logoURI: wp.tokenB?.logoURI,
         },
@@ -371,48 +405,58 @@ export class OrcaAdapter implements DEXAdapter {
         apy: wp.apy?.total || wp.apy || 0,
         apy7d: wp.apy7d?.total || wp.apy7d || wp.apy?.total || 0,
         volume24h: wp.volume?.day || wp.volume24h || 0,
-        priceRange: wp.price ? {
-          lower: 0,
-          upper: Infinity,
-          current: wp.price,
-        } : undefined,
+        priceRange: wp.price
+          ? {
+              lower: 0,
+              upper: Infinity,
+              current: wp.price,
+            }
+          : undefined,
       };
     } catch {
       return null;
     }
   }
 
-  private calculateTickRange(strategy: string): { tickLower: number; tickUpper: number } {
+  private calculateTickRange(strategy: string): {
+    tickLower: number;
+    tickUpper: number;
+  } {
     // Tick spacing for 0.30% fee tier (most common)
     const tickSpacing = 64;
-    
+
     // Get current price tick (would come from pool data in real impl)
     const currentTick = 0; // Placeholder
-    
+
     switch (strategy) {
-      case 'concentrated':
+      case "concentrated":
         // ±5% range
         return {
-          tickLower: Math.floor((currentTick - 500) / tickSpacing) * tickSpacing,
+          tickLower:
+            Math.floor((currentTick - 500) / tickSpacing) * tickSpacing,
           tickUpper: Math.ceil((currentTick + 500) / tickSpacing) * tickSpacing,
         };
-      case 'balanced':
+      case "balanced":
         // ±20% range
         return {
-          tickLower: Math.floor((currentTick - 2000) / tickSpacing) * tickSpacing,
-          tickUpper: Math.ceil((currentTick + 2000) / tickSpacing) * tickSpacing,
+          tickLower:
+            Math.floor((currentTick - 2000) / tickSpacing) * tickSpacing,
+          tickUpper:
+            Math.ceil((currentTick + 2000) / tickSpacing) * tickSpacing,
         };
-      case 'yield-max':
+      case "yield-max":
         // ±50% range (wider for more fee capture)
         return {
-          tickLower: Math.floor((currentTick - 5000) / tickSpacing) * tickSpacing,
-          tickUpper: Math.ceil((currentTick + 5000) / tickSpacing) * tickSpacing,
+          tickLower:
+            Math.floor((currentTick - 5000) / tickSpacing) * tickSpacing,
+          tickUpper:
+            Math.ceil((currentTick + 5000) / tickSpacing) * tickSpacing,
         };
       default:
         // Full range
         return {
-          tickLower: -443632,  // MIN_TICK
-          tickUpper: 443632,   // MAX_TICK
+          tickLower: -443632, // MIN_TICK
+          tickUpper: 443632, // MAX_TICK
         };
     }
   }
@@ -421,23 +465,39 @@ export class OrcaAdapter implements DEXAdapter {
     // Fallback pool data for when API is unavailable
     return [
       {
-        venue: 'orca',
-        address: 'HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ',
-        name: 'SOL-USDC',
-        tokenA: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
-        tokenB: { mint: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', symbol: 'USDC', decimals: 6 },
-        fee: 0.30,
+        venue: "orca",
+        address: "HJPjoWUrhoZzkNfRpHuieeFk9WcZWjwy6PBjZ81ngndJ",
+        name: "SOL-USDC",
+        tokenA: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
+        tokenB: {
+          mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+          symbol: "USDC",
+          decimals: 6,
+        },
+        fee: 0.3,
         tvl: 45000000,
         apy: 42.5,
         apy7d: 38.2,
         volume24h: 12000000,
       },
       {
-        venue: 'orca',
-        address: '9vqYJjDUFecLL2xPUC4Rc7hyCtZ6iJ4mDiVZX7aFXoAe',
-        name: 'mSOL-SOL',
-        tokenA: { mint: 'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So', symbol: 'mSOL', decimals: 9 },
-        tokenB: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
+        venue: "orca",
+        address: "9vqYJjDUFecLL2xPUC4Rc7hyCtZ6iJ4mDiVZX7aFXoAe",
+        name: "mSOL-SOL",
+        tokenA: {
+          mint: "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So",
+          symbol: "mSOL",
+          decimals: 9,
+        },
+        tokenB: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
         fee: 0.01,
         tvl: 28000000,
         apy: 8.5,
@@ -445,36 +505,60 @@ export class OrcaAdapter implements DEXAdapter {
         volume24h: 3500000,
       },
       {
-        venue: 'orca',
-        address: 'Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crLCEgK8Kb',
-        name: 'BONK-SOL',
-        tokenA: { mint: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', symbol: 'BONK', decimals: 5 },
-        tokenB: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
-        fee: 1.00,
+        venue: "orca",
+        address: "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crLCEgK8Kb",
+        name: "BONK-SOL",
+        tokenA: {
+          mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
+          symbol: "BONK",
+          decimals: 5,
+        },
+        tokenB: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
+        fee: 1.0,
         tvl: 8500000,
         apy: 156.3,
         apy7d: 142.1,
         volume24h: 25000000,
       },
       {
-        venue: 'orca',
-        address: 'EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMx',
-        name: 'JTO-SOL',
-        tokenA: { mint: 'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL', symbol: 'JTO', decimals: 9 },
-        tokenB: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
-        fee: 0.30,
+        venue: "orca",
+        address: "EP2ib6dYdEeqD8MfE2ezHCxX3kP3K2eLKkirfPm5eyMx",
+        name: "JTO-SOL",
+        tokenA: {
+          mint: "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL",
+          symbol: "JTO",
+          decimals: 9,
+        },
+        tokenB: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
+        fee: 0.3,
         tvl: 12000000,
         apy: 65.8,
         apy7d: 58.4,
         volume24h: 8000000,
       },
       {
-        venue: 'orca',
-        address: 'H1xnHfHxLk5rqBnX2q2VdRoAtbTTpJHxJwwPzX4AdEKM',
-        name: 'JUP-SOL',
-        tokenA: { mint: 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN', symbol: 'JUP', decimals: 6 },
-        tokenB: { mint: 'So11111111111111111111111111111111111111112', symbol: 'SOL', decimals: 9 },
-        fee: 0.30,
+        venue: "orca",
+        address: "H1xnHfHxLk5rqBnX2q2VdRoAtbTTpJHxJwwPzX4AdEKM",
+        name: "JUP-SOL",
+        tokenA: {
+          mint: "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
+          symbol: "JUP",
+          decimals: 6,
+        },
+        tokenB: {
+          mint: "So11111111111111111111111111111111111111112",
+          symbol: "SOL",
+          decimals: 9,
+        },
+        fee: 0.3,
         tvl: 18000000,
         apy: 78.2,
         apy7d: 71.5,

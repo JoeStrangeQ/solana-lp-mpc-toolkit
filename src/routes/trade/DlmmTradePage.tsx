@@ -1,8 +1,14 @@
 import { PoolDataHeader } from "~/components/PoolDataHeader";
 import { Address, toAddress } from "../../../convex/utils/solana";
 import { useParams } from "@tanstack/react-router";
-import { CreatePositionPanel, CreatePositionPanelSkeleton } from "~/components/trade/CreatePositionPanel";
-import { RangeSelectorPanel, RangeSelectorPanelSkeleton } from "~/components/trade/RangeSelectorPanel";
+import {
+  CreatePositionPanel,
+  CreatePositionPanelSkeleton,
+} from "~/components/trade/CreatePositionPanel";
+import {
+  RangeSelectorPanel,
+  RangeSelectorPanelSkeleton,
+} from "~/components/trade/RangeSelectorPanel";
 import { MnMSuspense } from "~/components/MnMSuspense";
 import { ChartColumnIncreasing } from "lucide-react";
 import { usePool } from "~/states/pools";
@@ -17,7 +23,11 @@ export default function DlmmTradePage() {
 
   return (
     <div className="w-full px-5 py-9">
-      <PoolDataHeader classname="mb-3.5" protocol="dlmm" poolAddress={parsedPoolAddress} />
+      <PoolDataHeader
+        classname="mb-3.5"
+        protocol="dlmm"
+        poolAddress={parsedPoolAddress}
+      />
 
       <div
         className="
@@ -55,7 +65,9 @@ export default function DlmmTradePage() {
         </div>
       </div>
 
-      <div className="text-text text-sm text-left mt-5 mb-2">Open Positions</div>
+      <div className="text-text text-sm text-left mt-5 mb-2">
+        Open Positions
+      </div>
       <OpenPositionsTable />
     </div>
   );

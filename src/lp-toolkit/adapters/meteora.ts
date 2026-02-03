@@ -3,9 +3,9 @@
  * Unified interface for Meteora DLMM liquidity operations
  */
 
-import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js';
-import DLMM from '@meteora-ag/dlmm';
-import BN from 'bn.js';
+import { Connection, PublicKey, Keypair, Transaction } from "@solana/web3.js";
+import DLMM from "@meteora-ag/dlmm";
+import BN from "bn.js";
 
 // ============ Types ============
 
@@ -58,11 +58,11 @@ export interface RemoveLiquidityParams {
 // ============ Constants ============
 
 export const POPULAR_POOLS = {
-  'SOL-USDC': 'ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq',
-  'SOL-USDT': '6WfCBxPWDrHMBVr5DyRTQr7w1FqTwW5EGMHynPCKxRxJ',
-  'JUP-USDC': 'Gad6LaPqJMQwjF2sHctPdHm8qVqDsLLMz2pjCrUFp6Zb',
-  'JUP-SOL': '5BUwFW4nRbftYTDMbgxykoFWqWHPzahFSNAaaaJtVKsq',
-  'BONK-SOL': 'AQJcx5P8BVWwRqT6xCfMEbUqJWyXH7r3EyMKvwNzFKui',
+  "SOL-USDC": "ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq",
+  "SOL-USDT": "6WfCBxPWDrHMBVr5DyRTQr7w1FqTwW5EGMHynPCKxRxJ",
+  "JUP-USDC": "Gad6LaPqJMQwjF2sHctPdHm8qVqDsLLMz2pjCrUFp6Zb",
+  "JUP-SOL": "5BUwFW4nRbftYTDMbgxykoFWqWHPzahFSNAaaaJtVKsq",
+  "BONK-SOL": "AQJcx5P8BVWwRqT6xCfMEbUqJWyXH7r3EyMKvwNzFKui",
 } as const;
 
 // ============ Core Functions ============
@@ -73,9 +73,9 @@ export const POPULAR_POOLS = {
 export async function getPools(connection: Connection): Promise<MeteoraPool[]> {
   try {
     // Fetch from Meteora API for pool data with APY
-    const response = await fetch('https://dlmm-api.meteora.ag/pair/all');
+    const response = await fetch("https://dlmm-api.meteora.ag/pair/all");
     const data = await response.json();
-    
+
     return data.map((pool: any) => ({
       address: pool.address,
       name: pool.name,
@@ -90,7 +90,7 @@ export async function getPools(connection: Connection): Promise<MeteoraPool[]> {
       volume24h: pool.trade_volume_24h || 0,
     }));
   } catch (error) {
-    console.error('Failed to fetch Meteora pools:', error);
+    console.error("Failed to fetch Meteora pools:", error);
     return [];
   }
 }
@@ -102,30 +102,30 @@ export async function getTopPools(
   connection: Connection,
   tokenA?: string,
   tokenB?: string,
-  limit: number = 10
+  limit: number = 10,
 ): Promise<MeteoraPool[]> {
   const pools = await getPools(connection);
-  
+
   let filtered = pools;
-  
+
   // Filter by token if specified
   if (tokenA) {
     const tokenAUpper = tokenA.toUpperCase();
-    filtered = filtered.filter(p => 
-      p.name.toUpperCase().includes(tokenAUpper)
+    filtered = filtered.filter((p) =>
+      p.name.toUpperCase().includes(tokenAUpper),
     );
   }
-  
+
   if (tokenB) {
     const tokenBUpper = tokenB.toUpperCase();
-    filtered = filtered.filter(p => 
-      p.name.toUpperCase().includes(tokenBUpper)
+    filtered = filtered.filter((p) =>
+      p.name.toUpperCase().includes(tokenBUpper),
     );
   }
-  
+
   // Sort by APY descending
   filtered.sort((a, b) => b.apy24h - a.apy24h);
-  
+
   return filtered.slice(0, limit);
 }
 
@@ -134,33 +134,33 @@ export async function getTopPools(
  */
 export async function getPositions(
   connection: Connection,
-  userPubkey: PublicKey
+  userPubkey: PublicKey,
 ): Promise<MeteoraPosition[]> {
   try {
     // Fetch user positions from Meteora API
     const response = await fetch(
-      `https://dlmm-api.meteora.ag/position/${userPubkey.toString()}`
+      `https://dlmm-api.meteora.ag/position/${userPubkey.toString()}`,
     );
     const data = await response.json();
-    
+
     if (!Array.isArray(data)) return [];
-    
+
     return data.map((pos: any) => ({
       address: pos.address,
       poolAddress: pos.pair_address,
-      poolName: pos.pair_name || 'Unknown',
+      poolName: pos.pair_name || "Unknown",
       lowerBinId: pos.lower_bin_id,
       upperBinId: pos.upper_bin_id,
-      liquidity: pos.total_liquidity || '0',
-      tokenXAmount: pos.total_x_amount || '0',
-      tokenYAmount: pos.total_y_amount || '0',
+      liquidity: pos.total_liquidity || "0",
+      tokenXAmount: pos.total_x_amount || "0",
+      tokenYAmount: pos.total_y_amount || "0",
       valueUSD: pos.total_value_usd || 0,
-      unclaimedFeesX: pos.unclaimed_fee_x || '0',
-      unclaimedFeesY: pos.unclaimed_fee_y || '0',
+      unclaimedFeesX: pos.unclaimed_fee_x || "0",
+      unclaimedFeesY: pos.unclaimed_fee_y || "0",
       unclaimedFeesUSD: pos.unclaimed_fee_usd || 0,
     }));
   } catch (error) {
-    console.error('Failed to fetch Meteora positions:', error);
+    console.error("Failed to fetch Meteora positions:", error);
     return [];
   }
 }
@@ -172,30 +172,30 @@ export async function addLiquidity(params: AddLiquidityParams): Promise<{
   transaction: Transaction;
   positionAddress: PublicKey;
 }> {
-  const { 
-    connection, 
-    user, 
-    poolAddress, 
-    tokenXAmount, 
+  const {
+    connection,
+    user,
+    poolAddress,
+    tokenXAmount,
     tokenYAmount,
     binRange = 10,
-    slippageBps = 50 
+    slippageBps = 50,
   } = params;
-  
+
   // Initialize DLMM instance
   const dlmm = await DLMM.create(connection, new PublicKey(poolAddress));
-  
+
   // Get active bin for position centering
   const activeBin = await dlmm.getActiveBin();
   const activeBinId = activeBin.binId;
-  
+
   // Calculate bin range around active price
   const lowerBinId = activeBinId - Math.floor(binRange / 2);
   const upperBinId = activeBinId + Math.ceil(binRange / 2);
-  
+
   // Create position with balanced distribution
   const newPosition = Keypair.generate();
-  
+
   // Build add liquidity transaction
   const addLiquidityTx = await dlmm.addLiquidityByStrategy({
     connection,
@@ -204,16 +204,16 @@ export async function addLiquidity(params: AddLiquidityParams): Promise<{
     totalXAmount: new BN(tokenXAmount),
     totalYAmount: new BN(tokenYAmount),
     strategy: {
-      strategyType: 'SpotBalanced',
+      strategyType: "SpotBalanced",
       minBinId: lowerBinId,
       maxBinId: upperBinId,
     },
     slippage: slippageBps / 10000, // Convert bps to decimal
   });
-  
+
   // Sign with new position keypair
   addLiquidityTx.sign(newPosition);
-  
+
   return {
     transaction: addLiquidityTx,
     positionAddress: newPosition.publicKey,
@@ -223,37 +223,48 @@ export async function addLiquidity(params: AddLiquidityParams): Promise<{
 /**
  * Remove liquidity from a Meteora DLMM position
  */
-export async function removeLiquidity(params: RemoveLiquidityParams): Promise<Transaction> {
+export async function removeLiquidity(
+  params: RemoveLiquidityParams,
+): Promise<Transaction> {
   const { connection, user, positionAddress, percentage = 100 } = params;
-  
+
   // Get position info to find the pool
   const positionPubkey = new PublicKey(positionAddress);
-  
+
   // Fetch position to get pool address
   const response = await fetch(
-    `https://dlmm-api.meteora.ag/position_v2/${positionAddress}`
+    `https://dlmm-api.meteora.ag/position_v2/${positionAddress}`,
   );
   const positionData = await response.json();
-  
+
   if (!positionData.pair_address) {
-    throw new Error('Could not find pool for position');
+    throw new Error("Could not find pool for position");
   }
-  
+
   // Initialize DLMM instance
-  const dlmm = await DLMM.create(connection, new PublicKey(positionData.pair_address));
-  
+  const dlmm = await DLMM.create(
+    connection,
+    new PublicKey(positionData.pair_address),
+  );
+
   // Get the position's bin IDs
-  const { userPositions } = await dlmm.getPositionsByUserAndLbPair(user.publicKey);
-  const position = userPositions.find(p => p.publicKey.equals(positionPubkey));
-  
+  const { userPositions } = await dlmm.getPositionsByUserAndLbPair(
+    user.publicKey,
+  );
+  const position = userPositions.find((p) =>
+    p.publicKey.equals(positionPubkey),
+  );
+
   if (!position) {
-    throw new Error('Position not found');
+    throw new Error("Position not found");
   }
-  
+
   // Build remove liquidity transaction
-  const binIdsToRemove = position.positionData.positionBinData.map(bin => bin.binId);
+  const binIdsToRemove = position.positionData.positionBinData.map(
+    (bin) => bin.binId,
+  );
   const bpsToRemove = Math.floor(percentage * 100); // Convert percentage to bps
-  
+
   const removeLiquidityTx = await dlmm.removeLiquidity({
     user: user.publicKey,
     position: positionPubkey,
@@ -261,7 +272,7 @@ export async function removeLiquidity(params: RemoveLiquidityParams): Promise<Tr
     bps: new BN(bpsToRemove),
     shouldClaimAndClose: percentage === 100,
   });
-  
+
   return removeLiquidityTx;
 }
 
@@ -271,27 +282,30 @@ export async function removeLiquidity(params: RemoveLiquidityParams): Promise<Tr
 export async function claimFees(
   connection: Connection,
   user: Keypair,
-  positionAddress: string
+  positionAddress: string,
 ): Promise<Transaction> {
   const positionPubkey = new PublicKey(positionAddress);
-  
+
   // Fetch position to get pool address
   const response = await fetch(
-    `https://dlmm-api.meteora.ag/position_v2/${positionAddress}`
+    `https://dlmm-api.meteora.ag/position_v2/${positionAddress}`,
   );
   const positionData = await response.json();
-  
+
   if (!positionData.pair_address) {
-    throw new Error('Could not find pool for position');
+    throw new Error("Could not find pool for position");
   }
-  
-  const dlmm = await DLMM.create(connection, new PublicKey(positionData.pair_address));
-  
+
+  const dlmm = await DLMM.create(
+    connection,
+    new PublicKey(positionData.pair_address),
+  );
+
   const claimTx = await dlmm.claimAllRewards({
     owner: user.publicKey,
     positions: [positionPubkey],
   });
-  
+
   return claimTx;
 }
 
@@ -321,19 +335,26 @@ export function formatPoolForChat(pool: MeteoraPool): string {
 
 // ============ Class Adapter (implements DEXAdapter interface) ============
 
-import { DEXAdapter, DEXVenue, LPPool, LPPosition, AddLiquidityIntent, RemoveLiquidityIntent } from './types';
+import {
+  DEXAdapter,
+  DEXVenue,
+  LPPool,
+  LPPosition,
+  AddLiquidityIntent,
+  RemoveLiquidityIntent,
+} from "./types";
 
 export class MeteoraAdapter implements DEXAdapter {
-  venue: DEXVenue = 'meteora';
+  venue: DEXVenue = "meteora";
 
   async getPools(connection: Connection): Promise<LPPool[]> {
     const pools = await getPools(connection);
-    return pools.map(p => ({
-      venue: 'meteora' as DEXVenue,
+    return pools.map((p) => ({
+      venue: "meteora" as DEXVenue,
       address: p.address,
       name: p.name,
-      tokenA: { mint: p.mintX, symbol: p.name.split('-')[0], decimals: 9 },
-      tokenB: { mint: p.mintY, symbol: p.name.split('-')[1], decimals: 6 },
+      tokenA: { mint: p.mintX, symbol: p.name.split("-")[0], decimals: 9 },
+      tokenB: { mint: p.mintY, symbol: p.name.split("-")[1], decimals: 6 },
       fee: p.baseFee,
       tvl: p.tvl,
       apy: p.apy24h,
@@ -343,15 +364,21 @@ export class MeteoraAdapter implements DEXAdapter {
     }));
   }
 
-  async getPool(connection: Connection, address: string): Promise<LPPool | null> {
+  async getPool(
+    connection: Connection,
+    address: string,
+  ): Promise<LPPool | null> {
     const pools = await this.getPools(connection);
-    return pools.find(p => p.address === address) || null;
+    return pools.find((p) => p.address === address) || null;
   }
 
-  async getPositions(connection: Connection, user: PublicKey): Promise<LPPosition[]> {
+  async getPositions(
+    connection: Connection,
+    user: PublicKey,
+  ): Promise<LPPosition[]> {
     const positions = await getPositions(connection, user);
-    return positions.map(p => ({
-      venue: 'meteora' as DEXVenue,
+    return positions.map((p) => ({
+      venue: "meteora" as DEXVenue,
       positionId: p.address,
       poolAddress: p.poolAddress,
       poolName: p.poolName,
@@ -369,12 +396,19 @@ export class MeteoraAdapter implements DEXAdapter {
     }));
   }
 
-  async getPosition(connection: Connection, positionId: string): Promise<LPPosition | null> {
+  async getPosition(
+    connection: Connection,
+    positionId: string,
+  ): Promise<LPPosition | null> {
     // Would need to fetch specific position
     return null;
   }
 
-  async addLiquidity(connection: Connection, user: Keypair, params: AddLiquidityIntent) {
+  async addLiquidity(
+    connection: Connection,
+    user: Keypair,
+    params: AddLiquidityIntent,
+  ) {
     const result = await addLiquidity({
       connection,
       user,
@@ -383,10 +417,17 @@ export class MeteoraAdapter implements DEXAdapter {
       tokenYAmount: params.amountB || 0,
       slippageBps: params.slippageBps,
     });
-    return { transaction: result.transaction, positionId: result.positionAddress.toBase58() };
+    return {
+      transaction: result.transaction,
+      positionId: result.positionAddress.toBase58(),
+    };
   }
 
-  async removeLiquidity(connection: Connection, user: Keypair, params: RemoveLiquidityIntent) {
+  async removeLiquidity(
+    connection: Connection,
+    user: Keypair,
+    params: RemoveLiquidityIntent,
+  ) {
     return removeLiquidity({
       connection,
       user,
@@ -400,12 +441,12 @@ export class MeteoraAdapter implements DEXAdapter {
   }
 
   estimateYield(pool: LPPool, amount: number, days: number): number {
-    return (pool.apy / 365) * days * amount / 100;
+    return ((pool.apy / 365) * days * amount) / 100;
   }
 
   estimateIL(pool: LPPool, priceChange: number): number {
     // Simplified IL formula for DLMM
-    const k = 2 * Math.sqrt(1 + priceChange) / (1 + priceChange + 1) - 1;
+    const k = (2 * Math.sqrt(1 + priceChange)) / (1 + priceChange + 1) - 1;
     return Math.abs(k) * 100;
   }
 }

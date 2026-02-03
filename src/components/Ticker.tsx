@@ -36,22 +36,29 @@ export function Ticker({
         animate: { opacity: 0 },
       },
     }),
-    []
+    [],
   );
 
   return (
     <div className="flex flex-row">
       <AnimatePresence>
         {chars.map((char, i) => {
-          const isWholeNumber = i < decimalsSeparatorIndex || decimalsSeparatorIndex === -1;
+          const isWholeNumber =
+            i < decimalsSeparatorIndex || decimalsSeparatorIndex === -1;
           return (
             <motion.div
               key={i}
               className={`${isWholeNumber ? "text-text" : "text-textSecondary"} font-bold select-none
  ${className ?? ""}`}
-              initial={animateOnMount ? fadeVariants.fadeInDown.initial : undefined}
+              initial={
+                animateOnMount ? fadeVariants.fadeInDown.initial : undefined
+              }
               animate={fadeVariants.fadeInDown.animate}
-              exit={isWholeNumber ? fadeVariants.fadeOutUp.animate : fadeVariants.fadeOutDecimals.animate}
+              exit={
+                isWholeNumber
+                  ? fadeVariants.fadeOutUp.animate
+                  : fadeVariants.fadeOutDecimals.animate
+              }
               transition={
                 isWholeNumber
                   ? {

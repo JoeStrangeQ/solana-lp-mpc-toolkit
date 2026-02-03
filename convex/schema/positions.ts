@@ -11,7 +11,11 @@ export const vBinIdAndPrice = v.object({
   id: v.number(),
   price: v.number(),
 });
-export const vLiquidityShape = v.union(v.literal("Spot"), v.literal("Curve"), v.literal("BidAsk"));
+export const vLiquidityShape = v.union(
+  v.literal("Spot"),
+  v.literal("Curve"),
+  v.literal("BidAsk"),
+);
 
 const vDLMMDetails = v.object({
   lowerBin: vBinIdAndPrice,

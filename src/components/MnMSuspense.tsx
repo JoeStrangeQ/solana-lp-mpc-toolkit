@@ -8,7 +8,11 @@ interface MnMAsyncBoundaryProps {
   errorFallback?: (props: FallbackProps) => ReactNode;
 }
 
-export function MnMSuspense({ children, fallback, errorFallback = () => <></> }: MnMAsyncBoundaryProps) {
+export function MnMSuspense({
+  children,
+  fallback,
+  errorFallback = () => <></>,
+}: MnMAsyncBoundaryProps) {
   return (
     <QueryErrorResetBoundary>
       {({ reset }) => (

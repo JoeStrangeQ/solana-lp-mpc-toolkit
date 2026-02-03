@@ -3,7 +3,10 @@ import { Address } from "../../convex/utils/solana";
 import { useCollateralToTokenAmount, useToken } from "./tokens";
 import { usePool } from "./pools";
 import { MS_1M, MS_1S } from "../../convex/utils/timeframe";
-import { getLoopscaleMaxQuote, getLoopscaleOraclePrices } from "~/services/loopscale";
+import {
+  getLoopscaleMaxQuote,
+  getLoopscaleOraclePrices,
+} from "~/services/loopscale";
 import { amountToRawAmount } from "../../convex/utils/amounts";
 
 export function useLoopscaleQuote({
@@ -35,7 +38,12 @@ export function useLoopscaleQuote({
   });
 
   const { data } = useSuspenseQuery({
-    queryKey: ["loopscale-quote", poolAddress, collateralMint, collateralUiAmount],
+    queryKey: [
+      "loopscale-quote",
+      poolAddress,
+      collateralMint,
+      collateralUiAmount,
+    ],
     queryFn: async () => {
       const oraclePrices = await getLoopscaleOraclePrices();
       const xOracle = oraclePrices[pool.mint_x];
@@ -54,7 +62,8 @@ export function useLoopscaleQuote({
         };
       }
 
-      const priceOverride = xAmount * xOracle.twapPrice + yAmount * yOracle.twapPrice;
+      const priceOverride =
+        xAmount * xOracle.twapPrice + yAmount * yOracle.twapPrice;
       const quotes = await getLoopscaleMaxQuote({
         userAddress,
         collateralMint,
@@ -64,7 +73,9 @@ export function useLoopscaleQuote({
 
       const best = quotes.reduce((a, b) => (a.ltv > b.ltv ? a : b));
 
-      const maxLeverage = best.amount / amountToRawAmount(collateralUiAmount, collateralToken.decimals);
+      const maxLeverage =
+        best.amount /
+        amountToRawAmount(collateralUiAmount, collateralToken.decimals);
       return {
         maxLeverage: Math.max(1, maxLeverage),
         collateralIdentifier: best.collateralIdentifier,

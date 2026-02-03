@@ -5,7 +5,11 @@ import { Address } from "../../convex/utils/solana";
 import { useCollateralToTokenAmount, useToken } from "~/states/tokens";
 import { Row } from "./ui/Row";
 import { TokenIcon } from "./TokenIcon";
-import { abbreviateAmount, formatTokenAmount, formatUsdValue } from "~/utils/numberFormats";
+import {
+  abbreviateAmount,
+  formatTokenAmount,
+  formatUsdValue,
+} from "~/utils/numberFormats";
 import { usePool } from "~/states/pools";
 import { useBinsAroundActiveBin } from "~/states/dlmm";
 import { SerializedBinLiquidity } from "../../convex/services/meteora";
@@ -140,16 +144,20 @@ function AssetAmount({
         "flex flex-col gap-px",
         align === "start" && "items-start",
         align === "center" && "items-center",
-        align === "end" && "items-end"
+        align === "end" && "items-end",
       )}
     >
       <Row className="gap-0.5" justify={align}>
         <TokenIcon className="w-3.5 h-3.5" icon={token.icon} />
-        <div className="text-text font-normal text-xs">{formatTokenAmount(tokenAmount, token.symbol)}</div>
+        <div className="text-text font-normal text-xs">
+          {formatTokenAmount(tokenAmount, token.symbol)}
+        </div>
       </Row>
 
       <Row className="gap-1" justify={align}>
-        <div className="text-textSecondary font-normal text-xs">{formatUsdValue(tokenUsdAmount)}</div>
+        <div className="text-textSecondary font-normal text-xs">
+          {formatUsdValue(tokenUsdAmount)}
+        </div>
         <div className="text-textSecondary/70 font-normal text-xs">
           {abbreviateAmount(split * 100, { type: "percentage", decimals: 0 })}%
         </div>
@@ -158,14 +166,18 @@ function AssetAmount({
   );
 }
 
-function AssetAmountSkeleton({ align = "start" }: { align?: "start" | "center" | "end" }) {
+function AssetAmountSkeleton({
+  align = "start",
+}: {
+  align?: "start" | "center" | "end";
+}) {
   return (
     <div
       className={cn(
         "flex flex-col gap-px",
         align === "start" && "items-start",
         align === "center" && "items-center",
-        align === "end" && "items-end"
+        align === "end" && "items-end",
       )}
     >
       <Row className="gap-0.5" justify={align}>
@@ -207,18 +219,26 @@ export function AssetSplitSlider({
   return (
     <div className={cn("w-full relative", className)}>
       <Slider.Root
-        className={cn("relative flex items-center select-none w-full", disabled && "cursor-not-allowed opacity-50")}
+        className={cn(
+          "relative flex items-center select-none w-full",
+          disabled && "cursor-not-allowed opacity-50",
+        )}
         style={{ height }}
         value={[percentage]}
         max={100}
         min={0}
         step={1}
         disabled={disabled}
-        onValueChange={([value]) => onChange(parseFloat((value / 100).toFixed(2)))}
+        onValueChange={([value]) =>
+          onChange(parseFloat((value / 100).toFixed(2)))
+        }
       >
         {/* Left Track */}
         <div
-          className={cn("absolute left-0 top-0", leftTrackSplit === 1 ? "rounded-full" : "rounded-l-full")}
+          className={cn(
+            "absolute left-0 top-0",
+            leftTrackSplit === 1 ? "rounded-full" : "rounded-l-full",
+          )}
           style={{
             height,
             width: `${percentage}%`,
@@ -228,7 +248,10 @@ export function AssetSplitSlider({
 
         {/* Right Track */}
         <div
-          className={cn("absolute right-0 top-0", leftTrackSplit === 0 ? "rounded-full" : "rounded-r-full")}
+          className={cn(
+            "absolute right-0 top-0",
+            leftTrackSplit === 0 ? "rounded-full" : "rounded-r-full",
+          )}
           style={{
             height,
             width: `${100 - percentage}%`,
@@ -241,7 +264,7 @@ export function AssetSplitSlider({
           <div
             className={cn(
               "relative z-5 w-5 h-5 rounded-full bg-text hover:scale-105 transition outline-0",
-              disabled ? "cursor-not-allowed" : "cursor-pointer"
+              disabled ? "cursor-not-allowed" : "cursor-pointer",
             )}
             style={{
               height: height * 2,

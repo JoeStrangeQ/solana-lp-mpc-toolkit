@@ -3,32 +3,40 @@
  * Aggregates LP opportunities across all DEX venues
  */
 
-import { Connection, PublicKey } from '@solana/web3.js';
-import { getAllAdapters, getAdapter } from '../adapters';
-import { LPPool, LPPosition, DEXVenue, YieldScanResult } from '../adapters/types';
+import { Connection, PublicKey } from "@solana/web3.js";
+import { getAllAdapters, getAdapter } from "../adapters";
+import {
+  LPPool,
+  LPPosition,
+  DEXVenue,
+  YieldScanResult,
+} from "../adapters/types";
 
 // ============ Types ============
 
 export interface ScanOptions {
-  venues?: DEXVenue[];      // Filter by specific venues
-  tokenA?: string;          // Filter by token (symbol or mint)
-  tokenB?: string;          // Filter by token pair
-  minApy?: number;          // Minimum APY threshold
-  minTvl?: number;          // Minimum TVL in USD
-  maxFee?: number;          // Maximum fee percentage
-  limit?: number;           // Max results per venue
-  sortBy?: 'apy' | 'tvl' | 'volume' | 'fee';
+  venues?: DEXVenue[]; // Filter by specific venues
+  tokenA?: string; // Filter by token (symbol or mint)
+  tokenB?: string; // Filter by token pair
+  minApy?: number; // Minimum APY threshold
+  minTvl?: number; // Minimum TVL in USD
+  maxFee?: number; // Maximum fee percentage
+  limit?: number; // Max results per venue
+  sortBy?: "apy" | "tvl" | "volume" | "fee";
 }
 
 export interface AggregatedPositions {
   positions: LPPosition[];
   totalValueUSD: number;
   totalUnclaimedUSD: number;
-  byVenue: Record<DEXVenue, {
-    count: number;
-    valueUSD: number;
-    unclaimedUSD: number;
-  }>;
+  byVenue: Record<
+    DEXVenue,
+    {
+      count: number;
+      valueUSD: number;
+      unclaimedUSD: number;
+    }
+  >;
 }
 
 // ============ Scanner Class ============
@@ -47,14 +55,14 @@ export class YieldScanner {
    */
   async scanPools(options: ScanOptions = {}): Promise<YieldScanResult> {
     const {
-      venues = ['meteora', 'orca', 'raydium'],
+      venues = ["meteora", "orca", "raydium"],
       tokenA,
       tokenB,
       minApy = 0,
       minTvl = 10000,
       maxFee = 100,
       limit = 20,
-      sortBy = 'apy',
+      sortBy = "apy",
     } = options;
 
     const allPools: LPPool[] = [];
@@ -70,19 +78,21 @@ export class YieldScanner {
     }
 
     // Apply filters
-    let filtered = allPools.filter(pool => 
-      pool.apy >= minApy &&
-      pool.tvl >= minTvl &&
-      pool.fee <= maxFee
+    let filtered = allPools.filter(
+      (pool) => pool.apy >= minApy && pool.tvl >= minTvl && pool.fee <= maxFee,
     );
 
     // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'tvl': return b.tvl - a.tvl;
-        case 'volume': return b.volume24h - a.volume24h;
-        case 'fee': return a.fee - b.fee;
-        default: return b.apy - a.apy;
+        case "tvl":
+          return b.tvl - a.tvl;
+        case "volume":
+          return b.volume24h - a.volume24h;
+        case "fee":
+          return a.fee - b.fee;
+        default:
+          return b.apy - a.apy;
       }
     });
 
@@ -91,7 +101,10 @@ export class YieldScanner {
 
     // Determine recommendation
     const recommended = filtered.length > 0 ? filtered[0] : null;
-    const reasoning = this.generateRecommendationReasoning(recommended, options);
+    const reasoning = this.generateRecommendationReasoning(
+      recommended,
+      options,
+    );
 
     return {
       pools: filtered,
@@ -105,13 +118,13 @@ export class YieldScanner {
    * Fetch pools from a specific venue using unified adapters
    */
   private async fetchPoolsForVenue(
-    venue: DEXVenue, 
-    tokenA?: string, 
-    tokenB?: string
+    venue: DEXVenue,
+    tokenA?: string,
+    tokenB?: string,
   ): Promise<LPPool[]> {
-    const cacheKey = `pools:${venue}:${tokenA || ''}:${tokenB || ''}`;
+    const cacheKey = `pools:${venue}:${tokenA || ""}:${tokenB || ""}`;
     const cached = this.cache.get(cacheKey);
-    
+
     if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
       return cached.data;
     }
@@ -123,17 +136,19 @@ export class YieldScanner {
     }
 
     let pools: LPPool[] = [];
-    
+
     try {
       pools = await adapter.getPools(this.connection);
-      
+
       // Filter by tokens if specified
       if (tokenA || tokenB) {
-        pools = pools.filter(p => {
-          const matchA = !tokenA || 
+        pools = pools.filter((p) => {
+          const matchA =
+            !tokenA ||
             p.tokenA.symbol.toUpperCase().includes(tokenA.toUpperCase()) ||
             p.tokenB.symbol.toUpperCase().includes(tokenA.toUpperCase());
-          const matchB = !tokenB || 
+          const matchB =
+            !tokenB ||
             p.tokenA.symbol.toUpperCase().includes(tokenB.toUpperCase()) ||
             p.tokenB.symbol.toUpperCase().includes(tokenB.toUpperCase());
           return matchA && matchB;
@@ -155,7 +170,7 @@ export class YieldScanner {
       tokenA,
       tokenB,
       limit: 1,
-      sortBy: 'apy',
+      sortBy: "apy",
       minTvl: 50000, // Only consider pools with decent liquidity
     });
     return result.recommended;
@@ -173,18 +188,22 @@ export class YieldScanner {
    * Format pool for chat display (agent-native output)
    */
   formatPoolForChat(pool: LPPool, amountUSD?: number): string {
-    const daily = amountUSD ? this.estimateDailyEarnings(pool, amountUSD) : null;
-    const dailyStr = daily ? ` (~$${daily.toFixed(2)}/day)` : '';
-    
+    const daily = amountUSD
+      ? this.estimateDailyEarnings(pool, amountUSD)
+      : null;
+    const dailyStr = daily ? ` (~$${daily.toFixed(2)}/day)` : "";
+
     return `${pool.name} [${pool.venue}] - ${pool.apy.toFixed(1)}% APY${dailyStr}`;
   }
 
   /**
    * Get all positions for a user across all venues
    */
-  async getAggregatedPositions(userPubkey: PublicKey): Promise<AggregatedPositions> {
+  async getAggregatedPositions(
+    userPubkey: PublicKey,
+  ): Promise<AggregatedPositions> {
     const positions: LPPosition[] = [];
-    const byVenue: AggregatedPositions['byVenue'] = {
+    const byVenue: AggregatedPositions["byVenue"] = {
       meteora: { count: 0, valueUSD: 0, unclaimedUSD: 0 },
       orca: { count: 0, valueUSD: 0, unclaimedUSD: 0 },
       raydium: { count: 0, valueUSD: 0, unclaimedUSD: 0 },
@@ -195,7 +214,10 @@ export class YieldScanner {
     const adapters = getAllAdapters();
     const fetchPromises = adapters.map(async (adapter) => {
       try {
-        const venuePositions = await adapter.getPositions(this.connection, userPubkey);
+        const venuePositions = await adapter.getPositions(
+          this.connection,
+          userPubkey,
+        );
         return { venue: adapter.venue, positions: venuePositions };
       } catch (error) {
         console.error(`Failed to fetch ${adapter.venue} positions:`, error);
@@ -216,7 +238,10 @@ export class YieldScanner {
     }
 
     const totalValueUSD = positions.reduce((sum, p) => sum + p.valueUSD, 0);
-    const totalUnclaimedUSD = positions.reduce((sum, p) => sum + p.unclaimedFees.totalUSD, 0);
+    const totalUnclaimedUSD = positions.reduce(
+      (sum, p) => sum + p.unclaimedFees.totalUSD,
+      0,
+    );
 
     return {
       positions,
@@ -229,9 +254,12 @@ export class YieldScanner {
   /**
    * Generate reasoning for pool recommendation
    */
-  private generateRecommendationReasoning(pool: LPPool | null, options: ScanOptions): string {
+  private generateRecommendationReasoning(
+    pool: LPPool | null,
+    options: ScanOptions,
+  ): string {
     if (!pool) {
-      return 'No pools found matching your criteria.';
+      return "No pools found matching your criteria.";
     }
 
     const reasons: string[] = [];
@@ -247,16 +275,18 @@ export class YieldScanner {
     }
 
     if (pool.volume24h > 1000000) {
-      reasons.push(`Active trading ($${(pool.volume24h / 1e6).toFixed(1)}M 24h volume)`);
+      reasons.push(
+        `Active trading ($${(pool.volume24h / 1e6).toFixed(1)}M 24h volume)`,
+      );
     }
 
     if (pool.fee < 0.3) {
       reasons.push(`Low fee (${pool.fee}%)`);
     }
 
-    return reasons.length > 0 
-      ? `Recommended: ${reasons.join(', ')}`
-      : 'Best match for your criteria.';
+    return reasons.length > 0
+      ? `Recommended: ${reasons.join(", ")}`
+      : "Best match for your criteria.";
   }
 
   /**

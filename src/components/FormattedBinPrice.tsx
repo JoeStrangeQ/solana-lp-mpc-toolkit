@@ -20,7 +20,11 @@ export function FormattedBinPrice({
 }) {
   // Only use scientific formatting if value is really small (< 0.001)
   if (value === 0 || Math.abs(value) >= 0.001) {
-    return <span className={cn("text-white", classname)}>{value.toFixed(significantDigits)}</span>;
+    return (
+      <span className={cn("text-white", classname)}>
+        {value.toFixed(significantDigits)}
+      </span>
+    );
   }
 
   // For very small numbers, use scientific notation
@@ -28,7 +32,11 @@ export function FormattedBinPrice({
   const match = str.match(/^([0-9.]+)e-(\d+)$/);
 
   if (!match) {
-    return <span className={cn("text-white", classname)}>{value.toFixed(significantDigits)}</span>;
+    return (
+      <span className={cn("text-white", classname)}>
+        {value.toFixed(significantDigits)}
+      </span>
+    );
   }
 
   const [, base, expStr] = match;

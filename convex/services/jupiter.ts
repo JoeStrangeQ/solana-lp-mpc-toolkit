@@ -104,7 +104,7 @@ const JupQuoteResponseZ = z.object({
         feeMint: z.string(),
       }),
       percent: z.number(),
-    })
+    }),
   ),
   contextSlot: z.number(),
   timeTaken: z.number(),
@@ -139,7 +139,9 @@ export const JupiterSwapInstructionsResponseZ = z.object({
 export type TokenMetadata = z.infer<typeof TokenMetadataZ>;
 export type JupTokenPrices = z.infer<typeof JupTokenPriceZ>;
 export type JupQuoteResponse = z.infer<typeof JupQuoteResponseZ>;
-export type JupiterSwapInstructionsResponse = z.infer<typeof JupiterSwapInstructionsResponseZ>;
+export type JupiterSwapInstructionsResponse = z.infer<
+  typeof JupiterSwapInstructionsResponseZ
+>;
 
 export async function fetchTokensMetadata({ mints }: { mints: string[] }) {
   const url = `https://api.jup.ag/tokens/v2/search?query=${encodeURIComponent(mints.join(","))}`;
@@ -163,15 +165,20 @@ export async function fetchTokensMetadata({ mints }: { mints: string[] }) {
 }
 
 export async function getJupiterTokenPrices({ mints }: { mints: Address[] }) {
-  const response = await fetch(`https://api.jup.ag/price/v3?ids=${mints.join(",")}`, {
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": JUPITER_API_KEY,
+  const response = await fetch(
+    `https://api.jup.ag/price/v3?ids=${mints.join(",")}`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": JUPITER_API_KEY,
+      },
     },
-  });
+  );
 
   if (!response.ok) {
-    throw new Error(`jupiter /price api error: ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `jupiter /price api error: ${response.status}: ${await response.text()}`,
+    );
   }
   const responseData = await response.json();
 
@@ -204,7 +211,9 @@ export async function getJupSwapQuote({
   });
 
   if (!response.ok) {
-    throw new Error(`jupiter /quote error: ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `jupiter /quote error: ${response.status}: ${await response.text()}`,
+    );
   }
 
   const quoteResponse = await response.json();
@@ -263,7 +272,9 @@ export async function getJupSwapInstructions({
   });
 
   if (!response.ok) {
-    throw new Error(`jupiter /swap instructions error: ${response.status}: ${await response.text()}`);
+    throw new Error(
+      `jupiter /swap instructions error: ${response.status}: ${await response.text()}`,
+    );
   }
 
   const res = await response.json();

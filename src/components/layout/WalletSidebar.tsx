@@ -14,7 +14,11 @@ import { Doc } from "../../../convex/_generated/dataModel";
 import { SolScanIcon } from "../icons/SolScanIcon";
 import { Ticker } from "../Ticker";
 import { TokenIcon } from "../TokenIcon";
-import { abbreviateAmount, formatUsdValue, tokenAmountFormatter } from "~/utils/numberFormats";
+import {
+  abbreviateAmount,
+  formatUsdValue,
+  tokenAmountFormatter,
+} from "~/utils/numberFormats";
 import { abbreviateAddress } from "~/utils/solana";
 import { MnMIcon } from "../icons/MnMIcon";
 import { useBalances, useTotalUsdBalance } from "~/states/balances";
@@ -22,7 +26,13 @@ import { toAddress } from "../../../convex/utils/solana";
 import { Button } from "../ui/Button";
 import { useMfaReminderStore } from "~/states/mfa";
 
-export function WalletSidebar({ user, onClose }: { user: Doc<"users">; onClose: () => void }) {
+export function WalletSidebar({
+  user,
+  onClose,
+}: {
+  user: Doc<"users">;
+  onClose: () => void;
+}) {
   const [tab, setTab] = useState<"Portfolio" | "Activities">("Portfolio");
   const tabOptions = ["Portfolio", "Activities"] as const;
 
@@ -61,7 +71,13 @@ export function WalletSidebar({ user, onClose }: { user: Doc<"users">; onClose: 
     </div>
   );
 }
-function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) {
+function Header({
+  user,
+  onClose,
+}: {
+  user: Doc<"users">;
+  onClose: () => void;
+}) {
   const { signout } = useConvexUser();
   const { logout } = usePrivy();
   const [copied, setCopied] = useState(false);
@@ -84,9 +100,14 @@ function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) 
       </div>
 
       <div className="flex flex-col ml-2 gap-1">
-        <div className="text-text text-sm">{abbreviateAddress(user.address)}</div>
+        <div className="text-text text-sm">
+          {abbreviateAddress(user.address)}
+        </div>
         <Row justify="start" className="gap-2">
-          <div className="w-3.5 h-3.5  hover-effect cursor-pointer hover:scale-105" onClick={handleCopy}>
+          <div
+            className="w-3.5 h-3.5  hover-effect cursor-pointer hover:scale-105"
+            onClick={handleCopy}
+          >
             {copied ? (
               <Check className="w-3.5 h-3.5 text-green" />
             ) : (
@@ -96,14 +117,21 @@ function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) 
 
           <div
             className="cursor-pointer hover-effect hover:scale-115"
-            onClick={() => window.open(`https://solscan.io/account/${user.address}`, "_blank")}
+            onClick={() =>
+              window.open(
+                `https://solscan.io/account/${user.address}`,
+                "_blank",
+              )
+            }
           >
             <SolScanIcon className="w-3.5 h-3.5" />
           </div>
 
           <div
             className="cursor-pointer hover-effect hover:scale-115"
-            onClick={() => window.open(`https://solana.fm/address/${user.address}`, "_blank")}
+            onClick={() =>
+              window.open(`https://solana.fm/address/${user.address}`, "_blank")
+            }
           >
             <img src={SolanaFmIcon} className="w-3.5 h-3.5" />
           </div>
@@ -111,7 +139,11 @@ function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) 
       </div>
 
       <Row className="gap-1 ml-auto mr-0">
-        <Button variant="neutral" className="h-8 text-xs rounded-2xl" onClick={exportWalletWithMfa}>
+        <Button
+          variant="neutral"
+          className="h-8 text-xs rounded-2xl"
+          onClick={exportWalletWithMfa}
+        >
           Export
         </Button>
         <div
@@ -130,7 +162,12 @@ function Header({ user, onClose }: { user: Doc<"users">; onClose: () => void }) 
   );
 }
 
-function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: () => void }) {
+function TotalBalance({
+  userAddress,
+}: {
+  userAddress: string;
+  onCloseSideBar: () => void;
+}) {
   // const { resetWithdrawModalStates } = useWithdrawModalStates();
   // const { convexUser } = useConvexUser();
   const { fundWallet } = useFundWallet();
@@ -150,7 +187,9 @@ function TotalBalance({ userAddress }: { userAddress: string; onCloseSideBar: ()
     <>
       <Row fullWidth>
         <div className="flex flex-col w-full">
-          <div className="text-textSecondary text-nowrap mb-0.5 ">Total balance</div>
+          <div className="text-textSecondary text-nowrap mb-0.5 ">
+            Total balance
+          </div>
 
           <Row fullWidth>
             <Ticker value={formattedUsdBalance} className={tickerSize} />
@@ -199,7 +238,9 @@ function TotalBalanceSkeleton() {
   return (
     <Row fullWidth>
       <div className="flex flex-col w-full ">
-        <div className="text-textSecondary text-nowrap mb-0.5">Total balance</div>
+        <div className="text-textSecondary text-nowrap mb-0.5">
+          Total balance
+        </div>
 
         <Row fullWidth>
           <Skeleton className="h-9 w-40 " />
@@ -240,12 +281,16 @@ function TokenList({ userAddress }: { userAddress: string }) {
             <TokenIcon icon={token.icon} className="h-8 w-8" />
             <div className="flex flex-col ml-2.5">
               <div className="text-text text-sm">{token.name}</div>
-              <div className="text-textSecondary text-xs text-left">{tokenAmount}</div>
+              <div className="text-textSecondary text-xs text-left">
+                {tokenAmount}
+              </div>
             </div>
             <div
               className={cn(
                 ` px-1.5 py-0.5 rounded-2xl flex justify-center items-center text-center text-[10px] ml-3.5`,
-                priceChange > 0 ? "text-green bg-green/10" : "text-red bg-red/10"
+                priceChange > 0
+                  ? "text-green bg-green/10"
+                  : "text-red bg-red/10",
               )}
             >
               {priceChange > 0 ? "+" : "-"}
@@ -256,7 +301,9 @@ function TokenList({ userAddress }: { userAddress: string }) {
               %
             </div>
 
-            <div className="text-text text-sm text-right ml-auto mr-0">{formatUsdValue(token.usdBalance)}</div>
+            <div className="text-text text-sm text-right ml-auto mr-0">
+              {formatUsdValue(token.usdBalance)}
+            </div>
           </Row>
         );
       })}

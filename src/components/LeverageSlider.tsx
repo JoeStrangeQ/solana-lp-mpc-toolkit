@@ -19,8 +19,13 @@ export function LeverageSliderCreatePosition({
   userAddress: Address;
   poolAddress: Address;
 }) {
-  const { collateralMint, collateralUiAmount, tokenXSplit, leverage, setCreatePositionState } =
-    useCreatePositionState();
+  const {
+    collateralMint,
+    collateralUiAmount,
+    tokenXSplit,
+    leverage,
+    setCreatePositionState,
+  } = useCreatePositionState();
   const pool = usePool({ poolAddress, protocol: "dlmm" });
   const tokenX = useToken({ mint: pool.mint_x });
   const tokenY = useToken({ mint: pool.mint_y });
@@ -32,18 +37,20 @@ export function LeverageSliderCreatePosition({
     poolAddress,
     tokenXSplit,
   });
-  const { tokenAmount: xAmount, tokenUsdAmount: xUsdAmount } = useCollateralToTokenAmount({
-    collateralMint,
-    collateralAmount: collateralUiAmount,
-    mint: pool.mint_x,
-    split: tokenXSplit,
-  });
-  const { tokenAmount: yAmount, tokenUsdAmount: yUsdAmount } = useCollateralToTokenAmount({
-    collateralMint,
-    collateralAmount: collateralUiAmount,
-    mint: pool.mint_y,
-    split: 1 - tokenXSplit,
-  });
+  const { tokenAmount: xAmount, tokenUsdAmount: xUsdAmount } =
+    useCollateralToTokenAmount({
+      collateralMint,
+      collateralAmount: collateralUiAmount,
+      mint: pool.mint_x,
+      split: tokenXSplit,
+    });
+  const { tokenAmount: yAmount, tokenUsdAmount: yUsdAmount } =
+    useCollateralToTokenAmount({
+      collateralMint,
+      collateralAmount: collateralUiAmount,
+      mint: pool.mint_y,
+      split: 1 - tokenXSplit,
+    });
 
   const xBorrowed = xAmount * leverage - xAmount;
   const xBorrowedUsd = xUsdAmount * leverage - xUsdAmount;
@@ -54,7 +61,9 @@ export function LeverageSliderCreatePosition({
     <LeverageSlider
       leverage={leverage}
       maxLeverage={Math.min(5, maxLeverage)}
-      onLeverageChange={(newLev) => setCreatePositionState({ leverage: newLev })}
+      onLeverageChange={(newLev) =>
+        setCreatePositionState({ leverage: newLev })
+      }
       toolTip={
         <div className="flex flex-col gap-0.5 grow min-w-32">
           <div className="text-textSecondary text-xs mb-0.5">Borrowing</div>
@@ -63,7 +72,9 @@ export function LeverageSliderCreatePosition({
               <TokenIcon className="h-2.5 w-2.5" icon={tokenX.icon} />
               {formatTokenAmount(xBorrowed, tokenX.symbol)}
             </Row>
-            <div className="flex ml-auto mr-0 text-textSecondary text-xs">{formatUsdValue(xBorrowedUsd)}</div>
+            <div className="flex ml-auto mr-0 text-textSecondary text-xs">
+              {formatUsdValue(xBorrowedUsd)}
+            </div>
           </Row>
 
           <Row fullWidth justify="between" className="gap-5">
@@ -71,7 +82,9 @@ export function LeverageSliderCreatePosition({
               <TokenIcon className="h-2.5 w-2.5" icon={tokenY.icon} />
               {formatTokenAmount(yBorrowed, tokenY.symbol)}
             </Row>
-            <div className="flex ml-auto mr-0 text-textSecondary text-xs">{formatUsdValue(yBorrowedUsd)}</div>
+            <div className="flex ml-auto mr-0 text-textSecondary text-xs">
+              {formatUsdValue(yBorrowedUsd)}
+            </div>
           </Row>
         </div>
       }
@@ -110,7 +123,10 @@ export function LeverageSlider({
   return (
     <div className="flex bg-backgroundTertiary inner-white rounded-full px-2.5 py-1.5  z-10">
       <Slider.Root
-        className={cn("relative flex items-center w-full h-5", disabled ? "opacity-15" : "opacity-100")}
+        className={cn(
+          "relative flex items-center w-full h-5",
+          disabled ? "opacity-15" : "opacity-100",
+        )}
         min={1}
         max={maxLeverage}
         step={0.01}
@@ -123,14 +139,18 @@ export function LeverageSlider({
         onPointerCancel={() => setIsDragging(false)}
         disabled={disabled || maxLeverage === 1}
       >
-        <Slider.Track className={`bg-backgroundQuaternary relative grow rounded-full h-1.5`}>
-          <Slider.Range className={`bg-white/20 absolute rounded-full h-full `} />
+        <Slider.Track
+          className={`bg-backgroundQuaternary relative grow rounded-full h-1.5`}
+        >
+          <Slider.Range
+            className={`bg-white/20 absolute rounded-full h-full `}
+          />
         </Slider.Track>
 
         <Slider.Thumb
           className={cn(
             "relative block px-1.5 py-0.5 bg-text/90  rounded-full shadow outline-0 ring-0 text-[10px] text-black hover-effect cursor-grab",
-            !disabled && "hover:bg-text active:scale-110"
+            !disabled && "hover:bg-text active:scale-110",
           )}
         >
           {leverage.toFixed(2)}x

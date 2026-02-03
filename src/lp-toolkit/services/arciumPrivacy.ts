@@ -1,19 +1,19 @@
 /**
  * Arcium Privacy Service for LP Toolkit
  * REAL integration with @arcium-hq/client SDK
- * 
+ *
  * Uses Arcium's MXE (Multi-party eXecution Environment) for:
  * - Encrypting strategy parameters before execution
  * - Private position tracking
  * - Hidden execution intent (prevent front-running)
- * 
+ *
  * SDK: @arcium-hq/client
  * Docs: https://docs.arcium.com/developers/js-client-library
  */
 
-import { Connection, PublicKey, Keypair } from '@solana/web3.js';
-import { randomBytes } from 'crypto';
-import { AddLiquidityIntent, LPPosition } from '../adapters/types';
+import { Connection, PublicKey, Keypair } from "@solana/web3.js";
+import { randomBytes } from "crypto";
+import { AddLiquidityIntent, LPPosition } from "../adapters/types";
 
 // Import Arcium SDK
 import {
@@ -24,26 +24,27 @@ import {
   getMXEPublicKey,
   getArciumProgramId,
   getClusterAccAddress,
-} from '@arcium-hq/client';
-import * as anchor from '@coral-xyz/anchor';
+} from "@arcium-hq/client";
+import * as anchor from "@coral-xyz/anchor";
 
 // ============ Devnet Configuration ============
 
 /**
  * Arcium Devnet Cluster 456 (v0.7.0) - REAL MXE PUBLIC KEY
  * Fetched: 2026-02-03T05:51:52.572Z
- * 
+ *
  * This is the x25519 public key for the MXE cluster on Solana devnet.
  * Used for deriving shared secrets for encryption.
  */
 export const ARCIUM_DEVNET_CONFIG = {
   clusterOffset: 456,
   mxePublicKey: new Uint8Array([
-    1, 174, 161, 187, 141, 66, 116, 90, 163, 13, 214, 142, 19, 88, 189, 84,
-    184, 25, 230, 74, 49, 61, 246, 124, 131, 198, 122, 107, 149, 253, 90, 100
+    1, 174, 161, 187, 141, 66, 116, 90, 163, 13, 214, 142, 19, 88, 189, 84, 184,
+    25, 230, 74, 49, 61, 246, 124, 131, 198, 122, 107, 149, 253, 90, 100,
   ]),
-  mxePublicKeyHex: '01aea1bb8d42745aa30dd68e1358bd54b819e64a313df67c83c67a6b95fd5a64',
-  clusterAuthority: 'CkgyeACNCpPMzDt2b8n41jTit63VehY1ghPXNU9Lnz8L',
+  mxePublicKeyHex:
+    "01aea1bb8d42745aa30dd68e1358bd54b819e64a313df67c83c67a6b95fd5a64",
+  clusterAuthority: "CkgyeACNCpPMzDt2b8n41jTit63VehY1ghPXNU9Lnz8L",
   clusterSize: 2,
 };
 
@@ -58,9 +59,9 @@ export interface PrivacyKeys {
 export interface EncryptedStrategy {
   id: string;
   ownerPubkey: string;
-  ciphertext: number[][];      // Encrypted bytes (each inner array is 32 bytes, values 0-255)
-  publicKey: string;           // Client's X25519 public key (base64)
-  nonce: string;               // 16-byte nonce (base64)
+  ciphertext: number[][]; // Encrypted bytes (each inner array is 32 bytes, values 0-255)
+  publicKey: string; // Client's X25519 public key (base64)
+  nonce: string; // 16-byte nonce (base64)
   timestamp: number;
   expiresAt: number;
 }
@@ -68,7 +69,7 @@ export interface EncryptedStrategy {
 export interface EncryptedPosition {
   positionId: string;
   ownerPubkey: string;
-  encryptedValue: number[][];  // Encrypted bytes (values 0-255)
+  encryptedValue: number[][]; // Encrypted bytes (values 0-255)
   venue: string;
   poolName: string;
   publicKey: string;
@@ -92,7 +93,7 @@ export function generatePrivacyKeys(): PrivacyKeys {
  */
 export function deriveSharedSecret(
   privateKey: Uint8Array,
-  mxePublicKey: Uint8Array
+  mxePublicKey: Uint8Array,
 ): Uint8Array {
   return x25519.getSharedSecret(privateKey, mxePublicKey);
 }
@@ -114,46 +115,58 @@ export class ArciumPrivacyService {
   /**
    * Initialize connection to Arcium MXE
    * Must be called before encryption operations
-   * 
+   *
    * @param connection - Solana connection
    * @param options - Optional: programId for custom MXE, useDevnet for automatic devnet config
    */
   async initialize(
-    connection: Connection, 
-    options?: { 
-      programId?: PublicKey; 
+    connection: Connection,
+    options?: {
+      programId?: PublicKey;
       useDevnet?: boolean;
       mxePublicKey?: Uint8Array;
-    }
+    },
   ): Promise<boolean> {
     try {
       const { programId, useDevnet = true, mxePublicKey } = options || {};
-      
+
       // Priority 1: Explicit MXE public key provided
       if (mxePublicKey) {
         this.mxePublicKey = mxePublicKey;
-        console.log('[Arcium] Using provided MXE public key');
+        console.log("[Arcium] Using provided MXE public key");
       }
       // Priority 2: Use devnet cluster 456 (recommended for hackathon)
       else if (useDevnet) {
         this.mxePublicKey = ARCIUM_DEVNET_CONFIG.mxePublicKey;
-        console.log(`[Arcium] Using devnet cluster ${ARCIUM_DEVNET_CONFIG.clusterOffset} MXE key`);
-        console.log(`[Arcium] MXE Key: ${ARCIUM_DEVNET_CONFIG.mxePublicKeyHex.slice(0, 16)}...`);
+        console.log(
+          `[Arcium] Using devnet cluster ${ARCIUM_DEVNET_CONFIG.clusterOffset} MXE key`,
+        );
+        console.log(
+          `[Arcium] MXE Key: ${ARCIUM_DEVNET_CONFIG.mxePublicKeyHex.slice(0, 16)}...`,
+        );
       }
       // Priority 3: Fetch from on-chain (requires deployed program)
       else if (programId) {
-        const keypairPath = `${require('os').homedir()}/.config/solana/id.json`;
-        const keypairData = JSON.parse(require('fs').readFileSync(keypairPath, 'utf-8'));
-        const keypair = require('@solana/web3.js').Keypair.fromSecretKey(new Uint8Array(keypairData));
+        const keypairPath = `${require("os").homedir()}/.config/solana/id.json`;
+        const keypairData = JSON.parse(
+          require("fs").readFileSync(keypairPath, "utf-8"),
+        );
+        const keypair = require("@solana/web3.js").Keypair.fromSecretKey(
+          new Uint8Array(keypairData),
+        );
         const wallet = new anchor.Wallet(keypair);
-        const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
-        
+        const provider = new anchor.AnchorProvider(connection, wallet, {
+          commitment: "confirmed",
+        });
+
         const fetchedKey = await getMXEPublicKey(provider, programId);
         if (fetchedKey) {
           this.mxePublicKey = fetchedKey;
-          console.log('[Arcium] Fetched MXE public key from on-chain');
+          console.log("[Arcium] Fetched MXE public key from on-chain");
         } else {
-          console.warn('[Arcium] MXE public key not found on-chain, using devnet fallback');
+          console.warn(
+            "[Arcium] MXE public key not found on-chain, using devnet fallback",
+          );
           this.mxePublicKey = ARCIUM_DEVNET_CONFIG.mxePublicKey;
         }
       }
@@ -162,19 +175,23 @@ export class ArciumPrivacyService {
       if (this.mxePublicKey) {
         this.keys.sharedSecret = deriveSharedSecret(
           this.keys.privateKey,
-          this.mxePublicKey
+          this.mxePublicKey,
         );
         this.cipher = new RescueCipher(this.keys.sharedSecret);
-        console.log('[Arcium] ✅ RescueCipher initialized with real MXE shared secret');
+        console.log(
+          "[Arcium] ✅ RescueCipher initialized with real MXE shared secret",
+        );
       } else {
-        console.warn('[Arcium] ⚠️ No MXE public key - using fallback encryption');
+        console.warn(
+          "[Arcium] ⚠️ No MXE public key - using fallback encryption",
+        );
       }
 
       this.initialized = true;
-      console.log('[Arcium] Privacy service initialized');
+      console.log("[Arcium] Privacy service initialized");
       return true;
     } catch (error) {
-      console.error('[Arcium] Failed to initialize:', error);
+      console.error("[Arcium] Failed to initialize:", error);
       return false;
     }
   }
@@ -185,8 +202,8 @@ export class ArciumPrivacyService {
    */
   async initializeDevnet(): Promise<boolean> {
     return this.initialize(
-      new Connection('https://api.devnet.solana.com', 'confirmed'),
-      { useDevnet: true }
+      new Connection("https://api.devnet.solana.com", "confirmed"),
+      { useDevnet: true },
     );
   }
 
@@ -201,7 +218,7 @@ export class ArciumPrivacyService {
    * Get the client's public key (for identifying encrypted data)
    */
   getPublicKey(): string {
-    return Buffer.from(this.keys.publicKey).toString('base64');
+    return Buffer.from(this.keys.publicKey).toString("base64");
   }
 
   /**
@@ -220,22 +237,24 @@ export class ArciumPrivacyService {
     const nonce = randomBytes(16);
 
     let ciphertext: bigint[][];
-    
+
     if (this.cipher) {
       // Use Arcium's RescueCipher
       ciphertext = this.cipher.encrypt(plaintext, nonce);
     } else {
       // Fallback: XOR-based encryption (less secure, for testing only)
-      console.warn('[Arcium] Using fallback encryption - initialize for full security');
+      console.warn(
+        "[Arcium] Using fallback encryption - initialize for full security",
+      );
       ciphertext = this.fallbackEncrypt(plaintext, nonce);
     }
 
     return {
       id: this.generateId(),
       ownerPubkey: this.ownerPubkey.toBase58(),
-      ciphertext: ciphertext.map(arr => Array.from(arr)),  // Store as number arrays (bytes 0-255)
+      ciphertext: ciphertext.map((arr) => Array.from(arr)), // Store as number arrays (bytes 0-255)
       publicKey: this.getPublicKey(),
-      nonce: Buffer.from(nonce).toString('base64'),
+      nonce: Buffer.from(nonce).toString("base64"),
       timestamp: Date.now(),
       expiresAt: Date.now() + 3600000, // 1 hour
     };
@@ -246,12 +265,12 @@ export class ArciumPrivacyService {
    */
   decryptStrategy(encrypted: EncryptedStrategy): AddLiquidityIntent | null {
     try {
-      const nonce = Buffer.from(encrypted.nonce, 'base64');
+      const nonce = Buffer.from(encrypted.nonce, "base64");
       // Ciphertext is already number[][] (bytes), just pass through
       const ciphertext = encrypted.ciphertext;
 
       let plaintext: bigint[];
-      
+
       if (this.cipher) {
         plaintext = this.cipher.decrypt(ciphertext, nonce);
       } else {
@@ -260,7 +279,7 @@ export class ArciumPrivacyService {
 
       return this.bigIntsToIntent(plaintext);
     } catch (error) {
-      console.error('[Arcium] Decryption failed:', error);
+      console.error("[Arcium] Decryption failed:", error);
       return null;
     }
   }
@@ -268,13 +287,16 @@ export class ArciumPrivacyService {
   /**
    * Encrypt position value for private storage
    */
-  encryptPositionValue(valueUSD: number, feesUSD: number): {
+  encryptPositionValue(
+    valueUSD: number,
+    feesUSD: number,
+  ): {
     encryptedValue: number[][];
     encryptedFees: number[][];
     nonce: string;
   } {
     const nonce = randomBytes(16);
-    
+
     // Convert to BigInt (multiply by 1e6 for precision)
     const valueBigInt = BigInt(Math.floor(valueUSD * 1e6));
     const feesBigInt = BigInt(Math.floor(feesUSD * 1e6));
@@ -283,17 +305,25 @@ export class ArciumPrivacyService {
     let encFees: number[][];
 
     if (this.cipher) {
-      encValue = this.cipher.encrypt([valueBigInt], nonce).map(arr => Array.from(arr));
-      encFees = this.cipher.encrypt([feesBigInt], nonce).map(arr => Array.from(arr));
+      encValue = this.cipher
+        .encrypt([valueBigInt], nonce)
+        .map((arr) => Array.from(arr));
+      encFees = this.cipher
+        .encrypt([feesBigInt], nonce)
+        .map((arr) => Array.from(arr));
     } else {
-      encValue = this.fallbackEncrypt([valueBigInt], nonce).map(arr => arr.map(n => Number(n)));
-      encFees = this.fallbackEncrypt([feesBigInt], nonce).map(arr => arr.map(n => Number(n)));
+      encValue = this.fallbackEncrypt([valueBigInt], nonce).map((arr) =>
+        arr.map((n) => Number(n)),
+      );
+      encFees = this.fallbackEncrypt([feesBigInt], nonce).map((arr) =>
+        arr.map((n) => Number(n)),
+      );
     }
 
     return {
       encryptedValue: encValue,
       encryptedFees: encFees,
-      nonce: Buffer.from(nonce).toString('base64'),
+      nonce: Buffer.from(nonce).toString("base64"),
     };
   }
 
@@ -303,10 +333,10 @@ export class ArciumPrivacyService {
   decryptPositionValue(
     encryptedValue: number[][],
     encryptedFees: number[][],
-    nonce: string
+    nonce: string,
   ): { valueUSD: number; feesUSD: number } | null {
     try {
-      const nonceBytes = Buffer.from(nonce, 'base64');
+      const nonceBytes = Buffer.from(nonce, "base64");
       // Ciphertext is already number[][] (bytes)
       const valueArr = encryptedValue;
       const feesArr = encryptedFees;
@@ -327,7 +357,7 @@ export class ArciumPrivacyService {
         feesUSD: Number(feesBigInt) / 1e6,
       };
     } catch (error) {
-      console.error('[Arcium] Position decryption failed:', error);
+      console.error("[Arcium] Position decryption failed:", error);
       return null;
     }
   }
@@ -343,8 +373,8 @@ export class ArciumPrivacyService {
   } {
     return {
       totalPositions: positions.length,
-      venues: [...new Set(positions.map(p => p.venue))],
-      pools: positions.map(p => p.poolName),
+      venues: [...new Set(positions.map((p) => p.venue))],
+      pools: positions.map((p) => p.poolName),
       valueHidden: true,
     };
   }
@@ -354,8 +384,8 @@ export class ArciumPrivacyService {
   private intentToBigInts(intent: AddLiquidityIntent): bigint[] {
     // Encode intent as array of BigInts
     // Format: [amountA * 1e6, amountB * 1e6, totalValueUSD * 1e6, strategyCode, slippageBps]
-    const strategyCode = this.encodeStrategy(intent.strategy || 'balanced');
-    
+    const strategyCode = this.encodeStrategy(intent.strategy || "balanced");
+
     return [
       BigInt(Math.floor((intent.amountA || 0) * 1e6)),
       BigInt(Math.floor((intent.amountB || 0) * 1e6)),
@@ -372,44 +402,49 @@ export class ArciumPrivacyService {
       totalValueUSD: Number(plaintext[2]) / 1e6,
       strategy: this.decodeStrategy(Number(plaintext[3])),
       slippageBps: Number(plaintext[4]),
-      tokenA: '',  // Not encrypted
-      tokenB: '',  // Not encrypted
+      tokenA: "", // Not encrypted
+      tokenB: "", // Not encrypted
     };
   }
 
   private encodeStrategy(strategy: string): number {
     const codes: Record<string, number> = {
-      'balanced': 1,
-      'concentrated': 2,
-      'yield-max': 3,
-      'delta-neutral': 4,
-      'bid-heavy': 5,
-      'ask-heavy': 6,
+      balanced: 1,
+      concentrated: 2,
+      "yield-max": 3,
+      "delta-neutral": 4,
+      "bid-heavy": 5,
+      "ask-heavy": 6,
     };
     return codes[strategy] || 1;
   }
 
   private decodeStrategy(code: number): string {
     const strategies: Record<number, string> = {
-      1: 'balanced',
-      2: 'concentrated',
-      3: 'yield-max',
-      4: 'delta-neutral',
-      5: 'bid-heavy',
-      6: 'ask-heavy',
+      1: "balanced",
+      2: "concentrated",
+      3: "yield-max",
+      4: "delta-neutral",
+      5: "bid-heavy",
+      6: "ask-heavy",
     };
-    return strategies[code] || 'balanced';
+    return strategies[code] || "balanced";
   }
 
   private generateId(): string {
-    return `arc_${Date.now().toString(36)}_${randomBytes(4).toString('hex')}`;
+    return `arc_${Date.now().toString(36)}_${randomBytes(4).toString("hex")}`;
   }
 
   // Fallback encryption for when MXE is not available
   private fallbackEncrypt(plaintext: bigint[], nonce: Buffer): bigint[][] {
     const key = this.keys.privateKey;
     return plaintext.map((val, i) => {
-      const xorKey = BigInt('0x' + Buffer.from([...key, ...nonce]).slice(i * 8, i * 8 + 8).toString('hex'));
+      const xorKey = BigInt(
+        "0x" +
+          Buffer.from([...key, ...nonce])
+            .slice(i * 8, i * 8 + 8)
+            .toString("hex"),
+      );
       return [val ^ xorKey];
     });
   }
@@ -417,7 +452,12 @@ export class ArciumPrivacyService {
   private fallbackDecrypt(ciphertext: bigint[][], nonce: Buffer): bigint[] {
     const key = this.keys.privateKey;
     return ciphertext.map((arr, i) => {
-      const xorKey = BigInt('0x' + Buffer.from([...key, ...nonce]).slice(i * 8, i * 8 + 8).toString('hex'));
+      const xorKey = BigInt(
+        "0x" +
+          Buffer.from([...key, ...nonce])
+            .slice(i * 8, i * 8 + 8)
+            .toString("hex"),
+      );
       return arr[0] ^ xorKey;
     });
   }

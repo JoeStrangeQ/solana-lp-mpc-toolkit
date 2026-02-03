@@ -1,6 +1,10 @@
 export async function retry<T>(
   fn: () => Promise<T>,
-  { retries = 3, initialDelayMs = 150, factor = 2 }: { retries?: number; initialDelayMs?: number; factor?: number } = {}
+  {
+    retries = 3,
+    initialDelayMs = 150,
+    factor = 2,
+  }: { retries?: number; initialDelayMs?: number; factor?: number } = {},
 ): Promise<{ ok: true; value: T } | { ok: false; error: any }> {
   let attempt = 0;
   let delay = initialDelayMs;

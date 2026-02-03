@@ -62,20 +62,27 @@ export async function sendNozomiTransaction({
     });
 
   console.log("Create position", txnBase64);
-  const signedTx = VersionedTransaction.deserialize(Buffer.from(txnBase64, "base64"));
+  const signedTx = VersionedTransaction.deserialize(
+    Buffer.from(txnBase64, "base64"),
+  );
   const signature = bs58.encode(signedTx.signatures[0]);
 
-  const response = await fetch(`https://nozomi.temporal.xyz/api/sendTransaction2?c=${NOZOMI_API_KEY}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/plain",
+  const response = await fetch(
+    `https://nozomi.temporal.xyz/api/sendTransaction2?c=${NOZOMI_API_KEY}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+      },
+      body: txnBase64,
     },
-    body: txnBase64,
-  });
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Transaction failed with status ${response.status}: ${errorText}`);
+    throw new Error(
+      `Transaction failed with status ${response.status}: ${errorText}`,
+    );
   }
 
   console.log("Response", response);

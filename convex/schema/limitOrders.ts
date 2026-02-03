@@ -6,12 +6,20 @@ const vOrderStatus = v.union(
   v.literal("executing"),
   v.literal("executed"),
   v.literal("failed"),
-  v.literal("canceled")
+  v.literal("canceled"),
 );
 
-export const vSupportedMarket = v.union(v.literal("SOL/USDC"), v.literal("MET/USDC"), v.literal("MET/SOL"));
+export const vSupportedMarket = v.union(
+  v.literal("SOL/USDC"),
+  v.literal("MET/USDC"),
+  v.literal("MET/SOL"),
+);
 export const vOrderDirection = v.union(v.literal("sl"), v.literal("tp"));
-export const vSwapToOption = v.union(v.literal("SOL"), v.literal("USDC"), v.literal("none"));
+export const vSwapToOption = v.union(
+  v.literal("SOL"),
+  v.literal("USDC"),
+  v.literal("none"),
+);
 export const vLimitOrderInput = v.object({
   price: v.number(),
   swapTo: vSwapToOption,
