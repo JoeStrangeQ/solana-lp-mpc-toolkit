@@ -54,18 +54,28 @@ A toolkit that enables AI agents to manage LP positions across Solana DEXs throu
 
 ### Prerequisites
 
-1. **Hummingbot Gateway** running locally:
-   ```bash
-   git clone https://github.com/hummingbot/gateway.git
-   cd gateway && pnpm install && pnpm build
-   pnpm start --passphrase=your-secret --dev
-   ```
+1. **Docker** - Required for Hummingbot Gateway
+2. **Node.js 20+**
+3. **Portal API Key** (for MPC): [Get one here](https://www.portalhq.io/signup)
 
-2. **Portal API Key** (for MPC): [Get one here](https://www.portalhq.io/signup)
+### Setup Hummingbot Gateway (Docker)
 
-3. **Node.js 20+**
+```bash
+# Clone Gateway
+git clone https://github.com/hummingbot/gateway.git ~/hummingbot-gateway
+cd ~/hummingbot-gateway
 
-### Install & Run
+# Run setup script
+./gateway-setup.sh --with-defaults
+
+# Start Gateway (Docker)
+docker compose up -d
+
+# Verify it's running
+curl http://localhost:15888
+```
+
+### Install & Run the Toolkit
 
 ```bash
 # Clone
@@ -73,14 +83,14 @@ git clone https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit.git
 cd solana-lp-mpc-toolkit
 
 # Install
-npm install
+pnpm install  # or npm install
 
 # Configure
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env - add your Portal API key
 
 # Run
-npm start
+pnpm start  # or npm start
 ```
 
 ### Environment Variables
