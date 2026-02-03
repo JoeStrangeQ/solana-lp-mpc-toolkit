@@ -44,26 +44,46 @@ export class LifinityAdapter implements DEXAdapter {
 
   /**
    * Get all Lifinity pools
+   * Tries multiple endpoints with fallback to hardcoded data
    */
   async getPools(connection: Connection): Promise<LPPool[]> {
-    try {
-      // Lifinity API
-      const response = await fetch('https://lifinity.io/api/pools');
-      const data = await response.json();
-      
-      if (Array.isArray(data)) {
-        return data
-          .filter((p: any) => p.tvl > 10000)
-          .map((p: any) => this.parsePoolData(p))
-          .filter((p): p is LPPool => p !== null)
-          .sort((a, b) => b.tvl - a.tvl);
+    const endpoints = [
+      'https://lifinity.io/api/pools',
+      'https://api.lifinity.io/v1/pools',
+      'https://lifinity.io/api/v2/pools',
+    ];
+
+    for (const endpoint of endpoints) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        
+        const response = await fetch(endpoint, { 
+          signal: controller.signal,
+          headers: { 'Accept': 'application/json' }
+        });
+        clearTimeout(timeout);
+        
+        if (!response.ok) continue;
+        
+        const data = await response.json();
+        const poolData = Array.isArray(data) ? data : (data.pools || data.data || []);
+        
+        if (Array.isArray(poolData) && poolData.length > 0) {
+          return poolData
+            .filter((p: any) => (p.tvl || p.liquidity || 0) > 10000)
+            .map((p: any) => this.parsePoolData(p))
+            .filter((p): p is LPPool => p !== null)
+            .sort((a, b) => b.tvl - a.tvl);
+        }
+      } catch (error) {
+        console.warn(`Lifinity endpoint ${endpoint} failed`);
+        continue;
       }
-      
-      return this.getHardcodedPools();
-    } catch (error) {
-      console.error('Failed to fetch Lifinity pools:', error);
-      return this.getHardcodedPools();
     }
+    
+    console.warn('All Lifinity endpoints failed, using hardcoded data');
+    return this.getHardcodedPools();
   }
 
   /**
