@@ -15,6 +15,8 @@ export type DEXVenue =
   | 'lifinity'     // Oracle-based, reduced IL
   | 'saber'        // Stable swaps
   | 'crema'        // CLMM concentrated
+  | 'fluxbeam'     // CLMM
+  | 'invariant'    // CLMM with custom ticks
   | 'phoenix';     // CLOB (not implemented)
 
 export interface LPPool {
