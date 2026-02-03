@@ -1,19 +1,11 @@
 /**
  * Vercel serverless entry point
- * Lightweight API without heavy Solana dependencies
+ * Native Vercel handler (no Hono for reliability)
  */
 
-import { Hono } from 'hono';
-import { handle } from 'hono/vercel';
-import { cors } from 'hono/cors';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Create Hono app
-const app = new Hono().basePath('/');
-
-// Middleware
-app.use('*', cors());
-
-// Fee config (static to avoid Solana imports)
+// Fee config
 const FEE_CONFIG = {
   FEE_BPS: 10, // 0.1%
   TREASURY: 'BNQnCszvPwYfjBMUmFgmCooMSRrdkC7LncMQBExDakLp',
@@ -21,84 +13,7 @@ const FEE_CONFIG = {
   EXEMPT_THRESHOLD_USD: 1,
 };
 
-function createFeeBreakdown(grossAmount: number) {
-  const feeAmount = (grossAmount * FEE_CONFIG.FEE_BPS) / 10000;
-  const netAmount = grossAmount - feeAmount;
-  return {
-    protocol: {
-      bps: FEE_CONFIG.FEE_BPS,
-      amount: feeAmount,
-    },
-    total: {
-      grossAmount,
-      netAmount,
-    },
-  };
-}
-
-// ============ Root ============
-
-app.get('/', (c) => c.json({
-  name: 'LP Agent Toolkit',
-  version: '2.0.0',
-  status: 'running',
-  docs: 'https://mnm-web-seven.vercel.app',
-  github: 'https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit',
-  features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
-  endpoints: [
-    'GET /health - Health check',
-    'GET /fees - Fee configuration',
-    'GET /fees/calculate?amount=1000 - Calculate fee',
-    'GET /pools/scan?tokenA=SOL&tokenB=USDC - Scan pools',
-  ],
-}));
-
-// ============ Health ============
-
-app.get('/health', (c) => c.json({
-  status: 'ok',
-  timestamp: new Date().toISOString(),
-}));
-
-// ============ Fees ============
-
-app.get('/fees', (c) => {
-  return c.json({
-    protocolFee: {
-      bps: FEE_CONFIG.FEE_BPS,
-      percentage: `${FEE_CONFIG.FEE_BPS / 100}%`,
-      description: 'Fee deducted from every LP transaction',
-    },
-    treasury: FEE_CONFIG.TREASURY,
-    minFee: {
-      lamports: FEE_CONFIG.MIN_FEE_LAMPORTS,
-      description: 'Minimum fee threshold to avoid dust',
-    },
-    exemptThreshold: {
-      usd: FEE_CONFIG.EXEMPT_THRESHOLD_USD,
-      description: 'Transactions below this USD value are fee-exempt',
-    },
-    calculate: '/fees/calculate?amount=1000',
-  });
-});
-
-app.get('/fees/calculate', (c) => {
-  const amount = parseFloat(c.req.query('amount') || '0');
-  if (amount <= 0) {
-    return c.json({ error: 'Provide a positive amount query parameter' }, 400);
-  }
-  
-  const breakdown = createFeeBreakdown(amount);
-  return c.json({
-    input: amount,
-    fee: breakdown.protocol,
-    output: breakdown.total.netAmount,
-    message: `${breakdown.protocol.amount.toFixed(4)} (${breakdown.protocol.bps / 100}%) goes to protocol treasury`,
-  });
-});
-
-// ============ Pool Scanning ============
-
+// Sample pool data
 const SAMPLE_POOLS = [
   {
     address: 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE',
@@ -135,23 +50,100 @@ const SAMPLE_POOLS = [
   },
 ];
 
-app.get('/pools/scan', (c) => {
-  const tokenA = c.req.query('tokenA') || 'SOL';
-  const tokenB = c.req.query('tokenB') || 'USDC';
-  
-  const pools = SAMPLE_POOLS.filter(p => 
-    p.tokens.includes(tokenA.toUpperCase()) && 
-    p.tokens.includes(tokenB.toUpperCase())
-  );
-  
-  return c.json({
-    success: true,
-    pair: `${tokenA}-${tokenB}`,
-    count: pools.length,
-    pools: pools,
-    note: 'Sample data for demo. Full scanning requires local server with Gateway connection.',
-  });
-});
+function createFeeBreakdown(grossAmount: number) {
+  const feeAmount = (grossAmount * FEE_CONFIG.FEE_BPS) / 10000;
+  const netAmount = grossAmount - feeAmount;
+  return { feeAmount, netAmount };
+}
 
-// Export for Vercel
-export default handle(app);
+export default function handler(req: VercelRequest, res: VercelResponse) {
+  // CORS
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  const path = req.url || '/';
+  const url = new URL(path, 'http://localhost');
+  const pathname = url.pathname;
+
+  // Route: /health
+  if (pathname === '/health') {
+    return res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // Route: /fees
+  if (pathname === '/fees') {
+    return res.json({
+      protocolFee: {
+        bps: FEE_CONFIG.FEE_BPS,
+        percentage: `${FEE_CONFIG.FEE_BPS / 100}%`,
+        description: 'Fee deducted from every LP transaction',
+      },
+      treasury: FEE_CONFIG.TREASURY,
+      minFee: {
+        lamports: FEE_CONFIG.MIN_FEE_LAMPORTS,
+        description: 'Minimum fee threshold to avoid dust',
+      },
+      exemptThreshold: {
+        usd: FEE_CONFIG.EXEMPT_THRESHOLD_USD,
+        description: 'Transactions below this USD value are fee-exempt',
+      },
+      calculate: '/fees/calculate?amount=1000',
+    });
+  }
+
+  // Route: /fees/calculate
+  if (pathname === '/fees/calculate') {
+    const amount = parseFloat(url.searchParams.get('amount') || '0');
+    if (amount <= 0) {
+      return res.status(400).json({ error: 'Provide a positive amount query parameter' });
+    }
+    const { feeAmount, netAmount } = createFeeBreakdown(amount);
+    return res.json({
+      input: amount,
+      fee: { bps: FEE_CONFIG.FEE_BPS, amount: feeAmount },
+      output: netAmount,
+      message: `${feeAmount.toFixed(4)} (${FEE_CONFIG.FEE_BPS / 100}%) goes to protocol treasury`,
+    });
+  }
+
+  // Route: /pools/scan
+  if (pathname === '/pools/scan') {
+    const tokenA = url.searchParams.get('tokenA') || 'SOL';
+    const tokenB = url.searchParams.get('tokenB') || 'USDC';
+    const pools = SAMPLE_POOLS.filter(p => 
+      p.tokens.includes(tokenA.toUpperCase()) && 
+      p.tokens.includes(tokenB.toUpperCase())
+    );
+    return res.json({
+      success: true,
+      pair: `${tokenA}-${tokenB}`,
+      count: pools.length,
+      pools: pools,
+      note: 'Sample data for demo. Full scanning requires local server with Gateway connection.',
+    });
+  }
+
+  // Default: root
+  return res.json({
+    name: 'LP Agent Toolkit',
+    version: '2.0.0',
+    status: 'running',
+    docs: 'https://mnm-web-seven.vercel.app',
+    github: 'https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit',
+    features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
+    endpoints: [
+      'GET /health - Health check',
+      'GET /fees - Fee configuration',
+      'GET /fees/calculate?amount=1000 - Calculate fee',
+      'GET /pools/scan?tokenA=SOL&tokenB=USDC - Scan pools',
+    ],
+  });
+}
