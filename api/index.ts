@@ -90,7 +90,7 @@ app.get('/swap/quote', async (c) => {
   try {
     const inputMint = jupiterClient.resolveTokenMint(inputToken);
     const outputMint = jupiterClient.resolveTokenMint(outputToken);
-    const quote = await jupiterClient.getQuote(inputMint, outputMint, parseInt(amount));
+    const quote = await jupiterClient.getQuote(inputMint, outputMint, parseInt(amount as string));
     return c.json({ success: true, quote });
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
@@ -110,7 +110,7 @@ app.post('/chat', async (c) => {
   const message = body.message || body.text;
 
   if (!message) {
-    return c.json<AgentResponse>({
+    return c.json({
       success: false,
       error: 'No message provided',
     }, 400);
