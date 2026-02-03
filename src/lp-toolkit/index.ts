@@ -20,6 +20,9 @@ export { getAllAdapters, getAdapter, adapters } from './adapters';
 // ============ Services ============
 export { YieldScanner, createYieldScanner } from './services/yieldScanner';
 export { ArciumPrivacyService, generatePrivacyKeys } from './services/arciumPrivacy';
+export { PrivateExecutor } from './services/privateExecutor';
+export { YieldMonitor, createYieldMonitor } from './services/yieldMonitor';
+export type { YieldUpdate, MonitorConfig } from './services/yieldMonitor';
 
 // ============ API Layer ============
 // Chat commands
