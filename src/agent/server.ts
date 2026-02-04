@@ -15,6 +15,7 @@ import { GatewayClient } from '../gateway';
 import { MPCClient } from '../mpc';
 import { MockMPCClient } from '../mpc/mockClient';
 import { PrivyWalletClient } from '../mpc/privyClient';
+import { LocalKeypairClient } from '../mpc/localKeypair';
 import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
 import { createFeeBreakdown, FEE_CONFIG } from '../fees';
@@ -77,6 +78,7 @@ app.use('*', cors());
 // State - supports multiple wallet providers
 let mpcClient: MPCClient | MockMPCClient | null = null;
 let privyClient: PrivyWalletClient | null = null;
+let localKeypairClient: LocalKeypairClient | null = null;
 let gatewayClient: GatewayClient | null = null;
 let connection: Connection;
 
@@ -84,7 +86,7 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.6-deferred-position-sign',
+  version: '2.0.7-local-keypair',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
   fees: {
@@ -359,8 +361,37 @@ app.post('/wallet/load', async (c) => {
   }
 });
 
+// Load local keypair for testing (supports actual transaction signing)
+app.post('/wallet/local', async (c) => {
+  try {
+    const { privateKey } = await c.req.json().catch(() => ({}));
+    
+    localKeypairClient = new LocalKeypairClient(privateKey);
+    const address = localKeypairClient.getAddress();
+    
+    return c.json<AgentResponse>({
+      success: true,
+      message: privateKey 
+        ? 'Local keypair wallet loaded. This wallet CAN sign arbitrary transactions.'
+        : 'New local keypair generated. Fund this address and use it for testing.',
+      data: {
+        address,
+        provider: 'local-keypair',
+        warning: 'For testing only - keypair stored in server memory',
+      },
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to create local keypair',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
 app.get('/wallet/address', (c) => {
-  if (!mpcClient?.isWalletLoaded()) {
+  const walletClient = getWalletClient();
+  if (!walletClient) {
     return c.json<AgentResponse>({
       success: false,
       message: 'No wallet loaded',
@@ -370,7 +401,7 @@ app.get('/wallet/address', (c) => {
   return c.json<AgentResponse>({
     success: true,
     message: 'Wallet address',
-    data: { address: mpcClient.getAddress() },
+    data: { address: walletClient.getAddress() },
   });
 });
 
@@ -937,8 +968,9 @@ async function handleSwap(intent: LPIntent): Promise<AgentResponse> {
   }
 }
 
-// Helper to get active wallet client (Privy or MPC)
+// Helper to get active wallet client (Local Keypair, Privy, or MPC)
 function getWalletClient() {
+  if (localKeypairClient) return localKeypairClient;
   if (privyClient?.isWalletLoaded()) return privyClient;
   if (mpcClient?.isWalletLoaded()) return mpcClient;
   return null;

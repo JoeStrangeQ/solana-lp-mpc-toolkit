@@ -1,3 +1,4 @@
 export * from './client';
 export * from './types';
 export * from './privyClient';
+export * from './localKeypair';
