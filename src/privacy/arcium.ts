@@ -154,19 +154,20 @@ export class ArciumPrivacy {
       const encrypted = await this.encryptStrategy(testStrategy);
       
       // Verify encrypted structure
-      const hasRequiredFields = 
+      const hasRequiredFields = Boolean(
         encrypted.ciphertext && 
         encrypted.nonce && 
         encrypted.publicKey &&
         encrypted.algorithm === 'x25519-aes256gcm' &&
-        encrypted.mxeCluster === 456;
+        encrypted.mxeCluster === 456
+      );
       
       // Verify ciphertext is different from plaintext (not just base64 encoding)
       const plaintext = JSON.stringify(testStrategy);
       const decodedCiphertext = Buffer.from(encrypted.ciphertext, 'base64').toString('utf-8');
       const isActuallyEncrypted = decodedCiphertext !== plaintext;
       
-      const passed = hasRequiredFields && isActuallyEncrypted;
+      const passed: boolean = hasRequiredFields && isActuallyEncrypted;
       
       console.log('[Arcium] Self-test:', {
         hasRequiredFields,
