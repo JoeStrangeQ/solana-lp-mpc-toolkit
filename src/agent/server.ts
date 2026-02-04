@@ -86,7 +86,7 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.11-persist-keypair',
+  version: '2.0.12-env-keypair',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
   fees: {
@@ -362,7 +362,7 @@ app.post('/wallet/load', async (c) => {
 });
 
 // Load local keypair for testing (supports actual transaction signing)
-// Reuses existing keypair if already loaded, unless forceNew=true
+// Uses LOCAL_WALLET_KEY env var if set, otherwise generates new
 app.post('/wallet/local', async (c) => {
   try {
     const { privateKey, forceNew } = await c.req.json().catch(() => ({}));
@@ -380,19 +380,25 @@ app.post('/wallet/local', async (c) => {
       });
     }
     
-    // Create new or load provided key
-    localKeypairClient = new LocalKeypairClient(privateKey || undefined);
+    // Priority: provided key > env var > generate new
+    const keyToUse = privateKey || process.env.LOCAL_WALLET_KEY || undefined;
+    localKeypairClient = new LocalKeypairClient(keyToUse);
     const address = localKeypairClient.getAddress();
+    
+    const source = privateKey ? 'provided' : (process.env.LOCAL_WALLET_KEY ? 'env' : 'generated');
     
     return c.json<AgentResponse>({
       success: true,
-      message: privateKey 
-        ? 'Local keypair wallet loaded from provided key.'
-        : 'New local keypair generated. Fund this address for testing.',
+      message: source === 'env' 
+        ? 'Local keypair loaded from LOCAL_WALLET_KEY env var.'
+        : source === 'provided'
+        ? 'Local keypair loaded from provided key.'
+        : 'New local keypair generated. Set LOCAL_WALLET_KEY env var to persist.',
       data: {
         address,
         provider: 'local-keypair',
-        warning: 'Keypair stored in server memory - lost on restart',
+        source,
+        persistent: source === 'env',
       },
     });
   } catch (error) {
