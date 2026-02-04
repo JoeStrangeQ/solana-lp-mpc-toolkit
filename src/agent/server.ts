@@ -86,7 +86,7 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.9-privy-caip2',
+  version: '2.0.10-finalized-blockhash',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
   fees: {
