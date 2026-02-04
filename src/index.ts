@@ -15,6 +15,8 @@ export * from './config';
 import { startServer } from './agent/server';
 
 if (require.main === module) {
-  startServer();
+  startServer().catch(err => {
+    console.error('💥 Server startup failed:', err);
+    process.exit(1);
+  });
 }
-// Rebuilt: 2026-02-04T22:06:38Z

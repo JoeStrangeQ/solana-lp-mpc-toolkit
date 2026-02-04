@@ -52,11 +52,14 @@ async function loadSwapModule() {
 async function loadLpModule() {
   if (!lpPipeline) {
     try {
+      console.log('📦 Loading LP module...');
       const mod = await import('../lp/index.js');
       lpPipeline = mod.lpPipeline;
       METEORA_POOLS = mod.METEORA_POOLS || METEORA_POOLS;
+      console.log('✅ LP module loaded successfully');
     } catch (e) {
-      console.warn('⚠️ Failed to load LP module:', (e as Error).message);
+      console.error('❌ Failed to load LP module:', (e as Error).message);
+      console.error('Stack:', (e as Error).stack);
     }
   }
   return lpPipeline;
@@ -1110,10 +1113,15 @@ async function broadcastTransaction(signedTx: string): Promise<string> {
 
 // ============ Server Start ============
 
-export function startServer() {
+export async function startServer() {
   try {
     console.log('🚀 LP Agent Toolkit - Initializing...');
     connection = new Connection(config.solana.rpc, 'confirmed');
+
+    // Eagerly load modules to catch errors at startup
+    console.log('📦 Pre-loading modules...');
+    await loadSwapModule();
+    await loadLpModule();
 
     const port = config.agent.port;
     
@@ -1123,6 +1131,8 @@ export function startServer() {
     console.log(`🛡️  Privacy: Arcium MXE`);
     console.log(`🌐 Network: mainnet`);
     console.log(`🚪 Port: ${port}`);
+    console.log(`📦 LP Module: ${lpPipeline ? 'loaded' : 'NOT LOADED'}`);
+    console.log(`📦 Swap Module: ${jupiterClient ? 'loaded' : 'NOT LOADED'}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     serve({
