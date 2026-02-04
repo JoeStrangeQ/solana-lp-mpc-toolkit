@@ -1071,28 +1071,29 @@ async function broadcastTransaction(signedTx: string): Promise<string> {
 
 export function startServer() {
   try {
-    connection = new Connection(config.solana.rpc);
+    console.log('🚀 LP Agent Toolkit - Initializing...');
+    connection = new Connection(config.solana.rpc, 'confirmed');
+
+    const port = config.agent.port;
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📡 Gateway: ${config.gateway.url}`);
+    console.log(`🔐 MPC Provider: ${config.privy.enabled ? 'Privy' : 'Portal'}`);
+    console.log(`🛡️  Privacy: Arcium MXE`);
+    console.log(`🌐 Network: ${config.solana.network}`);
+    console.log(`🚪 Port: ${port}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    serve({
+      fetch: app.fetch,
+      port: port,
+    });
+
+    console.log(`\n✅ Server running on http://0.0.0.0:${port}`);
   } catch (err) {
-    console.warn('⚠️ Could not connect to Solana RPC:', err);
+    console.error('💥 FATAL: Server failed to start!', err);
+    process.exit(1);
   }
-
-  const port = config.agent.port;
-  
-  console.log('🚀 LP Agent Toolkit');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`📡 Gateway: ${config.gateway.url}`);
-  console.log(`🔐 MPC: Portal Enclave`);
-  console.log(`🛡️  Privacy: Arcium MXE`);
-  console.log(`🌐 Network: ${config.gateway.network}`);
-  console.log(`🚪 Port: ${port}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-
-  serve({
-    fetch: app.fetch,
-    port: port,
-  });
-
-  console.log(`\n✅ Server running on http://0.0.0.0:${port}`);
 }
 
 export default app;
