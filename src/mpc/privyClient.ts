@@ -105,10 +105,11 @@ export class PrivyWalletClient {
     }
 
     try {
-      // Use the Privy SDK RPC API for Solana transactions with caip2
+      // Use the Privy SDK RPC API for Solana transactions
+      // Note: signTransaction does NOT use caip2 (only signAndSendTransaction does)
       const result = await (this.client as any).privyApiClient.wallets._rpc(this.wallet.id, {
         method: 'signTransaction',
-        caip2: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', // Solana mainnet
+        chain_type: 'solana',
         params: {
           transaction: transactionBase64,
           encoding: 'base64',
