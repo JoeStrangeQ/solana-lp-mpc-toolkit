@@ -7,8 +7,21 @@ import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { arciumPrivacy } from './privacy';
-import { PrivyWalletClient } from './mpc/privyClient';
 import { config } from './config';
+
+// Lazy-load Privy to avoid ESM/CJS issues at startup
+let PrivyWalletClient: any = null;
+async function loadPrivy() {
+  if (!PrivyWalletClient) {
+    try {
+      const module = await import('./mpc/privyClient.js');
+      PrivyWalletClient = module.PrivyWalletClient;
+    } catch (e) {
+      console.warn('⚠️ Privy SDK failed to load (ESM issue):', (e as Error).message);
+    }
+  }
+  return PrivyWalletClient;
+}
 
 const app = new Hono();
 
@@ -16,7 +29,8 @@ const app = new Hono();
 app.use('*', cors());
 
 // State
-let privyClient: PrivyWalletClient | null = null;
+let privyClient: any = null;
+let privyInitialized = false;
 let connection: Connection;
 
 // Initialize connection
@@ -28,12 +42,27 @@ try {
   connection = new Connection('https://api.mainnet-beta.solana.com');
 }
 
-// Initialize Privy if configured
-if (config.privy?.appId && config.privy?.appSecret) {
-  privyClient = new PrivyWalletClient({ appId: config.privy.appId, appSecret: config.privy.appSecret });
-  console.log('✅ Privy client initialized');
-} else {
-  console.warn('⚠️ Privy not configured - wallet endpoints disabled');
+// Lazy Privy initialization
+async function initPrivy() {
+  if (privyInitialized) return privyClient;
+  privyInitialized = true;
+  
+  if (!config.privy?.appId || !config.privy?.appSecret) {
+    console.warn('⚠️ Privy not configured - wallet endpoints disabled');
+    return null;
+  }
+  
+  const Client = await loadPrivy();
+  if (!Client) return null;
+  
+  try {
+    privyClient = new Client({ appId: config.privy.appId, appSecret: config.privy.appSecret });
+    console.log('✅ Privy client initialized');
+    return privyClient;
+  } catch (e) {
+    console.warn('⚠️ Privy init failed:', (e as Error).message);
+    return null;
+  }
 }
 
 // Fee config
@@ -186,11 +215,12 @@ app.get('/encrypt/test', async (c) => {
 // ============ Wallet ============
 
 app.post('/wallet/create', async (c) => {
-  if (!privyClient) {
-    return c.json({ error: 'Privy not configured', hint: 'Set PRIVY_APP_ID and PRIVY_APP_SECRET' }, 503);
+  const client = await initPrivy();
+  if (!client) {
+    return c.json({ error: 'Privy not available', hint: 'Check PRIVY_APP_ID and PRIVY_APP_SECRET env vars' }, 503);
   }
   try {
-    const wallet = await privyClient.generateWallet();
+    const wallet = await client.generateWallet();
     return c.json({
       success: true,
       wallet: {
@@ -205,15 +235,16 @@ app.post('/wallet/create', async (c) => {
 });
 
 app.post('/wallet/load', async (c) => {
-  if (!privyClient) {
-    return c.json({ error: 'Privy not configured' }, 503);
+  const client = await initPrivy();
+  if (!client) {
+    return c.json({ error: 'Privy not available' }, 503);
   }
   try {
     const { walletId } = await c.req.json();
     if (!walletId) {
       return c.json({ error: 'Missing walletId' }, 400);
     }
-    const wallet = await privyClient.loadWallet(walletId);
+    const wallet = await client.loadWallet(walletId);
     return c.json({
       success: true,
       wallet: {
@@ -228,11 +259,12 @@ app.post('/wallet/load', async (c) => {
 });
 
 app.get('/wallet/balance', async (c) => {
-  if (!privyClient || !privyClient.isWalletLoaded()) {
+  const client = await initPrivy();
+  if (!client || !client.isWalletLoaded()) {
     return c.json({ error: 'No wallet loaded' }, 400);
   }
   try {
-    const address = privyClient.getAddress();
+    const address = client.getAddress();
     const balance = await connection.getBalance(new PublicKey(address));
     return c.json({
       success: true,
@@ -250,7 +282,8 @@ app.get('/wallet/balance', async (c) => {
 // ============ LP Positions ============
 
 app.post('/lp/open', async (c) => {
-  if (!privyClient || !privyClient.isWalletLoaded()) {
+  const client = await initPrivy();
+  if (!client || !client.isWalletLoaded()) {
     return c.json({ error: 'No wallet loaded. Call /wallet/create or /wallet/load first' }, 400);
   }
   
@@ -281,7 +314,7 @@ app.post('/lp/open', async (c) => {
     
     // For demo: create a memo transaction showing the LP intent
     // In production: this would call Meteora DLMM SDK
-    const walletPubkey = new PublicKey(privyClient.getAddress());
+    const walletPubkey = new PublicKey(client.getAddress());
     const tx = new Transaction().add(
       SystemProgram.transfer({
         fromPubkey: walletPubkey,
@@ -299,7 +332,7 @@ app.post('/lp/open', async (c) => {
     const txBase64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
     
     // Sign with Privy
-    const signedTxBase64 = await privyClient.signTransaction(txBase64);
+    const signedTxBase64 = await client.signTransaction(txBase64);
     
     // Calculate fees
     const fee = (amountA * FEE_CONFIG.FEE_BPS) / 10000;
@@ -332,7 +365,8 @@ app.post('/lp/open', async (c) => {
 });
 
 app.post('/lp/close', async (c) => {
-  if (!privyClient || !privyClient.isWalletLoaded()) {
+  const client = await initPrivy();
+  if (!client || !client.isWalletLoaded()) {
     return c.json({ error: 'No wallet loaded' }, 400);
   }
   
@@ -382,7 +416,7 @@ app.post('/chat', async (c) => {
             pair: lower.includes('usdc') ? 'SOL-USDC' : 'SOL-USDC',
             fee,
           },
-          nextStep: privyClient?.isWalletLoaded() 
+          nextStep: privyClient?.isWalletLoaded?.() 
             ? 'Call POST /lp/open with poolAddress and amount'
             : 'First create/load wallet with POST /wallet/create',
           pools: SAMPLE_POOLS,
@@ -393,7 +427,7 @@ app.post('/chat', async (c) => {
         understood: true,
         intent: 'CHECK_BALANCE',
         nextStep: 'Call GET /wallet/balance',
-        walletLoaded: privyClient?.isWalletLoaded() || false,
+        walletLoaded: privyClient?.isWalletLoaded?.() || false,
       };
     } else if (lower.includes('pool') || lower.includes('yield') || lower.includes('apy')) {
       response = {
