@@ -80,7 +80,7 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.0',
+  version: '2.0.1-build.20260204.2210',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
   fees: {
@@ -1148,3 +1148,15 @@ export async function startServer() {
 }
 
 export default app;
+
+// Debug endpoint to test LP module loading
+app.get('/debug/lp', async (c) => {
+  console.log('🔍 Debug: Testing LP module load...');
+  const lp = await loadLpModule();
+  return c.json({
+    lpLoaded: !!lp,
+    lpPipelineType: typeof lpPipeline,
+    swapLoaded: !!jupiterClient,
+    timestamp: new Date().toISOString()
+  });
+});
