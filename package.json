@@ -17,7 +17,8 @@
     "build": "tsc",
     "test": "jest",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "tsx scripts/e2e-test.ts"
   },
   "keywords": [
     "solana",
