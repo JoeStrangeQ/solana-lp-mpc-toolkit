@@ -106,7 +106,8 @@ export class PrivyWalletClient {
 
     try {
       // Use the Privy SDK RPC API for Solana transactions
-      const result = await this.client.wallets._rpc(this.wallet.id, {
+      // Access through privyApiClient which has the wallets methods
+      const result = await (this.client as any).privyApiClient.wallets._rpc(this.wallet.id, {
         method: 'signTransaction',
         params: {
           transaction: transactionBase64,
@@ -130,7 +131,8 @@ export class PrivyWalletClient {
 
     try {
       // Use the Privy SDK RPC API for Solana transactions
-      const result = await this.client.wallets._rpc(this.wallet.id, {
+      // Access through privyApiClient which has the wallets methods
+      const result = await (this.client as any).privyApiClient.wallets._rpc(this.wallet.id, {
         method: 'signAndSendTransaction',
         params: {
           transaction: transactionBase64,
@@ -154,7 +156,8 @@ export class PrivyWalletClient {
 
     try {
       // Use the Privy SDK RPC API for Solana message signing
-      const result = await this.client.wallets._rpc(this.wallet.id, {
+      // Access through privyApiClient which has the wallets methods
+      const result = await (this.client as any).privyApiClient.wallets._rpc(this.wallet.id, {
         method: 'signMessage',
         params: {
           message: message,
