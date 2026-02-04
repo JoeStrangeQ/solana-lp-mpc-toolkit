@@ -3,12 +3,20 @@
  */
 
 export interface LPStrategy {
-  pair: string;
-  amount: number;
+  pair?: string;
+  amount?: number;
   binRange?: [number, number];
   distribution?: 'uniform' | 'gaussian' | 'bid-heavy' | 'ask-heavy';
   slippage?: number;
   autoCompound?: boolean;
+  // Extended fields for full LP operations
+  intent?: string;
+  dex?: string;
+  pool?: string;
+  tokenA?: string;
+  tokenB?: string;
+  amountA?: number;
+  amountB?: number;
 }
 
 export interface EncryptedStrategy {
