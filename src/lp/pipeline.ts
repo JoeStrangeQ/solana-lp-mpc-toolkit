@@ -15,7 +15,7 @@ import { MeteoraDirectClient } from '../dex/meteora';
 
 // Well-known pool addresses (Meteora DLMM)
 export const METEORA_POOLS = {
-  'SOL-USDC': '2sf6e8kWsvVvTEPLkHaJp3YdLt6bNouLNGrz5yeS9t2z', // Main SOL-USDC DLMM pool
+  'SOL-USDC': 'BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y', // Main SOL-USDC DLMM pool ($5M TVL)
 } as const;
 
 export interface TokenBalance {
