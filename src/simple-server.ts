@@ -28,12 +28,8 @@ const app = new Hono();
 // Middleware
 app.use('*', cors());
 
-// State
-let privyClient: any = null;
-let privyInitialized = false;
+// Connection (stateless - just RPC)
 let connection: Connection;
-
-// Initialize connection
 try {
   connection = new Connection(config.solana.rpc || 'https://api.mainnet-beta.solana.com');
   console.log('✅ Solana connection initialized');
@@ -42,13 +38,9 @@ try {
   connection = new Connection('https://api.mainnet-beta.solana.com');
 }
 
-// Lazy Privy initialization
-async function initPrivy() {
-  if (privyInitialized) return privyClient;
-  privyInitialized = true;
-  
+// Stateless Privy helpers - load wallet fresh per request
+async function createPrivyClient() {
   if (!config.privy?.appId || !config.privy?.appSecret) {
-    console.warn('⚠️ Privy not configured - wallet endpoints disabled');
     return null;
   }
   
@@ -56,17 +48,25 @@ async function initPrivy() {
   if (!Client) return null;
   
   try {
-    privyClient = new Client({ 
+    return new Client({ 
       appId: config.privy.appId, 
       appSecret: config.privy.appSecret,
       authorizationPrivateKey: config.privy.authorizationPrivateKey || undefined,
     });
-    console.log('✅ Privy client initialized');
-    return privyClient;
   } catch (e) {
-    console.warn('⚠️ Privy init failed:', (e as Error).message);
+    console.warn('⚠️ Privy client creation failed:', (e as Error).message);
     return null;
   }
+}
+
+// Load wallet by ID - stateless, fresh each request
+async function loadWalletById(walletId: string) {
+  const client = await createPrivyClient();
+  if (!client) {
+    throw new Error('Privy not configured');
+  }
+  const wallet = await client.loadWallet(walletId);
+  return { client, wallet };
 }
 
 // Fee config
@@ -105,24 +105,32 @@ const SAMPLE_POOLS = [
 
 app.get('/', (c) => c.json({ 
   name: 'LP Agent Toolkit', 
-  version: '2.0.0',
+  version: '2.1.0-stateless',
   status: 'running',
   docs: 'https://mnm-web-seven.vercel.app',
   github: 'https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit',
-  features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
+  features: ['MPC Custody', 'Arcium Privacy', 'Stateless API', 'Multi-DEX LP'],
+  design: 'STATELESS - pass walletId on every request',
+  flow: [
+    '1. POST /wallet/create → get walletId',
+    '2. Agent stores walletId in its context',
+    '3. All subsequent calls pass walletId',
+  ],
   endpoints: [
-    'GET /health',
-    'GET /fees',
-    'GET /fees/calculate?amount=1000',
-    'GET /pools/scan?tokenA=SOL&tokenB=USDC',
+    'GET  /health',
+    'GET  /fees',
+    'GET  /fees/calculate?amount=1000',
+    'GET  /pools/scan?tokenA=SOL&tokenB=USDC',
     'POST /encrypt',
-    'GET /encrypt/info',
-    'POST /wallet/create',
-    'POST /wallet/load',
-    'GET /wallet/balance',
-    'POST /lp/open',
-    'POST /lp/close',
-    'POST /chat',
+    'GET  /encrypt/info',
+    'POST /wallet/create                  → returns walletId',
+    'GET  /wallet/:walletId               → wallet info',
+    'GET  /wallet/:walletId/balance       → balance',
+    'POST /lp/open    { walletId, ... }   → open position',
+    'POST /lp/close   { walletId, ... }   → close position',
+    'POST /lp/execute { walletId, ... }   → full pipeline',
+    'GET  /positions/:walletId            → list positions',
+    'POST /chat       { message, walletId? }',
   ],
 }));
 
@@ -241,8 +249,9 @@ app.get('/encrypt/test', async (c) => {
 
 // ============ Wallet ============
 
+// Create new wallet - returns walletId for agent to store
 app.post('/wallet/create', async (c) => {
-  const client = await initPrivy();
+  const client = await createPrivyClient();
   if (!client) {
     return c.json({ error: 'Privy not available', hint: 'Check PRIVY_APP_ID and PRIVY_APP_SECRET env vars' }, 503);
   }
@@ -251,51 +260,45 @@ app.post('/wallet/create', async (c) => {
     return c.json({
       success: true,
       wallet: {
+        id: wallet.id,              // Agent MUST store this
         address: wallet.addresses.solana,
-        id: wallet.id,
         provider: 'privy',
       },
+      hint: 'Store walletId - pass it in all future requests',
     });
   } catch (error: any) {
     return c.json({ error: 'Wallet creation failed', details: error.message }, 500);
   }
 });
 
-app.post('/wallet/load', async (c) => {
-  const client = await initPrivy();
-  if (!client) {
-    return c.json({ error: 'Privy not available' }, 503);
-  }
+// Get wallet info by ID (stateless lookup)
+app.get('/wallet/:walletId', async (c) => {
+  const walletId = c.req.param('walletId');
   try {
-    const { walletId } = await c.req.json();
-    if (!walletId) {
-      return c.json({ error: 'Missing walletId' }, 400);
-    }
-    const wallet = await client.loadWallet(walletId);
+    const { wallet } = await loadWalletById(walletId);
     return c.json({
       success: true,
       wallet: {
-        address: wallet.address,
         id: wallet.id,
+        address: wallet.address,
         provider: 'privy',
       },
     });
   } catch (error: any) {
-    return c.json({ error: 'Wallet load failed', details: error.message }, 500);
+    return c.json({ error: 'Wallet not found', details: error.message }, 404);
   }
 });
 
-app.get('/wallet/balance', async (c) => {
-  const client = await initPrivy();
-  if (!client || !client.isWalletLoaded()) {
-    return c.json({ error: 'No wallet loaded' }, 400);
-  }
+// Get balance by walletId (stateless)
+app.get('/wallet/:walletId/balance', async (c) => {
+  const walletId = c.req.param('walletId');
   try {
-    const address = client.getAddress();
-    const balance = await connection.getBalance(new PublicKey(address));
+    const { wallet } = await loadWalletById(walletId);
+    const balance = await connection.getBalance(new PublicKey(wallet.address));
     return c.json({
       success: true,
-      address,
+      walletId,
+      address: wallet.address,
       balance: {
         lamports: balance,
         sol: balance / LAMPORTS_PER_SOL,
@@ -308,19 +311,25 @@ app.get('/wallet/balance', async (c) => {
 
 // ============ LP Positions ============
 
+// Open LP position - requires walletId (stateless)
 app.post('/lp/open', async (c) => {
-  const client = await initPrivy();
-  if (!client || !client.isWalletLoaded()) {
-    return c.json({ error: 'No wallet loaded. Call /wallet/create or /wallet/load first' }, 400);
-  }
-  
   try {
     const body = await c.req.json();
-    const { poolAddress, amountA, amountB, binRange, encrypt = true } = body;
+    const { walletId, poolAddress, amountA, amountB, binRange, encrypt = true } = body;
+    
+    if (!walletId) {
+      return c.json({ 
+        error: 'Missing walletId', 
+        hint: 'First call POST /wallet/create, then pass the returned walletId here' 
+      }, 400);
+    }
     
     if (!poolAddress || !amountA) {
       return c.json({ error: 'Missing poolAddress or amountA' }, 400);
     }
+    
+    // Load wallet fresh for this request (stateless)
+    const { client, wallet } = await loadWalletById(walletId);
     
     // Build LP strategy
     const strategy = {
@@ -328,7 +337,7 @@ app.post('/lp/open', async (c) => {
       pool: poolAddress,
       amountA,
       amountB: amountB || 0,
-      binRange: binRange || [127, 133], // Default around active bin
+      binRange: binRange || [127, 133],
       timestamp: Date.now(),
     };
     
@@ -339,9 +348,8 @@ app.post('/lp/open', async (c) => {
       encryptedStrategy = await arciumPrivacy.encryptStrategy(strategy);
     }
     
-    // For demo: create a memo transaction showing the LP intent
-    // In production: this would call Meteora DLMM SDK
-    const walletPubkey = new PublicKey(client.getAddress());
+    // Build transaction
+    const walletPubkey = new PublicKey(wallet.address);
     const tx = new Transaction().add(
       SystemProgram.transfer({
         fromPubkey: walletPubkey,
@@ -350,22 +358,19 @@ app.post('/lp/open', async (c) => {
       })
     );
     
-    // Get recent blockhash
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
     tx.feePayer = walletPubkey;
     
-    // Serialize transaction for Privy signing
+    // Sign with Privy (stateless - wallet loaded fresh)
     const txBase64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
-    
-    // Sign with Privy
     const signedTxBase64 = await client.signTransaction(txBase64);
     
-    // Calculate fees
     const fee = (amountA * FEE_CONFIG.FEE_BPS) / 10000;
     
     return c.json({
       success: true,
+      walletId,
       position: {
         pool: poolAddress,
         amountA,
@@ -391,22 +396,27 @@ app.post('/lp/open', async (c) => {
   }
 });
 
+// Close LP position - requires walletId (stateless)
 app.post('/lp/close', async (c) => {
-  const client = await initPrivy();
-  if (!client || !client.isWalletLoaded()) {
-    return c.json({ error: 'No wallet loaded' }, 400);
-  }
-  
   try {
     const body = await c.req.json();
-    const { positionAddress } = body;
+    const { walletId, positionAddress } = body;
+    
+    if (!walletId) {
+      return c.json({ error: 'Missing walletId' }, 400);
+    }
     
     if (!positionAddress) {
       return c.json({ error: 'Missing positionAddress' }, 400);
     }
     
+    // Load wallet for signing (stateless)
+    const { wallet } = await loadWalletById(walletId);
+    
     return c.json({
       success: true,
+      walletId,
+      walletAddress: wallet.address,
       message: 'Position close prepared',
       position: positionAddress,
       note: 'Demo - production would withdraw from Meteora DLMM',
@@ -416,18 +426,22 @@ app.post('/lp/close', async (c) => {
   }
 });
 
-// ============ Chat Interface ============
+// ============ Chat Interface (Stateless NL) ============
 
 app.post('/chat', async (c) => {
   try {
-    const { message } = await c.req.json();
+    const { message, walletId } = await c.req.json();
     if (!message) {
       return c.json({ error: 'Missing message' }, 400);
     }
     
     // Simple NL parsing
     const lower = message.toLowerCase();
-    let response: any = { understood: false, message: 'I didn\'t understand that. Try: "LP $500 into SOL-USDC"' };
+    let response: any = { 
+      understood: false, 
+      message: 'I didn\'t understand that. Try: "LP $500 into SOL-USDC"',
+      hint: 'Include walletId in request if you have one',
+    };
     
     if (lower.includes('lp') || lower.includes('liquidity')) {
       const amountMatch = message.match(/\$?([\d,]+)/);
@@ -443,9 +457,10 @@ app.post('/chat', async (c) => {
             pair: lower.includes('usdc') ? 'SOL-USDC' : 'SOL-USDC',
             fee,
           },
-          nextStep: privyClient?.isWalletLoaded?.() 
-            ? 'Call POST /lp/open with poolAddress and amount'
-            : 'First create/load wallet with POST /wallet/create',
+          walletId: walletId || null,
+          nextStep: walletId 
+            ? `Call POST /lp/open with { walletId: "${walletId}", poolAddress, amountA }`
+            : 'First call POST /wallet/create to get a walletId',
           pools: SAMPLE_POOLS,
         };
       }
@@ -453,8 +468,10 @@ app.post('/chat', async (c) => {
       response = {
         understood: true,
         intent: 'CHECK_BALANCE',
-        nextStep: 'Call GET /wallet/balance',
-        walletLoaded: privyClient?.isWalletLoaded?.() || false,
+        walletId: walletId || null,
+        nextStep: walletId 
+          ? `Call GET /wallet/${walletId}/balance`
+          : 'First call POST /wallet/create to get a walletId',
       };
     } else if (lower.includes('pool') || lower.includes('yield') || lower.includes('apy')) {
       response = {
@@ -462,6 +479,15 @@ app.post('/chat', async (c) => {
         intent: 'SCAN_POOLS',
         pools: SAMPLE_POOLS,
         bestPool: SAMPLE_POOLS[0],
+      };
+    } else if (lower.includes('position') || lower.includes('my lp')) {
+      response = {
+        understood: true,
+        intent: 'GET_POSITIONS',
+        walletId: walletId || null,
+        nextStep: walletId 
+          ? `Call GET /positions/${walletId}`
+          : 'First call POST /wallet/create to get a walletId',
       };
     }
     
@@ -546,13 +572,36 @@ app.get('/swap/quote', async (c) => {
   });
 });
 
-// ============ Position Endpoints ============
+// ============ Position Endpoints (Stateless) ============
 
+// Get positions by walletId
+app.get('/positions/:walletId', async (c) => {
+  const walletId = c.req.param('walletId');
+  try {
+    const { wallet } = await loadWalletById(walletId);
+    
+    // In production: query on-chain positions for this wallet address
+    // For now: return empty (no positions yet)
+    return c.json({
+      success: true,
+      walletId,
+      walletAddress: wallet.address,
+      positions: [],
+      message: 'No LP positions found for this wallet.',
+      hint: 'Call POST /lp/open with walletId to create a position',
+    });
+  } catch (error: any) {
+    return c.json({ error: 'Failed to fetch positions', details: error.message }, 500);
+  }
+});
+
+// Legacy endpoint - tells agent to use walletId
 app.get('/positions', async (c) => {
   return c.json({
-    success: true,
-    positions: [],
-    message: 'No positions found. Create a wallet and add liquidity first.',
+    success: false,
+    error: 'Missing walletId',
+    hint: 'Use GET /positions/:walletId instead',
+    example: 'GET /positions/abc123-wallet-id',
   });
 });
 
@@ -565,23 +614,36 @@ app.get('/lp/pools', (c) => {
   });
 });
 
+// Execute LP pipeline - requires walletId (stateless)
 app.post('/lp/execute', async (c) => {
   try {
     const body = await c.req.json();
-    const { tokenA, tokenB, totalValueUsd, amount } = body;
+    const { walletId, tokenA, tokenB, totalValueUsd, amount } = body;
     const value = totalValueUsd || amount;
+    
+    if (!walletId) {
+      return c.json({ 
+        error: 'Missing walletId',
+        hint: 'First call POST /wallet/create, store the walletId, then pass it here',
+        example: { walletId: 'abc123', tokenA: 'SOL', tokenB: 'USDC', totalValueUsd: 500 }
+      }, 400);
+    }
     
     if (!tokenA || !tokenB || !value) {
       return c.json({ 
         error: 'Missing tokenA, tokenB, or totalValueUsd/amount',
-        example: { tokenA: 'SOL', tokenB: 'USDC', totalValueUsd: 500 }
+        example: { walletId: 'abc123', tokenA: 'SOL', tokenB: 'USDC', totalValueUsd: 500 }
       }, 400);
     }
     
+    // Load wallet (stateless)
+    const { wallet } = await loadWalletById(walletId);
     const fee = value * FEE_CONFIG.FEE_BPS / 10000;
     
     return c.json({
       success: true,
+      walletId,
+      walletAddress: wallet.address,
       message: `LP pipeline prepared: $${value} into ${tokenA}-${tokenB}`,
       data: {
         pair: `${tokenA}-${tokenB}`,
