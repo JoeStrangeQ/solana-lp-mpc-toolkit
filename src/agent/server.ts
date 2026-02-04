@@ -1004,22 +1004,29 @@ async function broadcastTransaction(signedTx: string): Promise<string> {
 // ============ Server Start ============
 
 export function startServer() {
-  connection = new Connection(config.solana.rpc);
+  try {
+    connection = new Connection(config.solana.rpc);
+  } catch (err) {
+    console.warn('⚠️ Could not connect to Solana RPC:', err);
+  }
 
+  const port = config.agent.port;
+  
   console.log('🚀 LP Agent Toolkit');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📡 Gateway: ${config.gateway.url}`);
   console.log(`🔐 MPC: Portal Enclave`);
   console.log(`🛡️  Privacy: Arcium MXE`);
   console.log(`🌐 Network: ${config.gateway.network}`);
+  console.log(`🚪 Port: ${port}`);
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   serve({
     fetch: app.fetch,
-    port: config.agent.port,
+    port: port,
   });
 
-  console.log(`\n✅ Server running on http://localhost:${config.agent.port}`);
+  console.log(`\n✅ Server running on http://0.0.0.0:${port}`);
 }
 
 export default app;
