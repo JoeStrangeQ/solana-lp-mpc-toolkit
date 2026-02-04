@@ -20,6 +20,7 @@ export interface AddLiquidityParams {
 export interface AddLiquidityResult {
   transaction: string; // Base64 encoded
   positionAddress: string;
+  positionKeypair: string; // Base64 encoded secret key for signing
   binRange: { min: number; max: number };
   estimatedFee: number;
 }
@@ -96,16 +97,14 @@ export class MeteoraDirectClient {
     const { blockhash } = await this.connection.getLatestBlockhash();
     
     if ('recentBlockhash' in tx) {
-      // Legacy Transaction
+      // Legacy Transaction - serialize WITHOUT position signature
       tx.recentBlockhash = blockhash;
       tx.feePayer = new PublicKey(userPublicKey);
-      tx.partialSign(newPosition);
-      serialized = tx.serialize({ requireAllSignatures: false }).toString('base64');
+      // DON'T sign with position keypair here - return it for later signing
+      serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64');
     } else if ('version' in tx) {
-      // VersionedTransaction - need to sign with position keypair
-      const vTx = tx as unknown as VersionedTransaction;
-      vTx.sign([newPosition]); // Sign with position keypair first
-      serialized = Buffer.from(vTx.serialize()).toString('base64');
+      // VersionedTransaction - serialize without signing
+      serialized = Buffer.from((tx as unknown as VersionedTransaction).serialize()).toString('base64');
     } else {
       // Unknown transaction type - try to serialize anyway
       serialized = Buffer.from((tx as { serialize(): Uint8Array }).serialize()).toString('base64');
@@ -114,6 +113,7 @@ export class MeteoraDirectClient {
     return {
       transaction: serialized,
       positionAddress: newPosition.publicKey.toBase58(),
+      positionKeypair: Buffer.from(newPosition.secretKey).toString('base64'), // Return keypair for later signing
       binRange: { min: minBinId, max: maxBinId },
       estimatedFee: 5000, // ~0.000005 SOL
     };

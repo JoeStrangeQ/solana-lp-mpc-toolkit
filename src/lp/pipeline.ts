@@ -8,7 +8,7 @@
  * 4. Add liquidity to Meteora DLMM
  */
 
-import { Connection, PublicKey } from '@solana/web3.js';
+import { Connection, PublicKey, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
 import { config } from '../config';
 import { jupiterClient, TOKENS } from '../swap';
 import { MeteoraDirectClient } from '../dex/meteora';
@@ -262,11 +262,29 @@ export class LPPipeline {
       slippageBps: 100, // 1% slippage
     });
 
-    // Sign the transaction
-    const signedTx = await signTransaction(lpResult.transaction);
+    // Sign the transaction with user wallet (via Privy)
+    const userSignedTx = await signTransaction(lpResult.transaction);
+
+    // Now add position keypair signature
+    const positionKeypair = Keypair.fromSecretKey(Buffer.from(lpResult.positionKeypair, 'base64'));
+    const txBuffer = Buffer.from(userSignedTx, 'base64');
+    
+    // Deserialize, add position signature, and re-serialize
+    let fullySignedTx: string;
+    try {
+      // Try as VersionedTransaction first
+      const vTx = VersionedTransaction.deserialize(txBuffer);
+      vTx.sign([positionKeypair]);
+      fullySignedTx = Buffer.from(vTx.serialize()).toString('base64');
+    } catch {
+      // Fall back to legacy Transaction
+      const tx = Transaction.from(txBuffer);
+      tx.partialSign(positionKeypair);
+      fullySignedTx = tx.serialize().toString('base64');
+    }
 
     // Broadcast
-    const txid = await this.broadcastTransaction(signedTx);
+    const txid = await this.broadcastTransaction(fullySignedTx);
 
     return {
       txid,

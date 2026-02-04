@@ -84,7 +84,7 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.5-versioned-tx-sign',
+  version: '2.0.6-deferred-position-sign',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
   fees: {
