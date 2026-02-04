@@ -1,16 +1,40 @@
 /**
- * LP Agent API Server - Minimal Railway Version
- * Includes: health, fees, pools, encrypt
+ * LP Agent API Server - Full Railway Version
+ * Includes: health, fees, pools, encrypt, wallet, LP
  */
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
+import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { arciumPrivacy } from './privacy';
+import { PrivyWalletClient } from './mpc/privyClient';
+import { config } from './config';
 
 const app = new Hono();
 
 // Middleware
 app.use('*', cors());
+
+// State
+let privyClient: PrivyWalletClient | null = null;
+let connection: Connection;
+
+// Initialize connection
+try {
+  connection = new Connection(config.solana.rpc || 'https://api.mainnet-beta.solana.com');
+  console.log('✅ Solana connection initialized');
+} catch (e) {
+  console.warn('⚠️ Solana connection failed, using fallback');
+  connection = new Connection('https://api.mainnet-beta.solana.com');
+}
+
+// Initialize Privy if configured
+if (config.privy?.appId && config.privy?.appSecret) {
+  privyClient = new PrivyWalletClient({ appId: config.privy.appId, appSecret: config.privy.appSecret });
+  console.log('✅ Privy client initialized');
+} else {
+  console.warn('⚠️ Privy not configured - wallet endpoints disabled');
+}
 
 // Fee config
 const FEE_CONFIG = {
@@ -60,6 +84,12 @@ app.get('/', (c) => c.json({
     'GET /pools/scan?tokenA=SOL&tokenB=USDC',
     'POST /encrypt',
     'GET /encrypt/info',
+    'POST /wallet/create',
+    'POST /wallet/load',
+    'GET /wallet/balance',
+    'POST /lp/open',
+    'POST /lp/close',
+    'POST /chat',
   ],
 }));
 
@@ -151,6 +181,233 @@ app.get('/encrypt/test', async (c) => {
   await arciumPrivacy.initialize();
   const passed = await arciumPrivacy.selfTest();
   return c.json({ success: passed, algorithm: 'x25519-aes256gcm' });
+});
+
+// ============ Wallet ============
+
+app.post('/wallet/create', async (c) => {
+  if (!privyClient) {
+    return c.json({ error: 'Privy not configured', hint: 'Set PRIVY_APP_ID and PRIVY_APP_SECRET' }, 503);
+  }
+  try {
+    const wallet = await privyClient.generateWallet();
+    return c.json({
+      success: true,
+      wallet: {
+        address: wallet.addresses.solana,
+        id: wallet.id,
+        provider: 'privy',
+      },
+    });
+  } catch (error: any) {
+    return c.json({ error: 'Wallet creation failed', details: error.message }, 500);
+  }
+});
+
+app.post('/wallet/load', async (c) => {
+  if (!privyClient) {
+    return c.json({ error: 'Privy not configured' }, 503);
+  }
+  try {
+    const { walletId } = await c.req.json();
+    if (!walletId) {
+      return c.json({ error: 'Missing walletId' }, 400);
+    }
+    const wallet = await privyClient.loadWallet(walletId);
+    return c.json({
+      success: true,
+      wallet: {
+        address: wallet.address,
+        id: wallet.id,
+        provider: 'privy',
+      },
+    });
+  } catch (error: any) {
+    return c.json({ error: 'Wallet load failed', details: error.message }, 500);
+  }
+});
+
+app.get('/wallet/balance', async (c) => {
+  if (!privyClient || !privyClient.isWalletLoaded()) {
+    return c.json({ error: 'No wallet loaded' }, 400);
+  }
+  try {
+    const address = privyClient.getAddress();
+    const balance = await connection.getBalance(new PublicKey(address));
+    return c.json({
+      success: true,
+      address,
+      balance: {
+        lamports: balance,
+        sol: balance / LAMPORTS_PER_SOL,
+      },
+    });
+  } catch (error: any) {
+    return c.json({ error: 'Balance check failed', details: error.message }, 500);
+  }
+});
+
+// ============ LP Positions ============
+
+app.post('/lp/open', async (c) => {
+  if (!privyClient || !privyClient.isWalletLoaded()) {
+    return c.json({ error: 'No wallet loaded. Call /wallet/create or /wallet/load first' }, 400);
+  }
+  
+  try {
+    const body = await c.req.json();
+    const { poolAddress, amountA, amountB, binRange, encrypt = true } = body;
+    
+    if (!poolAddress || !amountA) {
+      return c.json({ error: 'Missing poolAddress or amountA' }, 400);
+    }
+    
+    // Build LP strategy
+    const strategy = {
+      action: 'ADD_LIQUIDITY',
+      pool: poolAddress,
+      amountA,
+      amountB: amountB || 0,
+      binRange: binRange || [127, 133], // Default around active bin
+      timestamp: Date.now(),
+    };
+    
+    // Encrypt strategy if requested
+    let encryptedStrategy = null;
+    if (encrypt) {
+      await arciumPrivacy.initialize();
+      encryptedStrategy = await arciumPrivacy.encryptStrategy(strategy);
+    }
+    
+    // For demo: create a memo transaction showing the LP intent
+    // In production: this would call Meteora DLMM SDK
+    const walletPubkey = new PublicKey(privyClient.getAddress());
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: walletPubkey,
+        toPubkey: walletPubkey,
+        lamports: 0,
+      })
+    );
+    
+    // Get recent blockhash
+    const { blockhash } = await connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = walletPubkey;
+    
+    // Serialize transaction for Privy signing
+    const txBase64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
+    
+    // Sign with Privy
+    const signedTxBase64 = await privyClient.signTransaction(txBase64);
+    
+    // Calculate fees
+    const fee = (amountA * FEE_CONFIG.FEE_BPS) / 10000;
+    
+    return c.json({
+      success: true,
+      position: {
+        pool: poolAddress,
+        amountA,
+        amountB: amountB || 0,
+        binRange: binRange || [127, 133],
+        estimatedFee: fee,
+        treasury: FEE_CONFIG.TREASURY,
+      },
+      encrypted: encryptedStrategy ? {
+        ciphertext: encryptedStrategy.ciphertext,
+        algorithm: encryptedStrategy.algorithm,
+        mxeCluster: encryptedStrategy.mxeCluster,
+      } : null,
+      transaction: {
+        serialized: signedTxBase64,
+        status: 'ready_to_broadcast',
+        note: 'Demo transaction - production would use Meteora DLMM SDK',
+      },
+    });
+  } catch (error: any) {
+    console.error('LP open error:', error);
+    return c.json({ error: 'LP position failed', details: error.message }, 500);
+  }
+});
+
+app.post('/lp/close', async (c) => {
+  if (!privyClient || !privyClient.isWalletLoaded()) {
+    return c.json({ error: 'No wallet loaded' }, 400);
+  }
+  
+  try {
+    const body = await c.req.json();
+    const { positionAddress } = body;
+    
+    if (!positionAddress) {
+      return c.json({ error: 'Missing positionAddress' }, 400);
+    }
+    
+    return c.json({
+      success: true,
+      message: 'Position close prepared',
+      position: positionAddress,
+      note: 'Demo - production would withdraw from Meteora DLMM',
+    });
+  } catch (error: any) {
+    return c.json({ error: 'LP close failed', details: error.message }, 500);
+  }
+});
+
+// ============ Chat Interface ============
+
+app.post('/chat', async (c) => {
+  try {
+    const { message } = await c.req.json();
+    if (!message) {
+      return c.json({ error: 'Missing message' }, 400);
+    }
+    
+    // Simple NL parsing
+    const lower = message.toLowerCase();
+    let response: any = { understood: false, message: 'I didn\'t understand that. Try: "LP $500 into SOL-USDC"' };
+    
+    if (lower.includes('lp') || lower.includes('liquidity')) {
+      const amountMatch = message.match(/\$?([\d,]+)/);
+      const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : null;
+      
+      if (amount) {
+        const fee = (amount * FEE_CONFIG.FEE_BPS) / 10000;
+        response = {
+          understood: true,
+          intent: 'ADD_LIQUIDITY',
+          parsed: {
+            amount,
+            pair: lower.includes('usdc') ? 'SOL-USDC' : 'SOL-USDC',
+            fee,
+          },
+          nextStep: privyClient?.isWalletLoaded() 
+            ? 'Call POST /lp/open with poolAddress and amount'
+            : 'First create/load wallet with POST /wallet/create',
+          pools: SAMPLE_POOLS,
+        };
+      }
+    } else if (lower.includes('balance') || lower.includes('wallet')) {
+      response = {
+        understood: true,
+        intent: 'CHECK_BALANCE',
+        nextStep: 'Call GET /wallet/balance',
+        walletLoaded: privyClient?.isWalletLoaded() || false,
+      };
+    } else if (lower.includes('pool') || lower.includes('yield') || lower.includes('apy')) {
+      response = {
+        understood: true,
+        intent: 'SCAN_POOLS',
+        pools: SAMPLE_POOLS,
+        bestPool: SAMPLE_POOLS[0],
+      };
+    }
+    
+    return c.json(response);
+  } catch (error: any) {
+    return c.json({ error: 'Chat failed', details: error.message }, 500);
+  }
 });
 
 // ============ Start ============
