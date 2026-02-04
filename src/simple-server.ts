@@ -471,6 +471,157 @@ app.post('/chat', async (c) => {
   }
 });
 
+// ============ Swap Endpoints ============
+
+const TOKENS: Record<string, string> = {
+  'SOL': 'So11111111111111111111111111111111111111112',
+  'USDC': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  'USDT': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  'BONK': 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+  'WIF': 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+  'JUP': 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  'RAY': '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+};
+
+app.get('/swap/tokens', (c) => {
+  return c.json({
+    tokens: TOKENS,
+    description: 'Well-known token mints. Use symbol (SOL, USDC) or full mint address.',
+  });
+});
+
+app.post('/swap', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { inputToken, outputToken, amount } = body;
+    
+    if (!inputToken || !outputToken || !amount) {
+      return c.json({ error: 'Missing inputToken, outputToken, or amount' }, 400);
+    }
+    
+    const inputMint = TOKENS[inputToken.toUpperCase()] || inputToken;
+    const outputMint = TOKENS[outputToken.toUpperCase()] || outputToken;
+    
+    // Demo response - production would use Jupiter API
+    return c.json({
+      success: true,
+      message: `Swap prepared: ${amount} ${inputToken} -> ${outputToken}`,
+      data: {
+        inputMint,
+        outputMint,
+        amount,
+        estimatedOutput: amount * 150, // Demo rate
+        fee: amount * FEE_CONFIG.FEE_BPS / 10000,
+        route: 'Jupiter Aggregator',
+      },
+      note: 'Demo mode - production executes via Jupiter',
+    });
+  } catch (error: any) {
+    return c.json({ error: 'Swap failed', details: error.message }, 500);
+  }
+});
+
+app.get('/swap/quote', async (c) => {
+  const inputToken = c.req.query('inputToken') || c.req.query('inputMint');
+  const outputToken = c.req.query('outputToken') || c.req.query('outputMint');
+  const amount = c.req.query('amount');
+  
+  if (!inputToken || !outputToken || !amount) {
+    return c.json({ error: 'Missing inputToken, outputToken, or amount' }, 400);
+  }
+  
+  const inputMint = TOKENS[inputToken.toUpperCase()] || inputToken;
+  const outputMint = TOKENS[outputToken.toUpperCase()] || outputToken;
+  
+  return c.json({
+    success: true,
+    quote: {
+      inputMint,
+      outputMint,
+      inAmount: amount,
+      outAmount: parseFloat(amount) * 150,
+      priceImpact: '0.01%',
+      route: 'Jupiter',
+    },
+  });
+});
+
+// ============ Position Endpoints ============
+
+app.get('/positions', async (c) => {
+  return c.json({
+    success: true,
+    positions: [],
+    message: 'No positions found. Create a wallet and add liquidity first.',
+  });
+});
+
+// ============ LP Pipeline Endpoints ============
+
+app.get('/lp/pools', (c) => {
+  return c.json({
+    pools: SAMPLE_POOLS,
+    description: 'Supported Meteora DLMM pools for LP pipeline',
+  });
+});
+
+app.post('/lp/execute', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { tokenA, tokenB, totalValueUsd, amount } = body;
+    const value = totalValueUsd || amount;
+    
+    if (!tokenA || !tokenB || !value) {
+      return c.json({ 
+        error: 'Missing tokenA, tokenB, or totalValueUsd/amount',
+        example: { tokenA: 'SOL', tokenB: 'USDC', totalValueUsd: 500 }
+      }, 400);
+    }
+    
+    const fee = value * FEE_CONFIG.FEE_BPS / 10000;
+    
+    return c.json({
+      success: true,
+      message: `LP pipeline prepared: $${value} into ${tokenA}-${tokenB}`,
+      data: {
+        pair: `${tokenA}-${tokenB}`,
+        totalValue: value,
+        fee,
+        pool: SAMPLE_POOLS[0],
+        steps: [
+          { step: 1, action: 'Check balances', status: 'pending' },
+          { step: 2, action: 'Swap to 50/50 if needed', status: 'pending' },
+          { step: 3, action: 'Add liquidity to Meteora DLMM', status: 'pending' },
+        ],
+      },
+      note: 'Demo mode - production executes full pipeline',
+    });
+  } catch (error: any) {
+    return c.json({ error: 'LP execute failed', details: error.message }, 500);
+  }
+});
+
+app.post('/lp/prepare', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { tokenA, tokenB, amount } = body;
+    
+    if (!tokenA || !tokenB || !amount) {
+      return c.json({ error: 'Missing tokenA, tokenB, or amount' }, 400);
+    }
+    
+    return c.json({
+      success: true,
+      ready: true,
+      message: `Ready to LP $${amount} into ${tokenA}-${tokenB}`,
+      pool: SAMPLE_POOLS[0],
+      fee: amount * FEE_CONFIG.FEE_BPS / 10000,
+    });
+  } catch (error: any) {
+    return c.json({ error: 'LP prepare failed', details: error.message }, 500);
+  }
+});
+
 // ============ Start ============
 
 const port = parseInt(process.env.PORT || '3456');
