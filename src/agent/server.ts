@@ -367,13 +367,13 @@ app.get('/wallet/address', (c) => {
   });
 });
 
-// Transfer SOL from loaded wallet
+// Transfer SOL from loaded wallet using native Privy RPC
 app.post('/wallet/transfer', async (c) => {
-  const walletClient = getWalletClient();
-  if (!walletClient) {
+  // Must use Privy client for native transfers
+  if (!privyClient?.isWalletLoaded()) {
     return c.json<AgentResponse>({
       success: false,
-      message: 'No wallet loaded. Load a wallet first.',
+      message: 'No Privy wallet loaded. Load a wallet first.',
     }, 400);
   }
 
@@ -387,39 +387,16 @@ app.post('/wallet/transfer', async (c) => {
       }, 400);
     }
 
-    const { PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL } = await import('@solana/web3.js');
-    
-    const fromPubkey = new PublicKey(walletClient.getAddress());
-    const toPubkey = new PublicKey(to);
+    const { LAMPORTS_PER_SOL } = await import('@solana/web3.js');
     const lamports = Math.floor(amount * LAMPORTS_PER_SOL);
 
-    // Get recent blockhash
-    const { blockhash } = await connection.getLatestBlockhash();
-    
-    // Build transfer transaction
-    const tx = new Transaction().add(
-      SystemProgram.transfer({
-        fromPubkey,
-        toPubkey,
-        lamports,
-      })
-    );
-    tx.recentBlockhash = blockhash;
-    tx.feePayer = fromPubkey;
-
-    // Serialize and sign
-    const serializedTx = tx.serialize({ requireAllSignatures: false }).toString('base64');
-    const signedTx = await walletClient.signTransaction(serializedTx);
-    
-    // Broadcast
-    const txBuffer = Buffer.from(signedTx, 'base64');
-    const txid = await connection.sendRawTransaction(txBuffer);
-    await connection.confirmTransaction(txid, 'confirmed');
+    // Use native Privy transfer
+    const txid = await privyClient.transfer(to, lamports);
 
     return c.json<AgentResponse>({
       success: true,
       message: `Transferred ${amount} SOL to ${to}`,
-      data: { txid, from: walletClient.getAddress(), to, amount },
+      data: { txid, from: privyClient.getAddress(), to, amount },
       transaction: { unsigned: '', txid },
     });
   } catch (error) {

@@ -172,6 +172,30 @@ export class PrivyWalletClient {
     }
   }
 
+  /**
+   * Native SOL transfer using Privy's transfer RPC method
+   */
+  async transfer(recipientAddress: string, lamports: number): Promise<string> {
+    if (!this.wallet) {
+      throw new Error('No wallet loaded');
+    }
+
+    try {
+      const result = await (this.client as any).privyApiClient.wallets._rpc(this.wallet.id, {
+        method: 'transfer',
+        params: {
+          recipient_public_key: recipientAddress,
+          amount_in_lamports: lamports.toString(),
+        },
+      });
+
+      return (result as any).transaction_hash || (result as any).hash;
+    } catch (error) {
+      console.error('[Privy] Failed to transfer:', error);
+      throw error;
+    }
+  }
+
   isWalletLoaded(): boolean {
     return this.wallet !== null;
   }
