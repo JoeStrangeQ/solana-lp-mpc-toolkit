@@ -18,9 +18,49 @@ import { PrivyWalletClient } from '../mpc/privyClient';
 import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
 import { createFeeBreakdown, FEE_CONFIG } from '../fees';
-import { jupiterClient, TOKENS } from '../swap';
-import { lpPipeline, METEORA_POOLS } from '../lp';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types';
+
+// Lazy-load potentially problematic modules
+let jupiterClient: any = null;
+let TOKENS: Record<string, string> = {
+  'SOL': 'So11111111111111111111111111111111111111112',
+  'USDC': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  'USDT': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  'BONK': 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+  'WIF': 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+  'JUP': 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  'RAY': '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
+};
+let lpPipeline: any = null;
+let METEORA_POOLS: Record<string, string> = {
+  'SOL-USDC': 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE',
+};
+
+async function loadSwapModule() {
+  if (!jupiterClient) {
+    try {
+      const mod = await import('../swap/index.js');
+      jupiterClient = mod.jupiterClient;
+      TOKENS = mod.TOKENS || TOKENS;
+    } catch (e) {
+      console.warn('⚠️ Failed to load swap module:', (e as Error).message);
+    }
+  }
+  return jupiterClient;
+}
+
+async function loadLpModule() {
+  if (!lpPipeline) {
+    try {
+      const mod = await import('../lp/index.js');
+      lpPipeline = mod.lpPipeline;
+      METEORA_POOLS = mod.METEORA_POOLS || METEORA_POOLS;
+    } catch (e) {
+      console.warn('⚠️ Failed to load LP module:', (e as Error).message);
+    }
+  }
+  return lpPipeline;
+}
 
 const app = new Hono();
 
@@ -452,9 +492,13 @@ app.get('/swap/quote', async (c) => {
   }
 
   try {
-    const inputMint = jupiterClient.resolveTokenMint(inputToken);
-    const outputMint = jupiterClient.resolveTokenMint(outputToken);
-    const quote = await jupiterClient.getQuote(inputMint, outputMint, amount);
+    const jup = await loadSwapModule();
+    if (!jup) {
+      return c.json<AgentResponse>({ success: false, message: 'Swap module not available' }, 503);
+    }
+    const inputMint = jup.resolveTokenMint(inputToken);
+    const outputMint = jup.resolveTokenMint(outputToken);
+    const quote = await jup.getQuote(inputMint, outputMint, amount);
 
     return c.json<AgentResponse>({
       success: true,
@@ -464,7 +508,7 @@ app.get('/swap/quote', async (c) => {
         inputMint,
         outputMint,
         priceImpact: quote.priceImpactPct,
-        route: quote.routePlan.map(r => r.swapInfo.label).join(' -> '),
+        route: quote.routePlan.map((r: any) => r.swapInfo.label).join(' -> '),
       },
     });
   } catch (error) {
@@ -763,9 +807,15 @@ async function handleSwap(intent: LPIntent): Promise<AgentResponse> {
   }
 
   try {
+    // Load swap module
+    const jup = await loadSwapModule();
+    if (!jup) {
+      return { success: false, message: 'Swap module not available' };
+    }
+
     // Resolve token symbols to mint addresses
-    const inputMint = jupiterClient.resolveTokenMint(intent.inputToken);
-    const outputMint = jupiterClient.resolveTokenMint(intent.outputToken);
+    const inputMint = jup.resolveTokenMint(intent.inputToken);
+    const outputMint = jup.resolveTokenMint(intent.outputToken);
 
     // Convert amount to base units (lamports for SOL = 9 decimals, USDC = 6 decimals)
     // For simplicity, we assume SOL has 9 decimals, stablecoins 6
@@ -780,10 +830,10 @@ async function handleSwap(intent: LPIntent): Promise<AgentResponse> {
     const userPublicKey = walletClient.getAddress();
 
     // Get quote
-    const quote = await jupiterClient.getQuote(inputMint, outputMint, amountBaseUnits);
+    const quote = await jup.getQuote(inputMint, outputMint, amountBaseUnits);
     
     // Build swap transaction
-    const swapResult = await jupiterClient.swap(quote, userPublicKey);
+    const swapResult = await jup.swap(quote, userPublicKey);
 
     // Sign the transaction
     const signedTx = await walletClient.signTransaction(swapResult.swapTransaction);
@@ -806,7 +856,7 @@ async function handleSwap(intent: LPIntent): Promise<AgentResponse> {
         outputMint,
         outputAmount,
         priceImpact: quote.priceImpactPct,
-        route: quote.routePlan.map(r => r.swapInfo.label).join(' -> '),
+        route: quote.routePlan.map((r: any) => r.swapInfo.label).join(' -> '),
       },
       transaction: {
         unsigned: swapResult.swapTransaction,
