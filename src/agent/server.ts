@@ -327,6 +327,46 @@ app.post('/wallet/create', async (c) => {
   }
 });
 
+// List all Privy wallets (to find walletId by address)
+app.get('/wallet/list', async (c) => {
+  try {
+    if (!config.privy.enabled) {
+      return c.json<AgentResponse>({ success: false, message: 'Privy not enabled' }, 503);
+    }
+    
+    const { PrivyClient } = await import('@privy-io/node');
+    const client = new PrivyClient({
+      appId: config.privy.appId,
+      appSecret: config.privy.appSecret,
+    });
+    
+    // List wallets via Privy API
+    const wallets: any[] = [];
+    for await (const wallet of client.wallets.list()) {
+      wallets.push({
+        id: wallet.id,
+        address: wallet.address,
+        chainType: wallet.chain_type,
+      });
+      // Limit to 100 wallets
+      if (wallets.length >= 100) break;
+    }
+    
+    return c.json<AgentResponse>({
+      success: true,
+      message: `Found ${wallets.length} wallets`,
+      data: { wallets },
+    });
+  } catch (error: any) {
+    console.error('[/wallet/list] Error:', error);
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to list wallets',
+      error: error.message,
+    }, 500);
+  }
+});
+
 app.post('/wallet/load', async (c) => {
   try {
     const { address, share, id, walletId, provider } = await c.req.json();
