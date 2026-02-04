@@ -173,23 +173,45 @@ export class PrivyWalletClient {
   }
 
   /**
-   * Native SOL transfer using Privy's transfer RPC method
+   * Native SOL transfer - builds transaction and uses signAndSendTransaction
    */
-  async transfer(recipientAddress: string, lamports: number): Promise<string> {
+  async transfer(recipientAddress: string, lamports: number, connection: any): Promise<string> {
     if (!this.wallet) {
       throw new Error('No wallet loaded');
     }
 
     try {
+      const { PublicKey, SystemProgram, Transaction } = await import('@solana/web3.js');
+      
+      const fromPubkey = new PublicKey(this.wallet.address);
+      const toPubkey = new PublicKey(recipientAddress);
+      
+      // Get recent blockhash
+      const { blockhash } = await connection.getLatestBlockhash();
+      
+      // Build transfer transaction
+      const tx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey,
+          toPubkey,
+          lamports,
+        })
+      );
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = fromPubkey;
+      
+      // Serialize transaction (unsigned)
+      const serializedTx = tx.serialize({ requireAllSignatures: false }).toString('base64');
+      
+      // Use Privy's signAndSendTransaction
       const result = await (this.client as any).privyApiClient.wallets._rpc(this.wallet.id, {
-        method: 'transfer',
+        method: 'signAndSendTransaction',
         params: {
-          recipient_public_key: recipientAddress,
-          amount_in_lamports: lamports.toString(),
+          transaction: serializedTx,
         },
       });
 
-      return (result as any).transaction_hash || (result as any).hash;
+      return (result as any).transaction_hash || (result as any).hash || result;
     } catch (error) {
       console.error('[Privy] Failed to transfer:', error);
       throw error;

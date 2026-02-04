@@ -367,9 +367,9 @@ app.get('/wallet/address', (c) => {
   });
 });
 
-// Transfer SOL from loaded wallet using native Privy RPC
+// Transfer SOL from loaded wallet using Privy signAndSendTransaction
 app.post('/wallet/transfer', async (c) => {
-  // Must use Privy client for native transfers
+  // Must use Privy client for transfers
   if (!privyClient?.isWalletLoaded()) {
     return c.json<AgentResponse>({
       success: false,
@@ -390,8 +390,8 @@ app.post('/wallet/transfer', async (c) => {
     const { LAMPORTS_PER_SOL } = await import('@solana/web3.js');
     const lamports = Math.floor(amount * LAMPORTS_PER_SOL);
 
-    // Use native Privy transfer
-    const txid = await privyClient.transfer(to, lamports);
+    // Use Privy transfer (builds tx and signs/sends via Privy)
+    const txid = await privyClient.transfer(to, lamports, connection);
 
     return c.json<AgentResponse>({
       success: true,
