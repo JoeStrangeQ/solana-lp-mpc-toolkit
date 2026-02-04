@@ -139,6 +139,9 @@ app.get('/debug/config', (c) => c.json({
     appIdPreview: config.privy.appId ? config.privy.appId.substring(0, 8) + '...' : 'NOT SET',
     secretSet: !!config.privy.appSecret,
     secretLength: config.privy.appSecret?.length || 0,
+    authKeySet: !!config.privy.authorizationPrivateKey,
+    authKeyLength: config.privy.authorizationPrivateKey?.length || 0,
+    authKeyPreview: config.privy.authorizationPrivateKey ? config.privy.authorizationPrivateKey.substring(0, 20) + '...' : 'NOT SET',
     enabled: config.privy.enabled,
   },
   solana: {
@@ -147,6 +150,7 @@ app.get('/debug/config', (c) => c.json({
   env: {
     PRIVY_APP_ID: process.env.PRIVY_APP_ID ? process.env.PRIVY_APP_ID.substring(0, 8) + '...' : 'NOT SET',
     PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET ? 'SET (' + process.env.PRIVY_APP_SECRET.length + ' chars)' : 'NOT SET',
+    PRIVY_AUTHORIZATION_PRIVATE_KEY: process.env.PRIVY_AUTHORIZATION_PRIVATE_KEY ? 'SET (' + process.env.PRIVY_AUTHORIZATION_PRIVATE_KEY.length + ' chars)' : 'NOT SET',
   }
 }));
 
