@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LP Agent Toolkit - Colosseum Hackathon Dashboard</title>
+  <style>
+    :root {
+      --bg-dark: #0a0a0f;
+      --bg-card: #111118;
+      --bg-hover: #1a1a22;
+      --border: #222;
+      --text: #e0e0e0;
+      --text-muted: #888;
+      --accent: #14F195;
+      --accent-purple: #9945FF;
+      --accent-blue: #4499ff;
+      --success: #14F195;
+      --warning: #ffaa00;
+      --error: #ff4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; 
+      background: var(--bg-dark); 
+      color: var(--text);
+      min-height: 100vh;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, rgba(153, 69, 255, 0.1), rgba(20, 241, 149, 0.1));
+      border-bottom: 1px solid var(--border);
+      padding: 15px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo img { width: 32px; height: 32px; }
+    .logo h1 { color: var(--accent); font-size: 18px; font-weight: bold; }
+    .logo .badge { 
+      background: var(--accent-purple); 
+      color: #fff; 
+      padding: 2px 8px; 
+      border-radius: 4px; 
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .header-right { display: flex; align-items: center; gap: 15px; }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+    .tab {
+      padding: 12px 24px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      color: var(--text-muted);
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .tab:hover { color: var(--text); background: var(--bg-hover); }
+    .tab.active { 
+      color: var(--accent); 
+      border-bottom-color: var(--accent);
+      background: var(--bg-hover);
+    }
+    
+    .content { padding: 20px; display: none; }
+    .content.active { display: block; }
+    
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title { font-size: 14px; font-weight: bold; color: var(--accent); }
+    
+    .grid { display: grid; gap: 20px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    
+    .stat { text-align: center; padding: 15px; }
+    .stat-value { font-size: 24px; font-weight: bold; color: var(--accent); }
+    .stat-label { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+    
+    .progress-bar {
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-purple), var(--accent));
+      transition: width 0.3s;
+    }
+    
+    .table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .table th { 
+      text-align: left; 
+      padding: 10px; 
+      border-bottom: 1px solid var(--border);
+      color: var(--text-muted);
+      font-weight: normal;
+    }
+    .table td { padding: 10px; border-bottom: 1px solid #1a1a1a; }
+    .table tr:hover { background: var(--bg-hover); }
+    
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .tag-success { background: rgba(20, 241, 149, 0.2); color: var(--success); }
+    .tag-warning { background: rgba(255, 170, 0, 0.2); color: var(--warning); }
+    .tag-error { background: rgba(255, 68, 68, 0.2); color: var(--error); }
+    .tag-info { background: rgba(153, 69, 255, 0.2); color: var(--accent-purple); }
+    
+    .arch-diagram {
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      background: #0a0a0a;
+      padding: 20px;
+      border-radius: 6px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .checklist { list-style: none; }
+    .checklist li {
+      padding: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+    }
+    .checklist .check { color: var(--success); }
+    .checklist .pending { color: var(--text-muted); }
+    
+    code {
+      background: #0a0a0a;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+    }
+    a { color: var(--accent-purple); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(20, 241, 149, 0.15);
+      border: 1px solid var(--success);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      color: var(--success);
+    }
+    .live-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      <img src="../mnm-web/public/logo.png" alt="MnM" onerror="this.style.display='none'">
+      <h1>LP Agent Toolkit</h1>
+      <span class="badge">COLOSSEUM</span>
+    </div>
+    <div class="header-right">
+      <span class="live-badge">ALL SYSTEMS LIVE</span>
+      <span style="color: var(--text-muted); font-size: 12px;">Agent Hackathon • Feb 2-12, 2026</span>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="overview">📊 Overview</div>
+    <div class="tab" data-tab="services">🔌 Services</div>
+    <div class="tab" data-tab="api">📡 API</div>
+    <div class="tab" data-tab="tasks">📋 Tasks</div>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <div class="content active" id="overview">
+    <div class="grid grid-4">
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value" style="color: var(--accent-purple);">Privy</div>
+          <div class="stat-label">MPC Wallets ✅</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value">Arcium</div>
+          <div class="stat-label">Encryption ✅</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value" style="color: var(--accent-purple);">Meteora</div>
+          <div class="stat-label">DLMM Pools ✅</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat">
+          <div class="stat-value" id="days-left">8</div>
+          <div class="stat-label">Days to Deadline</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🎯 What We Built</span>
+        <span class="tag tag-success">DEMO READY</span>
+      </div>
+      <p style="font-size: 13px; line-height: 1.6; margin-bottom: 15px;">
+        <strong>LP Agent Toolkit</strong> — AI-native liquidity management for Solana. Natural language commands, 
+        MPC custody via <strong>Privy</strong>, encrypted strategies via <strong>Arcium</strong>, 
+        concentrated liquidity via <strong>Meteora DLMM</strong>.
+      </p>
+      <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+        <a href="https://api.mnm.ag" target="_blank" class="live-badge" style="text-decoration: none;">Frontend</a>
+        <a href="https://lp-agent-api-production.up.railway.app/health" target="_blank" class="live-badge" style="text-decoration: none;">API Health</a>
+        <a href="https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit" target="_blank" style="color: var(--accent-purple); font-size: 12px;">GitHub →</a>
+      </div>
+    </div>
+
+    <div class="grid grid-2">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">✅ Completed</span>
+        </div>
+        <ul class="checklist">
+          <li><span class="check">✓</span> Privy wallet creation (MPC custody)</li>
+          <li><span class="check">✓</span> Arcium x25519-aes256gcm encryption</li>
+          <li><span class="check">✓</span> Meteora DLMM pool discovery</li>
+          <li><span class="check">✓</span> Jupiter swap integration</li>
+          <li><span class="check">✓</span> Natural language intent parser</li>
+          <li><span class="check">✓</span> 0.1% protocol fee system</li>
+          <li><span class="check">✓</span> REST API (Railway)</li>
+          <li><span class="check">✓</span> Frontend (Vercel)</li>
+          <li><span class="check">✓</span> DNS: api.mnm.ag</li>
+          <li><span class="check">✓</span> Twitter: @mnm_ag</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔄 Remaining</span>
+        </div>
+        <ul class="checklist">
+          <li><span class="pending">○</span> Demo video recording</li>
+          <li><span class="pending">○</span> Colosseum submission (Feb 12)</li>
+        </ul>
+        <div style="margin-top: 20px; padding: 15px; background: rgba(20, 241, 149, 0.1); border-radius: 6px; border: 1px solid var(--accent);">
+          <div style="font-size: 12px; color: var(--accent); font-weight: bold; margin-bottom: 5px;">🎉 Ready for Demo!</div>
+          <div style="font-size: 11px; color: var(--text-muted);">
+            All technical features complete. Record demo video and submit!
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📈 Sprint Progress</span>
+        <span class="tag tag-success">98% COMPLETE</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: 98%"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--text-muted);">
+        <span>Feb 2 - Started</span>
+        <span>Feb 4 - All Systems Live</span>
+        <span>Feb 12 - Deadline</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- SERVICES TAB -->
+  <div class="content" id="services">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔌 Live Services</span>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Status</th>
+            <th>URL</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Frontend</strong></td>
+            <td><span class="tag tag-success">LIVE</span></td>
+            <td><code>api.mnm.ag</code></td>
+            <td>Vercel, SSL provisioning</td>
+          </tr>
+          <tr>
+            <td><strong>API Backend</strong></td>
+            <td><span class="tag tag-success">LIVE</span></td>
+            <td><code>lp-agent-api-production.up.railway.app</code></td>
+            <td>Railway deployment</td>
+          </tr>
+          <tr>
+            <td><strong>Privy Wallets</strong></td>
+            <td><span class="tag tag-success">WORKING</span></td>
+            <td><code>/wallet/create</code></td>
+            <td>MPC custody, no exposed keys</td>
+          </tr>
+          <tr>
+            <td><strong>Arcium Encryption</strong></td>
+            <td><span class="tag tag-success">WORKING</span></td>
+            <td><code>/encrypt</code></td>
+            <td>x25519-aes256gcm, devnet cluster 456</td>
+          </tr>
+          <tr>
+            <td><strong>Meteora Pools</strong></td>
+            <td><span class="tag tag-success">WORKING</span></td>
+            <td><code>/pools/scan</code></td>
+            <td>DLMM pool discovery</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔑 Privy</span>
+          <span class="tag tag-success">✓</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+          Embedded MPC wallets
+        </p>
+        <ul class="checklist" style="font-size: 11px;">
+          <li><span class="check">✓</span> Wallet creation</li>
+          <li><span class="check">✓</span> Authorization key</li>
+          <li><span class="check">✓</span> Transaction signing</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🔐 Arcium</span>
+          <span class="tag tag-success">✓</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+          Strategy encryption
+        </p>
+        <ul class="checklist" style="font-size: 11px;">
+          <li><span class="check">✓</span> x25519 key exchange</li>
+          <li><span class="check">✓</span> AES-256-GCM</li>
+          <li><span class="check">✓</span> MXE cluster 456</li>
+        </ul>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">🌊 Meteora</span>
+          <span class="tag tag-success">✓</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
+          DLMM concentrated liquidity
+        </p>
+        <ul class="checklist" style="font-size: 11px;">
+          <li><span class="check">✓</span> Pool discovery</li>
+          <li><span class="check">✓</span> APY/TVL data</li>
+          <li><span class="check">✓</span> Dynamic bins</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- API TAB -->
+  <div class="content" id="api">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📡 API Endpoints</span>
+        <span class="tag tag-success">LIVE</span>
+      </div>
+      <p style="font-size: 12px; margin-bottom: 15px;">
+        Base URL: <code>https://lp-agent-api-production.up.railway.app</code>
+      </p>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Endpoint</th>
+            <th>Method</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>/health</code></td>
+            <td><span class="tag tag-success">GET</span></td>
+            <td>Health check</td>
+          </tr>
+          <tr>
+            <td><code>/wallet/create</code></td>
+            <td><span class="tag tag-info">POST</span></td>
+            <td>Create Privy MPC wallet</td>
+          </tr>
+          <tr>
+            <td><code>/chat</code></td>
+            <td><span class="tag tag-info">POST</span></td>
+            <td>Natural language LP interface</td>
+          </tr>
+          <tr>
+            <td><code>/encrypt</code></td>
+            <td><span class="tag tag-info">POST</span></td>
+            <td>Encrypt strategy with Arcium</td>
+          </tr>
+          <tr>
+            <td><code>/encrypt/info</code></td>
+            <td><span class="tag tag-success">GET</span></td>
+            <td>Arcium MXE info</td>
+          </tr>
+          <tr>
+            <td><code>/encrypt/test</code></td>
+            <td><span class="tag tag-success">GET</span></td>
+            <td>Test encryption</td>
+          </tr>
+          <tr>
+            <td><code>/pools/scan</code></td>
+            <td><span class="tag tag-success">GET</span></td>
+            <td>Scan Meteora DLMM pools</td>
+          </tr>
+          <tr>
+            <td><code>/fees</code></td>
+            <td><span class="tag tag-success">GET</span></td>
+            <td>Fee configuration (0.1%)</td>
+          </tr>
+          <tr>
+            <td><code>/lp/open</code></td>
+            <td><span class="tag tag-info">POST</span></td>
+            <td>Open LP position</td>
+          </tr>
+          <tr>
+            <td><code>/lp/close</code></td>
+            <td><span class="tag tag-info">POST</span></td>
+            <td>Close LP position</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🔧 Quick Test Commands</span>
+      </div>
+      <div class="arch-diagram" style="font-size: 12px;">
+# Health Check
+curl https://lp-agent-api-production.up.railway.app/health
+
+# Create Wallet
+curl -X POST https://lp-agent-api-production.up.railway.app/wallet/create
+
+# Chat Interface
+curl -X POST https://lp-agent-api-production.up.railway.app/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "LP $500 into SOL-USDC"}'
+
+# Test Encryption
+curl https://lp-agent-api-production.up.railway.app/encrypt/test
+
+# Scan Pools
+curl "https://lp-agent-api-production.up.railway.app/pools/scan?pair=SOL-USDC"
+
+# Fee Info
+curl https://lp-agent-api-production.up.railway.app/fees
+      </div>
+    </div>
+  </div>
+
+  <!-- TASKS TAB -->
+  <div class="content" id="tasks">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 Task Status</span>
+        <span style="font-size: 11px; color: var(--text-muted);">Updated: Feb 4, 2026 13:30 CST</span>
+      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Task</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Privy Wallet Integration</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>MPC wallets working, auth key configured</td>
+          </tr>
+          <tr>
+            <td>Arcium Encryption</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>x25519-aes256gcm, MXE cluster 456</td>
+          </tr>
+          <tr>
+            <td>Meteora DLMM</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>Pool discovery, APY data</td>
+          </tr>
+          <tr>
+            <td>Jupiter Swaps</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>Integrated in pipeline</td>
+          </tr>
+          <tr>
+            <td>NL Intent Parser</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>/chat endpoint working</td>
+          </tr>
+          <tr>
+            <td>Fee System</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>0.1% protocol fee</td>
+          </tr>
+          <tr>
+            <td>REST API</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>Railway deployment live</td>
+          </tr>
+          <tr>
+            <td>Frontend</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>Vercel @ api.mnm.ag</td>
+          </tr>
+          <tr>
+            <td>DNS Setup</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>api.mnm.ag → Vercel</td>
+          </tr>
+          <tr>
+            <td>Demo Video</td>
+            <td><span class="tag tag-warning">TODO</span></td>
+            <td>Ready to record</td>
+          </tr>
+          <tr>
+            <td>Colosseum Submission</td>
+            <td><span class="tag tag-warning">TODO</span></td>
+            <td>Deadline: Feb 12, 2026</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">💰 Revenue Model</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+        <div>
+          <div style="font-size: 24px; color: var(--accent); font-weight: bold;">0.1%</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Protocol Fee</div>
+        </div>
+        <div>
+          <div style="font-size: 24px; color: var(--accent-purple); font-weight: bold;">$1</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Exempt Threshold</div>
+        </div>
+        <div>
+          <div style="font-size: 12px; color: var(--text-muted); padding-top: 5px;">
+            Treasury:<br>
+            <code style="font-size: 9px;">BNQnCsz...DakLp</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Calculate days left
+    const deadline = new Date('2026-02-12T23:59:59-06:00');
+    const now = new Date();
+    const daysLeft = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+    document.getElementById('days-left').textContent = Math.max(0, daysLeft);
+  </script>
+</body>
+</html>
