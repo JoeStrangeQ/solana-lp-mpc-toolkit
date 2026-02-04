@@ -20,9 +20,13 @@ import { parseIntent, describeIntent } from './intent';
 import { createFeeBreakdown, FEE_CONFIG } from '../fees';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types';
 
-// Lazy-load potentially problematic modules
-let jupiterClient: any = null;
-let TOKENS: Record<string, string> = {
+// Static imports for LP and Swap modules
+import { lpPipeline as lpPipelineImport, METEORA_POOLS as meteoraPoolsImport } from '../lp';
+import { jupiterClient as jupiterClientImport, TOKENS as tokensImport } from '../swap';
+
+// Module references (populated from imports or lazy-load fallback)
+let jupiterClient: any = jupiterClientImport || null;
+let TOKENS: Record<string, string> = tokensImport || {
   'SOL': 'So11111111111111111111111111111111111111112',
   'USDC': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
   'USDT': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
@@ -31,8 +35,8 @@ let TOKENS: Record<string, string> = {
   'JUP': 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
   'RAY': '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R',
 };
-let lpPipeline: any = null;
-let METEORA_POOLS: Record<string, string> = {
+let lpPipeline: any = lpPipelineImport || null;
+let METEORA_POOLS: Record<string, string> = meteoraPoolsImport || {
   'SOL-USDC': 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE',
 };
 
@@ -80,7 +84,7 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.2-debug',
+  version: '2.0.3-static-import',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
   fees: {
