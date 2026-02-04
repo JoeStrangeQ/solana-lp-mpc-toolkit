@@ -105,15 +105,15 @@ export class PrivyWalletClient {
     }
 
     try {
-      // Use the new Privy SDK API: privy.wallets().solana().signTransaction()
-      const result = await (this.client as any).wallets().solana().signTransaction(
-        this.wallet.id,
-        {
+      // Use the Privy SDK RPC API for Solana transactions
+      const result = await this.client.wallets._rpc(this.wallet.id, {
+        method: 'signTransaction',
+        params: {
           transaction: transactionBase64,
-        }
-      );
+        },
+      });
 
-      return result.signed_transaction;
+      return (result as any).signed_transaction;
     } catch (error) {
       console.error('[Privy] Failed to sign transaction:', error);
       throw error;
@@ -129,15 +129,15 @@ export class PrivyWalletClient {
     }
 
     try {
-      // Use the new Privy SDK API: privy.wallets().solana().signAndSendTransaction()
-      const result = await (this.client as any).wallets().solana().signAndSendTransaction(
-        this.wallet.id,
-        {
+      // Use the Privy SDK RPC API for Solana transactions
+      const result = await this.client.wallets._rpc(this.wallet.id, {
+        method: 'signAndSendTransaction',
+        params: {
           transaction: transactionBase64,
-        }
-      );
+        },
+      });
 
-      return result.transaction_hash;
+      return (result as any).transaction_hash;
     } catch (error) {
       console.error('[Privy] Failed to sign and send transaction:', error);
       throw error;
@@ -153,15 +153,16 @@ export class PrivyWalletClient {
     }
 
     try {
-      // Use the new Privy SDK API: privy.wallets().solana().signMessage()
-      const result = await (this.client as any).wallets().solana().signMessage(
-        this.wallet.id,
-        {
+      // Use the Privy SDK RPC API for Solana message signing
+      const result = await this.client.wallets._rpc(this.wallet.id, {
+        method: 'signMessage',
+        params: {
           message: message,
-        }
-      );
+          encoding: 'utf-8',
+        },
+      });
 
-      return result.signature;
+      return (result as any).signature;
     } catch (error) {
       console.error('[Privy] Failed to sign message:', error);
       throw error;
