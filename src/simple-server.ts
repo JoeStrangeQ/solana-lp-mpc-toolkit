@@ -127,6 +127,25 @@ app.get('/health', (c) => c.json({
   timestamp: new Date().toISOString(),
 }));
 
+// Debug endpoint to check config (no secrets exposed)
+app.get('/debug/config', (c) => c.json({
+  privy: {
+    appIdSet: !!config.privy.appId,
+    appIdLength: config.privy.appId?.length || 0,
+    appIdPreview: config.privy.appId ? config.privy.appId.substring(0, 8) + '...' : 'NOT SET',
+    secretSet: !!config.privy.appSecret,
+    secretLength: config.privy.appSecret?.length || 0,
+    enabled: config.privy.enabled,
+  },
+  solana: {
+    rpcSet: !!config.solana.rpc,
+  },
+  env: {
+    PRIVY_APP_ID: process.env.PRIVY_APP_ID ? process.env.PRIVY_APP_ID.substring(0, 8) + '...' : 'NOT SET',
+    PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET ? 'SET (' + process.env.PRIVY_APP_SECRET.length + ' chars)' : 'NOT SET',
+  }
+}));
+
 // ============ Fees ============
 
 app.get('/fees', (c) => c.json({
