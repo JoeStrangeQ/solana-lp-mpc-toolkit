@@ -5,7 +5,7 @@
  * bypassing Gateway for more reliable operation.
  */
 
-import { Connection, PublicKey, Keypair, Transaction } from '@solana/web3.js';
+import { Connection, PublicKey, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
 import DLMM, { StrategyType } from '@meteora-ag/dlmm';
 import BN from 'bn.js';
 
@@ -101,8 +101,13 @@ export class MeteoraDirectClient {
       tx.feePayer = new PublicKey(userPublicKey);
       tx.partialSign(newPosition);
       serialized = tx.serialize({ requireAllSignatures: false }).toString('base64');
+    } else if ('version' in tx) {
+      // VersionedTransaction - need to sign with position keypair
+      const vTx = tx as unknown as VersionedTransaction;
+      vTx.sign([newPosition]); // Sign with position keypair first
+      serialized = Buffer.from(vTx.serialize()).toString('base64');
     } else {
-      // VersionedTransaction - serialize as-is
+      // Unknown transaction type - try to serialize anyway
       serialized = Buffer.from((tx as { serialize(): Uint8Array }).serialize()).toString('base64');
     }
 
