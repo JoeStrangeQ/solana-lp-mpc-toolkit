@@ -86,7 +86,7 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.10-finalized-blockhash',
+  version: '2.0.11-persist-keypair',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
   fees: {
@@ -362,22 +362,37 @@ app.post('/wallet/load', async (c) => {
 });
 
 // Load local keypair for testing (supports actual transaction signing)
+// Reuses existing keypair if already loaded, unless forceNew=true
 app.post('/wallet/local', async (c) => {
   try {
-    const { privateKey } = await c.req.json().catch(() => ({}));
+    const { privateKey, forceNew } = await c.req.json().catch(() => ({}));
     
-    localKeypairClient = new LocalKeypairClient(privateKey);
+    // If we already have a local keypair and not forcing new, return it
+    if (localKeypairClient && !forceNew && !privateKey) {
+      return c.json<AgentResponse>({
+        success: true,
+        message: 'Existing local keypair returned. This wallet CAN sign arbitrary transactions.',
+        data: {
+          address: localKeypairClient.getAddress(),
+          provider: 'local-keypair',
+          reused: true,
+        },
+      });
+    }
+    
+    // Create new or load provided key
+    localKeypairClient = new LocalKeypairClient(privateKey || undefined);
     const address = localKeypairClient.getAddress();
     
     return c.json<AgentResponse>({
       success: true,
       message: privateKey 
-        ? 'Local keypair wallet loaded. This wallet CAN sign arbitrary transactions.'
-        : 'New local keypair generated. Fund this address and use it for testing.',
+        ? 'Local keypair wallet loaded from provided key.'
+        : 'New local keypair generated. Fund this address for testing.',
       data: {
         address,
         provider: 'local-keypair',
-        warning: 'For testing only - keypair stored in server memory',
+        warning: 'Keypair stored in server memory - lost on restart',
       },
     });
   } catch (error) {
