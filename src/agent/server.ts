@@ -2,7 +2,14 @@
  * LP Agent API Server
  *
  * REST API for AI agents to manage LP positions across Solana DEXs
- * with MPC custody and Arcium privacy
+ * with Arcium privacy and self-custody (agents sign their own transactions)
+ * 
+ * ARCHITECTURE:
+ * - Stateless API - no private keys stored
+ * - Agents provide their wallet address
+ * - API returns unsigned transactions
+ * - Agents sign with their own keys
+ * - Arcium encrypts strategy params for privacy
  */
 
 import { Hono } from 'hono';
@@ -20,6 +27,7 @@ import { arciumPrivacy } from '../privacy';
 import { parseIntent, describeIntent } from './intent';
 import { createFeeBreakdown, FEE_CONFIG } from '../fees';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types';
+import { unsignedApi } from './unsigned';
 
 // Static imports for LP and Swap modules
 import { lpPipeline as lpPipelineImport, METEORA_POOLS as meteoraPoolsImport } from '../lp';
@@ -75,7 +83,10 @@ const app = new Hono();
 // Middleware
 app.use('*', cors());
 
-// State - supports multiple wallet providers
+// Mount stateless unsigned transaction API (primary interface for agents)
+app.route('/v2', unsignedApi);
+
+// State - supports multiple wallet providers (legacy, for testing)
 let mpcClient: MPCClient | MockMPCClient | null = null;
 let privyClient: PrivyWalletClient | null = null;
 let localKeypairClient: LocalKeypairClient | null = null;
@@ -86,12 +97,29 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.12-env-keypair',
+  version: '3.0.0-stateless',
   status: 'running',
-  features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
+  architecture: {
+    model: 'Stateless - agents sign their own transactions',
+    privacy: 'Arcium MXE encrypts strategy parameters',
+    custody: 'Self-custody - API never holds private keys',
+  },
+  endpoints: {
+    v2: {
+      '/v2/lp/build': 'POST - Build unsigned LP transaction',
+      '/v2/swap/build': 'POST - Build unsigned swap transaction',
+      '/v2/broadcast': 'POST - Broadcast signed transaction',
+      '/v2/encrypt-strategy': 'POST - Encrypt params with Arcium',
+    },
+    legacy: {
+      '/pools/scan': 'GET - Scan for LP opportunities',
+      '/encrypt': 'POST - Arcium encryption',
+      '/health': 'GET - Service health',
+    },
+  },
   fees: {
     protocol: `${FEE_CONFIG.FEE_BPS / 100}%`,
-    description: '1% protocol fee on every transaction',
+    description: 'Protocol fee on LP transactions',
     treasury: FEE_CONFIG.TREASURY_ADDRESS.toBase58(),
   },
 }));
