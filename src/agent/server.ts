@@ -86,7 +86,7 @@ let connection: Connection;
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.0.7-local-keypair',
+  version: '2.0.8-privy-native-transfer',
   status: 'running',
   features: ['MPC Custody', 'Arcium Privacy', 'Multi-DEX LP'],
   fees: {

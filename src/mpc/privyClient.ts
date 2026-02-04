@@ -173,47 +173,54 @@ export class PrivyWalletClient {
   }
 
   /**
-   * Native SOL transfer - builds transaction and uses signAndSendTransaction
+   * Native SOL transfer using Privy's native transfer RPC method
    */
-  async transfer(recipientAddress: string, lamports: number, connection: any): Promise<string> {
+  async transfer(recipientAddress: string, lamports: number, _connection?: any): Promise<string> {
     if (!this.wallet) {
       throw new Error('No wallet loaded');
     }
 
     try {
-      const { PublicKey, SystemProgram, Transaction } = await import('@solana/web3.js');
-      
-      const fromPubkey = new PublicKey(this.wallet.address);
-      const toPubkey = new PublicKey(recipientAddress);
-      
-      // Get recent blockhash
-      const { blockhash } = await connection.getLatestBlockhash();
-      
-      // Build transfer transaction
-      const tx = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey,
-          toPubkey,
-          lamports,
-        })
-      );
-      tx.recentBlockhash = blockhash;
-      tx.feePayer = fromPubkey;
-      
-      // Serialize transaction (unsigned)
-      const serializedTx = tx.serialize({ requireAllSignatures: false }).toString('base64');
-      
-      // Use Privy's signAndSendTransaction
+      // Use Privy's native 'transfer' RPC method for Solana
       const result = await (this.client as any).privyApiClient.wallets._rpc(this.wallet.id, {
-        method: 'signAndSendTransaction',
+        method: 'transfer',
         params: {
-          transaction: serializedTx,
+          to: recipientAddress,
+          amount: lamports.toString(), // Lamports as string
         },
       });
 
-      return (result as any).transaction_hash || (result as any).hash || result;
+      console.log('[Privy] Transfer result:', result);
+      return (result as any).transaction_hash || (result as any).hash || (result as any).txid || result;
     } catch (error) {
       console.error('[Privy] Failed to transfer:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Transfer SPL tokens using Privy's native transferTokens RPC method
+   */
+  async transferTokens(tokenMint: string, recipientAddress: string, amount: string): Promise<string> {
+    if (!this.wallet) {
+      throw new Error('No wallet loaded');
+    }
+
+    try {
+      // Use Privy's native 'transferTokens' RPC method for SPL tokens
+      const result = await (this.client as any).privyApiClient.wallets._rpc(this.wallet.id, {
+        method: 'transferTokens',
+        params: {
+          token_mint: tokenMint,
+          to: recipientAddress,
+          amount: amount,
+        },
+      });
+
+      console.log('[Privy] Token transfer result:', result);
+      return (result as any).transaction_hash || (result as any).hash || (result as any).txid || result;
+    } catch (error) {
+      console.error('[Privy] Failed to transfer tokens:', error);
       throw error;
     }
   }
