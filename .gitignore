@@ -28,3 +28,13 @@ _archive/
 # package-lock.json
 .vercel
 .env*.local
+
+# Security - never commit these
+*-transfer.ts
+*-test.ts
+local-*.ts
+test-*.ts
+*.secret
+*.key
+.env.local
+.env.production
