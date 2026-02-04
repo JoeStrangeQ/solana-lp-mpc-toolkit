@@ -20,6 +20,7 @@ export const config = {
   privy: {
     appId: process.env.PRIVY_APP_ID || '',
     appSecret: process.env.PRIVY_APP_SECRET || '',
+    authorizationPrivateKey: process.env.PRIVY_AUTHORIZATION_PRIVATE_KEY || '',
     enabled: !!(process.env.PRIVY_APP_ID && process.env.PRIVY_APP_SECRET),
   },
 

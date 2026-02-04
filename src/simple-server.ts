@@ -56,7 +56,11 @@ async function initPrivy() {
   if (!Client) return null;
   
   try {
-    privyClient = new Client({ appId: config.privy.appId, appSecret: config.privy.appSecret });
+    privyClient = new Client({ 
+      appId: config.privy.appId, 
+      appSecret: config.privy.appSecret,
+      authorizationPrivateKey: config.privy.authorizationPrivateKey || undefined,
+    });
     console.log('✅ Privy client initialized');
     return privyClient;
   } catch (e) {

@@ -17,6 +17,7 @@ export interface PrivyWalletInfo {
 export interface PrivyConfig {
   appId: string;
   appSecret: string;
+  authorizationPrivateKey?: string;
 }
 
 export class PrivyWalletClient {
@@ -24,10 +25,19 @@ export class PrivyWalletClient {
   private wallet: PrivyWalletInfo | null = null;
 
   constructor(config: PrivyConfig) {
-    this.client = new PrivyClient({
+    const clientConfig: any = {
       appId: config.appId,
       appSecret: config.appSecret,
-    });
+    };
+    
+    // Add authorization key if provided (required for server wallets)
+    if (config.authorizationPrivateKey) {
+      // Strip 'wallet-auth:' prefix if present
+      const key = config.authorizationPrivateKey.replace('wallet-auth:', '');
+      clientConfig.authorizationPrivateKey = key;
+    }
+    
+    this.client = new PrivyClient(clientConfig);
   }
 
   /**
