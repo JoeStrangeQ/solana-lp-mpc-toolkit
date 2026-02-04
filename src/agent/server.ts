@@ -546,6 +546,11 @@ app.post('/lp/prepare', async (c) => {
   }
 
   try {
+    const lp = await loadLpModule();
+    if (!lp) {
+      return c.json<AgentResponse>({ success: false, message: 'LP module not available' }, 503);
+    }
+
     const { tokenA, tokenB, amount } = await c.req.json();
 
     if (!tokenA || !tokenB || !amount) {
@@ -556,7 +561,7 @@ app.post('/lp/prepare', async (c) => {
     }
 
     const walletAddress = walletClient.getAddress();
-    const result = await lpPipeline.prepareLiquidity(walletAddress, tokenA, tokenB, amount);
+    const result = await lp.prepareLiquidity(walletAddress, tokenA, tokenB, amount);
 
     return c.json<AgentResponse>({
       success: result.ready,
@@ -582,6 +587,11 @@ app.post('/lp/execute', async (c) => {
   }
 
   try {
+    const lp = await loadLpModule();
+    if (!lp) {
+      return c.json<AgentResponse>({ success: false, message: 'LP module not available' }, 503);
+    }
+
     const { tokenA, tokenB, amount } = await c.req.json();
 
     if (!tokenA || !tokenB || !amount) {
@@ -594,7 +604,7 @@ app.post('/lp/execute', async (c) => {
     const walletAddress = walletClient.getAddress();
     const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
 
-    const result = await lpPipeline.execute(walletAddress, tokenA, tokenB, amount, signTransaction);
+    const result = await lp.execute(walletAddress, tokenA, tokenB, amount, signTransaction);
 
     return c.json<AgentResponse>({
       success: result.success,
@@ -641,10 +651,16 @@ async function handleLp(intent: LPIntent): Promise<AgentResponse> {
 
   const walletAddress = walletClient.getAddress();
 
+  // Load LP module
+  const lp = await loadLpModule();
+  if (!lp) {
+    return { success: false, message: 'LP module not available' };
+  }
+
   // If no amount specified, just prepare and return what's needed
   if (!intent.amount) {
     try {
-      const prep = await lpPipeline.prepareLiquidity(walletAddress, tokenA, tokenB, 0);
+      const prep = await lp.prepareLiquidity(walletAddress, tokenA, tokenB, 0);
       return {
         success: true,
         message: `To LP into ${intent.pair}, specify an amount. Example: "LP $500 into ${intent.pair}"`,
@@ -664,7 +680,7 @@ async function handleLp(intent: LPIntent): Promise<AgentResponse> {
 
   // First, prepare to see what's needed
   try {
-    const prep = await lpPipeline.prepareLiquidity(walletAddress, tokenA, tokenB, intent.amount);
+    const prep = await lp.prepareLiquidity(walletAddress, tokenA, tokenB, intent.amount);
 
     if (!prep.ready) {
       return {
@@ -680,7 +696,7 @@ async function handleLp(intent: LPIntent): Promise<AgentResponse> {
 
     // Execute the full pipeline (swap if needed + LP)
     const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
-    const result = await lpPipeline.execute(walletAddress, tokenA, tokenB, intent.amount, signTransaction);
+    const result = await lp.execute(walletAddress, tokenA, tokenB, intent.amount, signTransaction);
 
     // Calculate 1% protocol fee
     const feeBreakdown = createFeeBreakdown(intent.amount);
