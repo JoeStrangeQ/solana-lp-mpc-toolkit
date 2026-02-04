@@ -12,11 +12,10 @@
       --border: #222;
       --text: #e0e0e0;
       --text-muted: #888;
-      --accent: #00ff88;
+      --accent: #14F195;
+      --accent-purple: #9945FF;
       --accent-blue: #4499ff;
-      --accent-orange: #ff9944;
-      --accent-purple: #9966ff;
-      --success: #00ff88;
+      --success: #14F195;
       --warning: #ffaa00;
       --error: #ff4444;
     }
@@ -29,7 +28,7 @@
     }
     
     .header {
-      background: var(--bg-card);
+      background: linear-gradient(135deg, rgba(153, 69, 255, 0.1), rgba(20, 241, 149, 0.1));
       border-bottom: 1px solid var(--border);
       padding: 15px 20px;
       display: flex;
@@ -37,6 +36,7 @@
       justify-content: space-between;
     }
     .logo { display: flex; align-items: center; gap: 10px; }
+    .logo img { width: 32px; height: 32px; }
     .logo h1 { color: var(--accent); font-size: 18px; font-weight: bold; }
     .logo .badge { 
       background: var(--accent-purple); 
@@ -123,7 +123,7 @@
     }
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--accent-blue));
+      background: linear-gradient(90deg, var(--accent-purple), var(--accent));
       transition: width 0.3s;
     }
     
@@ -145,10 +145,10 @@
       font-size: 10px;
       font-weight: bold;
     }
-    .tag-success { background: rgba(0, 255, 136, 0.2); color: var(--success); }
+    .tag-success { background: rgba(20, 241, 149, 0.2); color: var(--success); }
     .tag-warning { background: rgba(255, 170, 0, 0.2); color: var(--warning); }
     .tag-error { background: rgba(255, 68, 68, 0.2); color: var(--error); }
-    .tag-info { background: rgba(68, 153, 255, 0.2); color: var(--accent-blue); }
+    .tag-info { background: rgba(153, 69, 255, 0.2); color: var(--accent-purple); }
     
     .arch-diagram {
       font-family: 'SF Mono', monospace;
@@ -160,37 +160,6 @@
       overflow-x: auto;
       white-space: pre;
     }
-    .arch-layer { color: var(--accent); }
-    
-    .timeline { position: relative; padding-left: 20px; }
-    .timeline::before {
-      content: '';
-      position: absolute;
-      left: 6px;
-      top: 0;
-      bottom: 0;
-      width: 2px;
-      background: var(--border);
-    }
-    .timeline-item {
-      position: relative;
-      padding: 10px 0 10px 20px;
-    }
-    .timeline-item::before {
-      content: '';
-      position: absolute;
-      left: -17px;
-      top: 14px;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--accent);
-      border: 2px solid var(--bg-dark);
-    }
-    .timeline-item.pending::before { background: var(--text-muted); }
-    .timeline-date { font-size: 10px; color: var(--text-muted); }
-    .timeline-title { font-weight: bold; margin: 3px 0; }
-    .timeline-desc { font-size: 11px; color: var(--text-muted); }
 
     .checklist { list-style: none; }
     .checklist li {
@@ -209,32 +178,48 @@
       border-radius: 3px;
       font-size: 11px;
     }
-    a { color: var(--accent-blue); text-decoration: none; }
+    a { color: var(--accent-purple); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    
+    .live-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(20, 241, 149, 0.15);
+      border: 1px solid var(--success);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      color: var(--success);
+    }
+    .live-badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="logo">
-      <span style="font-size: 24px;">🦐</span>
+      <img src="../mnm-web/public/logo.png" alt="MnM" onerror="this.style.display='none'">
       <h1>LP Agent Toolkit</h1>
       <span class="badge">COLOSSEUM</span>
     </div>
     <div class="header-right">
-      <div class="status-indicator">
-        <span class="status-dot"></span>
-        <span>Ready for Demo</span>
-      </div>
+      <span class="live-badge">ALL SYSTEMS LIVE</span>
       <span style="color: var(--text-muted); font-size: 12px;">Agent Hackathon • Feb 2-12, 2026</span>
     </div>
   </div>
 
   <div class="tabs">
     <div class="tab active" data-tab="overview">📊 Overview</div>
-    <div class="tab" data-tab="architecture">🏗️ Architecture</div>
+    <div class="tab" data-tab="services">🔌 Services</div>
     <div class="tab" data-tab="api">📡 API</div>
     <div class="tab" data-tab="tasks">📋 Tasks</div>
-    <div class="tab" data-tab="finance">💰 Finance</div>
   </div>
 
   <!-- OVERVIEW TAB -->
@@ -242,26 +227,26 @@
     <div class="grid grid-4">
       <div class="card">
         <div class="stat">
-          <div class="stat-value">Meteora</div>
-          <div class="stat-label">DLMM Integration</div>
+          <div class="stat-value" style="color: var(--accent-purple);">Privy</div>
+          <div class="stat-label">MPC Wallets ✅</div>
         </div>
       </div>
       <div class="card">
         <div class="stat">
-          <div class="stat-value">Jupiter</div>
-          <div class="stat-label">Swap Engine</div>
+          <div class="stat-value">Arcium</div>
+          <div class="stat-label">Encryption ✅</div>
         </div>
       </div>
       <div class="card">
         <div class="stat">
-          <div class="stat-value">Privy</div>
-          <div class="stat-label">Embedded Wallets</div>
+          <div class="stat-value" style="color: var(--accent-purple);">Meteora</div>
+          <div class="stat-label">DLMM Pools ✅</div>
         </div>
       </div>
       <div class="card">
         <div class="stat">
-          <div class="stat-value" id="days-left">5</div>
-          <div class="stat-label">Days Left</div>
+          <div class="stat-value" id="days-left">8</div>
+          <div class="stat-label">Days to Deadline</div>
         </div>
       </div>
     </div>
@@ -269,34 +254,36 @@
     <div class="card">
       <div class="card-header">
         <span class="card-title">🎯 What We Built</span>
+        <span class="tag tag-success">DEMO READY</span>
       </div>
       <p style="font-size: 13px; line-height: 1.6; margin-bottom: 15px;">
-        <strong>LP Agent Toolkit</strong> — A natural language interface for AI agents to manage liquidity positions on Solana. 
-        Combines <strong>Privy</strong> for secure embedded wallets, <strong>Arcium MXE</strong> for strategy privacy, 
-        <strong>Jupiter</strong> for swaps, and <strong>Meteora DLMM</strong> for concentrated liquidity.
+        <strong>LP Agent Toolkit</strong> — AI-native liquidity management for Solana. Natural language commands, 
+        MPC custody via <strong>Privy</strong>, encrypted strategies via <strong>Arcium</strong>, 
+        concentrated liquidity via <strong>Meteora DLMM</strong>.
       </p>
-      <div style="font-size: 12px; color: var(--text-muted);">
-        <strong>Example:</strong> <code>"Swap 1 SOL to USDC and LP into the best pool"</code> → Agent parses intent, 
-        executes swap via Jupiter, finds optimal Meteora pool, encrypts strategy with Arcium, executes LP.
+      <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 15px;">
+        <a href="https://api.mnm.ag" target="_blank" class="live-badge" style="text-decoration: none;">Frontend</a>
+        <a href="https://lp-agent-api-production.up.railway.app/health" target="_blank" class="live-badge" style="text-decoration: none;">API Health</a>
+        <a href="https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit" target="_blank" style="color: var(--accent-purple); font-size: 12px;">GitHub →</a>
       </div>
     </div>
 
     <div class="grid grid-2">
       <div class="card">
         <div class="card-header">
-          <span class="card-title">✅ Completed Features</span>
+          <span class="card-title">✅ Completed</span>
         </div>
         <ul class="checklist">
-          <li><span class="check">✓</span> Jupiter swap integration (<code>/swap</code>, <code>/swap/quote</code>)</li>
-          <li><span class="check">✓</span> Meteora DLMM integration</li>
-          <li><span class="check">✓</span> Swap→LP pipeline (<code>/lp/prepare</code>, <code>/lp/execute</code>)</li>
-          <li><span class="check">✓</span> Privy wallet creation</li>
-          <li><span class="check">✓</span> Arcium strategy encryption</li>
-          <li><span class="check">✓</span> 1% fee system</li>
-          <li><span class="check">✓</span> NL intent parser (swap + LP intents)</li>
-          <li><span class="check">✓</span> REST API on port 3456</li>
-          <li><span class="check">✓</span> README updated</li>
-          <li><span class="check">✓</span> DEMO_PLAN.md created</li>
+          <li><span class="check">✓</span> Privy wallet creation (MPC custody)</li>
+          <li><span class="check">✓</span> Arcium x25519-aes256gcm encryption</li>
+          <li><span class="check">✓</span> Meteora DLMM pool discovery</li>
+          <li><span class="check">✓</span> Jupiter swap integration</li>
+          <li><span class="check">✓</span> Natural language intent parser</li>
+          <li><span class="check">✓</span> 0.1% protocol fee system</li>
+          <li><span class="check">✓</span> REST API (Railway)</li>
+          <li><span class="check">✓</span> Frontend (Vercel)</li>
+          <li><span class="check">✓</span> DNS: api.mnm.ag</li>
+          <li><span class="check">✓</span> Twitter: @mnm_ag</li>
         </ul>
       </div>
       <div class="card">
@@ -307,10 +294,10 @@
           <li><span class="pending">○</span> Demo video recording</li>
           <li><span class="pending">○</span> Colosseum submission (Feb 12)</li>
         </ul>
-        <div style="margin-top: 20px; padding: 15px; background: rgba(0, 255, 136, 0.1); border-radius: 6px; border: 1px solid var(--accent);">
-          <div style="font-size: 12px; color: var(--accent); font-weight: bold; margin-bottom: 5px;">🎉 Core Implementation Complete!</div>
+        <div style="margin-top: 20px; padding: 15px; background: rgba(20, 241, 149, 0.1); border-radius: 6px; border: 1px solid var(--accent);">
+          <div style="font-size: 12px; color: var(--accent); font-weight: bold; margin-bottom: 5px;">🎉 Ready for Demo!</div>
           <div style="font-size: 11px; color: var(--text-muted);">
-            All technical features are implemented. Just need to record the demo video and submit!
+            All technical features complete. Record demo video and submit!
           </div>
         </div>
       </div>
@@ -319,150 +306,110 @@
     <div class="card">
       <div class="card-header">
         <span class="card-title">📈 Sprint Progress</span>
-        <span class="tag tag-success">95% COMPLETE</span>
+        <span class="tag tag-success">98% COMPLETE</span>
       </div>
       <div class="progress-bar">
-        <div class="progress-fill" style="width: 95%"></div>
+        <div class="progress-fill" style="width: 98%"></div>
       </div>
       <div style="display: flex; justify-content: space-between; margin-top: 10px; font-size: 11px; color: var(--text-muted);">
         <span>Feb 2 - Started</span>
-        <span>~95% Complete</span>
+        <span>Feb 4 - All Systems Live</span>
         <span>Feb 12 - Deadline</span>
       </div>
     </div>
   </div>
 
-  <!-- ARCHITECTURE TAB -->
-  <div class="content" id="architecture">
+  <!-- SERVICES TAB -->
+  <div class="content" id="services">
     <div class="card">
       <div class="card-header">
-        <span class="card-title">🏗️ System Architecture</span>
-        <span class="tag tag-success">CURRENT</span>
+        <span class="card-title">🔌 Live Services</span>
       </div>
-      <div class="arch-diagram">
-<span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
-<span class="arch-layer">│                           USER / AGENT INTERFACE                             │</span>
-│                                                                              │
-│   "Swap 1 SOL to USDC and LP into the best pool"  →  Natural Language Input  │
-│                                                                              │
-└──────────────────────────────────┬──────────────────────────────────────────┘
-                                   │
-                                   ▼
-<span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
-<span class="arch-layer">│                      INTENT PARSER (NL Processing)                           │</span>
-│                                                                              │
-│   Parses natural language into structured intents:                           │
-│   • SWAP: "swap 1 SOL to USDC" → { action: swap, from: SOL, to: USDC }       │
-│   • LP:   "LP into SOL-USDC"   → { action: lp, pair: SOL-USDC }              │
-│                                                                              │
-└──────────────────────────────────┬──────────────────────────────────────────┘
-                                   │
-         ┌─────────────────────────┼─────────────────────────────────────────┐
-         │                         │                                         │
-         ▼                         ▼                                         ▼
-<span class="arch-layer">┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐</span>
-<span class="arch-layer">│   JUPITER       │    │  METEORA DLMM   │    │  ARCIUM MXE     │</span>
-│  ───────────────│    │  ───────────────│    │  ───────────────│
-│  Token swaps    │    │  Concentrated   │    │  Strategy       │
-│  Best routes    │    │  liquidity      │    │  encryption     │
-│  Price quotes   │    │  Dynamic bins   │    │  Privacy layer  │
-│                 │    │  Pool discovery │    │                 │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                   │
-                                   ▼
-<span class="arch-layer">┌─────────────────────────────────────────────────────────────────────────────┐</span>
-<span class="arch-layer">│                           PRIVY EMBEDDED WALLETS                             │</span>
-│                                                                              │
-│   • Secure key management (no exposed private keys)                          │
-│   • Automatic wallet creation for new users                                  │
-│   • Transaction signing via embedded SDK                                     │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">🔄 Transaction Flow: Swap → LP Pipeline</span>
-      </div>
-      <div class="arch-diagram" style="font-size: 12px;">
-1. USER INPUT
-   └─▶ "Swap 1 SOL to USDC and add LP"
-
-2. INTENT PARSING (intent.ts)
-   └─▶ Detects: SWAP intent + LP intent
-   └─▶ { swap: { from: SOL, to: USDC, amount: 1 }, lp: { pair: SOL-USDC } }
-
-3. STRATEGY ENCRYPTION (Arcium MXE)
-   └─▶ Strategy params encrypted before execution
-   └─▶ Protects LP strategy from front-running
-
-4. FEE CALCULATION
-   └─▶ 1% protocol fee calculated
-   └─▶ Fee instruction prepared
-
-5. SWAP EXECUTION (Jupiter)
-   └─▶ POST /swap
-   └─▶ Jupiter finds best route, executes swap
-   └─▶ 1 SOL → ~X USDC
-
-6. LP PREPARATION
-   └─▶ POST /lp/prepare
-   └─▶ Checks balances: SOL and USDC available
-   └─▶ Finds best Meteora DLMM pool
-
-7. LP EXECUTION
-   └─▶ POST /lp/execute
-   └─▶ Creates concentrated liquidity position
-   └─▶ Position NFT minted to user wallet
-
-8. RESULT
-   └─▶ User has LP position in optimal SOL-USDC pool
-   └─▶ Earning trading fees from the pool
-      </div>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Status</th>
+            <th>URL</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Frontend</strong></td>
+            <td><span class="tag tag-success">LIVE</span></td>
+            <td><code>api.mnm.ag</code></td>
+            <td>Vercel, SSL provisioning</td>
+          </tr>
+          <tr>
+            <td><strong>API Backend</strong></td>
+            <td><span class="tag tag-success">LIVE</span></td>
+            <td><code>lp-agent-api-production.up.railway.app</code></td>
+            <td>Railway deployment</td>
+          </tr>
+          <tr>
+            <td><strong>Privy Wallets</strong></td>
+            <td><span class="tag tag-success">WORKING</span></td>
+            <td><code>/wallet/create</code></td>
+            <td>MPC custody, no exposed keys</td>
+          </tr>
+          <tr>
+            <td><strong>Arcium Encryption</strong></td>
+            <td><span class="tag tag-success">WORKING</span></td>
+            <td><code>/encrypt</code></td>
+            <td>x25519-aes256gcm, devnet cluster 456</td>
+          </tr>
+          <tr>
+            <td><strong>Meteora Pools</strong></td>
+            <td><span class="tag tag-success">WORKING</span></td>
+            <td><code>/pools/scan</code></td>
+            <td>DLMM pool discovery</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <div class="grid grid-3">
       <div class="card">
         <div class="card-header">
-          <span class="card-title">🔑 Privy Wallets</span>
+          <span class="card-title">🔑 Privy</span>
+          <span class="tag tag-success">✓</span>
         </div>
         <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
-          Embedded wallet infrastructure
+          Embedded MPC wallets
         </p>
         <ul class="checklist" style="font-size: 11px;">
           <li><span class="check">✓</span> Wallet creation</li>
-          <li><span class="check">✓</span> Secure key storage</li>
+          <li><span class="check">✓</span> Authorization key</li>
           <li><span class="check">✓</span> Transaction signing</li>
-          <li><span class="check">✓</span> No exposed keys</li>
         </ul>
       </div>
       <div class="card">
         <div class="card-header">
-          <span class="card-title">🔐 Arcium Privacy</span>
+          <span class="card-title">🔐 Arcium</span>
+          <span class="tag tag-success">✓</span>
         </div>
         <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
-          MXE-based strategy encryption
+          Strategy encryption
         </p>
         <ul class="checklist" style="font-size: 11px;">
-          <li><span class="check">✓</span> Strategy encryption</li>
-          <li><span class="check">✓</span> Front-run protection</li>
-          <li><span class="check">✓</span> Encrypted params</li>
-          <li><span class="check">✓</span> Secure execution</li>
+          <li><span class="check">✓</span> x25519 key exchange</li>
+          <li><span class="check">✓</span> AES-256-GCM</li>
+          <li><span class="check">✓</span> MXE cluster 456</li>
         </ul>
       </div>
       <div class="card">
         <div class="card-header">
-          <span class="card-title">🌊 Meteora DLMM</span>
+          <span class="card-title">🌊 Meteora</span>
+          <span class="tag tag-success">✓</span>
         </div>
         <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">
-          Concentrated liquidity
+          DLMM concentrated liquidity
         </p>
         <ul class="checklist" style="font-size: 11px;">
           <li><span class="check">✓</span> Pool discovery</li>
+          <li><span class="check">✓</span> APY/TVL data</li>
           <li><span class="check">✓</span> Dynamic bins</li>
-          <li><span class="check">✓</span> Position creation</li>
-          <li><span class="check">✓</span> Fee optimization</li>
         </ul>
       </div>
     </div>
@@ -473,8 +420,11 @@
     <div class="card">
       <div class="card-header">
         <span class="card-title">📡 API Endpoints</span>
-        <span class="tag tag-success">PORT 3456</span>
+        <span class="tag tag-success">LIVE</span>
       </div>
+      <p style="font-size: 12px; margin-bottom: 15px;">
+        Base URL: <code>https://lp-agent-api-production.up.railway.app</code>
+      </p>
       <table class="table">
         <thead>
           <tr>
@@ -485,49 +435,54 @@
         </thead>
         <tbody>
           <tr>
-            <td><code>/chat</code></td>
-            <td><span class="tag tag-info">POST</span></td>
-            <td>Natural language interface - parses and executes intents</td>
-          </tr>
-          <tr>
-            <td><code>/swap</code></td>
-            <td><span class="tag tag-info">POST</span></td>
-            <td>Execute a token swap via Jupiter</td>
-          </tr>
-          <tr>
-            <td><code>/swap/quote</code></td>
+            <td><code>/health</code></td>
             <td><span class="tag tag-success">GET</span></td>
-            <td>Get swap quote without executing</td>
-          </tr>
-          <tr>
-            <td><code>/swap/tokens</code></td>
-            <td><span class="tag tag-success">GET</span></td>
-            <td>List available tokens for swapping</td>
+            <td>Health check</td>
           </tr>
           <tr>
             <td><code>/wallet/create</code></td>
             <td><span class="tag tag-info">POST</span></td>
-            <td>Create new Privy embedded wallet</td>
+            <td>Create Privy MPC wallet</td>
           </tr>
           <tr>
-            <td><code>/lp/prepare</code></td>
+            <td><code>/chat</code></td>
             <td><span class="tag tag-info">POST</span></td>
-            <td>Check balances and find optimal pool</td>
+            <td>Natural language LP interface</td>
           </tr>
           <tr>
-            <td><code>/lp/execute</code></td>
+            <td><code>/encrypt</code></td>
             <td><span class="tag tag-info">POST</span></td>
-            <td>Execute full swap→LP pipeline</td>
+            <td>Encrypt strategy with Arcium</td>
+          </tr>
+          <tr>
+            <td><code>/encrypt/info</code></td>
+            <td><span class="tag tag-success">GET</span></td>
+            <td>Arcium MXE info</td>
+          </tr>
+          <tr>
+            <td><code>/encrypt/test</code></td>
+            <td><span class="tag tag-success">GET</span></td>
+            <td>Test encryption</td>
           </tr>
           <tr>
             <td><code>/pools/scan</code></td>
             <td><span class="tag tag-success">GET</span></td>
-            <td>Discover Meteora DLMM pools</td>
+            <td>Scan Meteora DLMM pools</td>
           </tr>
           <tr>
             <td><code>/fees</code></td>
             <td><span class="tag tag-success">GET</span></td>
-            <td>Get fee configuration</td>
+            <td>Fee configuration (0.1%)</td>
+          </tr>
+          <tr>
+            <td><code>/lp/open</code></td>
+            <td><span class="tag tag-info">POST</span></td>
+            <td>Open LP position</td>
+          </tr>
+          <tr>
+            <td><code>/lp/close</code></td>
+            <td><span class="tag tag-info">POST</span></td>
+            <td>Close LP position</td>
           </tr>
         </tbody>
       </table>
@@ -535,92 +490,28 @@
 
     <div class="card">
       <div class="card-header">
-        <span class="card-title">🔧 Example API Calls</span>
+        <span class="card-title">🔧 Quick Test Commands</span>
       </div>
       <div class="arch-diagram" style="font-size: 12px;">
-# Natural Language Chat
-curl -X POST http://localhost:3456/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Swap 1 SOL to USDC and LP into the best pool"}'
-
-# Get Swap Quote
-curl "http://localhost:3456/swap/quote?from=SOL&to=USDC&amount=1"
-
-# Execute Swap
-curl -X POST http://localhost:3456/swap \
-  -H "Content-Type: application/json" \
-  -d '{"from": "SOL", "to": "USDC", "amount": 1}'
+# Health Check
+curl https://lp-agent-api-production.up.railway.app/health
 
 # Create Wallet
-curl -X POST http://localhost:3456/wallet/create
+curl -X POST https://lp-agent-api-production.up.railway.app/wallet/create
 
-# Prepare LP (check balances, find pool)
-curl -X POST http://localhost:3456/lp/prepare \
+# Chat Interface
+curl -X POST https://lp-agent-api-production.up.railway.app/chat \
   -H "Content-Type: application/json" \
-  -d '{"pair": "SOL-USDC"}'
+  -d '{"message": "LP $500 into SOL-USDC"}'
 
-# Execute LP Pipeline
-curl -X POST http://localhost:3456/lp/execute \
-  -H "Content-Type: application/json" \
-  -d '{"pair": "SOL-USDC", "amount": 100}'
+# Test Encryption
+curl https://lp-agent-api-production.up.railway.app/encrypt/test
 
 # Scan Pools
-curl "http://localhost:3456/pools/scan?tokenA=SOL&tokenB=USDC"
+curl "https://lp-agent-api-production.up.railway.app/pools/scan?pair=SOL-USDC"
 
-# Get Fee Config
-curl "http://localhost:3456/fees"
-      </div>
-    </div>
-
-    <div class="grid grid-2">
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">📝 Request/Response Examples</span>
-        </div>
-        <div class="arch-diagram" style="font-size: 11px;">
-// POST /chat
-Request:
-{
-  "message": "swap 1 SOL to USDC"
-}
-
-Response:
-{
-  "intent": {
-    "action": "swap",
-    "from": "SOL",
-    "to": "USDC",
-    "amount": 1
-  },
-  "result": {
-    "txId": "5wH...xyz",
-    "inputAmount": 1,
-    "outputAmount": 156.42,
-    "fee": 0.01
-  }
-}
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <span class="card-title">🎯 NL Intent Examples</span>
-        </div>
-        <div class="arch-diagram" style="font-size: 11px;">
-// Swap Intents
-"swap 1 SOL to USDC"
-"convert 100 USDC to SOL"  
-"trade my SOL for BONK"
-"buy 50 USDC worth of SOL"
-
-// LP Intents
-"LP into SOL-USDC"
-"add liquidity to the best pool"
-"provide liquidity with 100 USDC"
-
-// Combined
-"swap 1 SOL to USDC and LP"
-"convert to USDC then add liquidity"
-        </div>
+# Fee Info
+curl https://lp-agent-api-production.up.railway.app/fees
       </div>
     </div>
   </div>
@@ -630,6 +521,7 @@ Response:
     <div class="card">
       <div class="card-header">
         <span class="card-title">📋 Task Status</span>
+        <span style="font-size: 11px; color: var(--text-muted);">Updated: Feb 4, 2026 13:30 CST</span>
       </div>
       <table class="table">
         <thead>
@@ -641,59 +533,54 @@ Response:
         </thead>
         <tbody>
           <tr>
-            <td>Jupiter Swap Integration</td>
+            <td>Privy Wallet Integration</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>/swap, /swap/quote endpoints working</td>
+            <td>MPC wallets working, auth key configured</td>
           </tr>
           <tr>
-            <td>Meteora DLMM Integration</td>
+            <td>Arcium Encryption</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>Pool discovery and LP execution</td>
+            <td>x25519-aes256gcm, MXE cluster 456</td>
           </tr>
           <tr>
-            <td>Swap→LP Pipeline</td>
+            <td>Meteora DLMM</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>/lp/prepare, /lp/execute endpoints</td>
+            <td>Pool discovery, APY data</td>
           </tr>
           <tr>
-            <td>Privy Wallet Creation</td>
+            <td>Jupiter Swaps</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>Embedded wallets via Privy SDK</td>
-          </tr>
-          <tr>
-            <td>Arcium Strategy Encryption</td>
-            <td><span class="tag tag-success">DONE</span></td>
-            <td>MXE privacy layer integrated</td>
-          </tr>
-          <tr>
-            <td>1% Fee System</td>
-            <td><span class="tag tag-success">DONE</span></td>
-            <td>Fee calculation and collection</td>
+            <td>Integrated in pipeline</td>
           </tr>
           <tr>
             <td>NL Intent Parser</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>Swap + LP intent detection</td>
+            <td>/chat endpoint working</td>
           </tr>
           <tr>
-            <td>REST API (Port 3456)</td>
+            <td>Fee System</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>All endpoints implemented</td>
+            <td>0.1% protocol fee</td>
           </tr>
           <tr>
-            <td>README Updated</td>
+            <td>REST API</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>Documentation complete</td>
+            <td>Railway deployment live</td>
           </tr>
           <tr>
-            <td>DEMO_PLAN.md</td>
+            <td>Frontend</td>
             <td><span class="tag tag-success">DONE</span></td>
-            <td>Demo script ready</td>
+            <td>Vercel @ api.mnm.ag</td>
+          </tr>
+          <tr>
+            <td>DNS Setup</td>
+            <td><span class="tag tag-success">DONE</span></td>
+            <td>api.mnm.ag → Vercel</td>
           </tr>
           <tr>
             <td>Demo Video</td>
             <td><span class="tag tag-warning">TODO</span></td>
-            <td>Need to record demo walkthrough</td>
+            <td>Ready to record</td>
           </tr>
           <tr>
             <td>Colosseum Submission</td>
@@ -706,119 +593,23 @@ Response:
 
     <div class="card">
       <div class="card-header">
-        <span class="card-title">📅 Sprint Timeline</span>
-      </div>
-      <div class="timeline">
-        <div class="timeline-item">
-          <div class="timeline-date">Feb 2</div>
-          <div class="timeline-title">Project Started</div>
-          <div class="timeline-desc">LP Agent Toolkit for Colosseum Hackathon</div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-date">Feb 3-5</div>
-          <div class="timeline-title">Core Architecture</div>
-          <div class="timeline-desc">Pivoted to Privy + Jupiter + Meteora stack</div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-date">Feb 6-7</div>
-          <div class="timeline-title">Jupiter Integration</div>
-          <div class="timeline-desc">Swap endpoints, quote API, token list</div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-date">Feb 7</div>
-          <div class="timeline-title">Meteora DLMM</div>
-          <div class="timeline-desc">Pool scanning, LP execution pipeline</div>
-        </div>
-        <div class="timeline-item">
-          <div class="timeline-date">Feb 7</div>
-          <div class="timeline-title">Full Pipeline Complete</div>
-          <div class="timeline-desc">Swap→LP, Arcium privacy, Privy wallets all working</div>
-        </div>
-        <div class="timeline-item pending">
-          <div class="timeline-date">Feb 8-11</div>
-          <div class="timeline-title">Demo & Polish</div>
-          <div class="timeline-desc">Record video, final testing</div>
-        </div>
-        <div class="timeline-item pending">
-          <div class="timeline-date">Feb 12</div>
-          <div class="timeline-title">Submit to Colosseum</div>
-          <div class="timeline-desc">Deadline!</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- FINANCE TAB -->
-  <div class="content" id="finance">
-    <div class="grid grid-3">
-      <div class="card">
-        <div class="stat">
-          <div class="stat-value">1%</div>
-          <div class="stat-label">Protocol Fee (100 bps)</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="stat">
-          <div class="stat-value">$0</div>
-          <div class="stat-label">Revenue (Pre-launch)</div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="stat">
-          <div class="stat-value">$1</div>
-          <div class="stat-label">Exempt Threshold</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
         <span class="card-title">💰 Revenue Model</span>
       </div>
-      <div class="arch-diagram" style="font-size: 12px;">
-┌─────────────────────────────────────────────────────────────────┐
-│                     1% PROTOCOL FEE FLOW                        │
-└─────────────────────────────────────────────────────────────────┘
-
-  Agent Request: "Swap 1 SOL to USDC and LP"
-       │
-       ▼
-  ┌─────────────────────────────────────────────────────────────┐
-  │                      FEE CALCULATION                         │
-  │  ───────────────────────────────────────────────────────────│
-  │  Swap Amount:     1 SOL                                      │
-  │  Protocol Fee:    0.01 SOL (1%)                              │
-  │  Net to Jupiter:  0.99 SOL                                   │
-  │                                                              │
-  │  Config:                                                     │
-  │  • Fee: 100 bps (1%)                                         │
-  │  • Min fee: 10,000 lamports (~$0.002)                        │
-  │  • Exempt if TX < $1 USD                                     │
-  └─────────────────────────────────────────────────────────────┘
-       │
-       ├──────────────────┐
-       ▼                  ▼
-  ┌─────────────┐    ┌─────────────┐
-  │   SWAP      │    │  TREASURY   │
-  │   0.99 SOL  │    │   0.01 SOL  │
-  │  Executed   │    │   Fee       │
-  └─────────────┘    └─────────────┘
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">🏦 Treasury</span>
-      </div>
-      <p style="font-size: 12px; margin-bottom: 10px;">
-        <strong>Address:</strong> <code>BNQnCszvPwYfjBMUmFgmCooMSRrdkC7LncMQBExDakLp</code>
-      </p>
-      <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">
-        All protocol fees are collected to this address via SPL token transfer or SOL transfer instructions 
-        appended to each transaction.
-      </p>
-      <div style="font-size: 11px;">
-        <strong>Fee API:</strong> <code>GET /fees</code> — Get fee configuration
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; text-align: center;">
+        <div>
+          <div style="font-size: 24px; color: var(--accent); font-weight: bold;">0.1%</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Protocol Fee</div>
+        </div>
+        <div>
+          <div style="font-size: 24px; color: var(--accent-purple); font-weight: bold;">$1</div>
+          <div style="font-size: 11px; color: var(--text-muted);">Exempt Threshold</div>
+        </div>
+        <div>
+          <div style="font-size: 12px; color: var(--text-muted); padding-top: 5px;">
+            Treasury:<br>
+            <code style="font-size: 9px;">BNQnCsz...DakLp</code>
+          </div>
+        </div>
       </div>
     </div>
   </div>
