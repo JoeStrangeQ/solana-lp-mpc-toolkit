@@ -189,7 +189,7 @@ export class PrivyWalletClient {
       const toPubkey = new PublicKey(recipientAddress);
       
       // Get recent blockhash
-      const { blockhash } = await connection.getLatestBlockhash();
+      const { blockhash } = await connection.getLatestBlockhash('finalized');
       
       // Build transfer transaction
       const tx = new Transaction().add(
