@@ -73,8 +73,9 @@ export class MeteoraDirectClient {
     const minBinId = activeBin.binId - RANGE_INTERVAL;
     const maxBinId = activeBin.binId + RANGE_INTERVAL;
     
-    // Build the add liquidity transaction using spot strategy
-    const addLiquidityTx = await pool.addLiquidityByStrategy({
+    // Build transaction to INITIALIZE position AND add liquidity (for new positions)
+    // This is the correct method that includes the position keypair as a signer
+    const initAndAddTx = await pool.initializePositionAndAddLiquidityByStrategy({
       positionPubKey: newPosition.publicKey,
       user: new PublicKey(userPublicKey),
       totalXAmount: new BN(amountX),
@@ -86,6 +87,9 @@ export class MeteoraDirectClient {
       },
       slippage: slippageBps / 10000, // Convert bps to decimal
     });
+    
+    // This returns a Transaction object directly
+    const addLiquidityTx = initAndAddTx;
 
     // Get the transaction - SDK returns an object with tx property or the tx directly
     const tx = (addLiquidityTx as { tx?: Transaction }).tx || addLiquidityTx;
