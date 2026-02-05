@@ -509,11 +509,13 @@ app.post('/wallet/transfer', async (c) => {
     
     const unsignedTx = tx.serialize({ requireAllSignatures: false }).toString('base64');
     
-    if (!('signAndSendTransaction' in walletClient)) {
-      throw new Error('Wallet client does not support signAndSendTransaction');
-    }
+    // Sign transaction (not sign+send, so we can broadcast with fresh blockhash)
+    const signedTx = await walletClient.signTransaction(unsignedTx);
     
-    const txid = await (walletClient as any).signAndSendTransaction(unsignedTx);
+    // Broadcast locally to ensure blockhash is fresh
+    const txBuffer = Buffer.from(signedTx, 'base64');
+    const txid = await connection.sendRawTransaction(txBuffer, { skipPreflight: false });
+    await connection.confirmTransaction(txid, 'confirmed');
 
     return c.json<AgentResponse>({
       success: true,
