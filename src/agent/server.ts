@@ -1125,6 +1125,72 @@ app.post('/lp/execute', async (c) => {
   }
 });
 
+// Atomic LP: Swap + LP in one Jito bundle (MEV protected, atomic execution)
+app.post('/lp/atomic', async (c) => {
+  const walletClient = getWalletClient();
+  if (!walletClient) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'No wallet loaded. Create or load a wallet first.',
+    }, 400);
+  }
+
+  try {
+    const { executeAtomicLP } = await import('../lp/atomic.js');
+    const { poolAddress, amount, strategy, shape, tipSpeed } = await c.req.json();
+
+    if (!poolAddress) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: 'Missing poolAddress. Find pools via /pools/scan',
+      }, 400);
+    }
+
+    if (!amount) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: 'Missing amount (in SOL). Example: { "amount": 0.5 }',
+      }, 400);
+    }
+
+    const walletAddress = walletClient.getAddress();
+    const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
+
+    // SOL as default collateral
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    const collateralLamports = Math.floor(amount * 1e9);
+
+    const result = await executeAtomicLP({
+      walletAddress,
+      poolAddress,
+      collateralMint: SOL_MINT,
+      collateralAmount: collateralLamports,
+      collateralDecimals: 9,
+      strategy: strategy || 'concentrated',
+      shape: shape || 'spot',
+      tipSpeed: tipSpeed || 'fast',
+      signTransaction,
+    });
+
+    return c.json<AgentResponse>({
+      success: result.success,
+      message: result.message,
+      data: {
+        bundleId: result.bundleId,
+        positionAddress: result.positionAddress,
+        arcium: result.encryptedStrategy,
+      },
+      error: result.error,
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Atomic LP failed',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
 // Withdraw liquidity and close position
 app.post('/lp/withdraw', async (c) => {
   const walletClient = getWalletClient();
