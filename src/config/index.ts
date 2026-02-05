@@ -40,10 +40,10 @@ export const config = {
     rpc: process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com',
   },
 
-  // Jupiter Swap
+  // Jupiter Swap (v1 - Metis Swap API)
   jupiter: {
     apiKey: process.env.JUPITER_API_KEY || '',
-    baseUrl: 'https://quote-api.jup.ag/v6',
+    baseUrl: 'https://api.jup.ag/swap/v1',
   },
 };
 
