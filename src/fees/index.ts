@@ -18,7 +18,7 @@ export const FEE_CONFIG = {
   FEE_BPS: 10, // 10 basis points = 0.1%
   
   // Protocol treasury (receives fees)
-  TREASURY_ADDRESS: new PublicKey('BNQnCszvPwYfjBMUmFgmCooMSRrdkC7LncMQBExDakLp'),
+  TREASURY_ADDRESS: new PublicKey('fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt'),
   
   // Minimum fee to avoid dust (in lamports for SOL, or token units)
   MIN_FEE_LAMPORTS: 10000, // 0.00001 SOL

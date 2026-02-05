@@ -8,7 +8,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 // Fee config
 const FEE_CONFIG = {
   FEE_BPS: 10, // 0.1%
-  TREASURY: 'BNQnCszvPwYfjBMUmFgmCooMSRrdkC7LncMQBExDakLp',
+  TREASURY: 'fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt',
   MIN_FEE_LAMPORTS: 10000,
   EXEMPT_THRESHOLD_USD: 1,
 };
