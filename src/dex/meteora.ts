@@ -97,17 +97,15 @@ export class MeteoraDirectClient {
     const { blockhash } = await this.connection.getLatestBlockhash();
     
     if ('recentBlockhash' in tx) {
-      // Legacy Transaction - add position as a signer
+      // Legacy Transaction - DON'T sign here, return unsigned
+      // Position keypair signing will happen after Privy signs
       tx.recentBlockhash = blockhash;
       tx.feePayer = new PublicKey(userPublicKey);
-      // Manually add the position keypair as a signer before serializing
-      tx.partialSign(newPosition);
-      // Serialize WITHOUT user signature, but WITH position signature placeholder
       serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64');
     } else if ('version' in tx) {
-      // VersionedTransaction - sign with position keypair first
+      // VersionedTransaction - DON'T sign here, return unsigned
+      // Position keypair signing will happen after Privy signs
       const vTx = tx as unknown as VersionedTransaction;
-      vTx.sign([newPosition]);
       serialized = Buffer.from(vTx.serialize()).toString('base64');
     } else {
       // Unknown transaction type - try to serialize anyway
