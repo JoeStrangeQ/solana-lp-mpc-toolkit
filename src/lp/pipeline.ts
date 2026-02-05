@@ -262,11 +262,29 @@ export class LPPipeline {
       slippageBps: 100, // 1% slippage
     });
 
-    // The transaction from meteoraClient is already partially signed by the position keypair
-    // Now just needs to be signed by the user wallet (via Privy)
-    const fullySignedTx = await signTransaction(lpResult.transaction);
+    // Step 1: Send UNSIGNED transaction to Privy for user wallet signature
+    const userSignedTx = await signTransaction(lpResult.transaction);
+    
+    // Step 2: Add position keypair signature
+    const positionKeypair = Keypair.fromSecretKey(Buffer.from(lpResult.positionKeypair, 'base64'));
+    const txBuffer = Buffer.from(userSignedTx, 'base64');
+    
+    let fullySignedTx: string;
+    try {
+      // Try as VersionedTransaction first
+      const vTx = VersionedTransaction.deserialize(txBuffer);
+      vTx.sign([positionKeypair]);
+      fullySignedTx = Buffer.from(vTx.serialize()).toString('base64');
+      console.log('[LP] Added position signature to VersionedTransaction');
+    } catch {
+      // Fall back to legacy Transaction
+      const tx = Transaction.from(txBuffer);
+      tx.partialSign(positionKeypair);
+      fullySignedTx = tx.serialize().toString('base64');
+      console.log('[LP] Added position signature to legacy Transaction');
+    }
 
-    // Broadcast
+    // Step 3: Broadcast ourselves
     const txid = await this.broadcastTransaction(fullySignedTx);
 
     return {
