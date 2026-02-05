@@ -25,8 +25,41 @@ async function loadPrivy() {
 
 const app = new Hono();
 
+// ============ Usage Stats (in-memory) ============
+const stats = {
+  startedAt: new Date().toISOString(),
+  requests: {
+    total: 0,
+    byEndpoint: {} as Record<string, number>,
+    byHour: {} as Record<string, number>,
+  },
+  actions: {
+    walletsCreated: 0,
+    walletsLoaded: 0,
+    transfers: 0,
+    lpExecuted: 0,
+    lpWithdrawn: 0,
+    encryptions: 0,
+  },
+  errors: 0,
+  lastRequest: null as string | null,
+};
+
 // Middleware
 app.use('*', cors());
+
+// Stats tracking middleware
+app.use('*', async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+  const hour = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
+  
+  stats.requests.total++;
+  stats.requests.byEndpoint[path] = (stats.requests.byEndpoint[path] || 0) + 1;
+  stats.requests.byHour[hour] = (stats.requests.byHour[hour] || 0) + 1;
+  stats.lastRequest = new Date().toISOString();
+  
+  await next();
+});
 
 // Connection (stateless - just RPC)
 let connection: Connection;
@@ -139,6 +172,31 @@ app.get('/health', (c) => c.json({
   timestamp: new Date().toISOString(),
 }));
 
+// Usage stats endpoint
+app.get('/stats', (c) => {
+  const uptime = Date.now() - new Date(stats.startedAt).getTime();
+  const hours = Math.floor(uptime / 3600000);
+  const minutes = Math.floor((uptime % 3600000) / 60000);
+  
+  return c.json({
+    status: 'operational',
+    uptime: `${hours}h ${minutes}m`,
+    startedAt: stats.startedAt,
+    requests: {
+      total: stats.requests.total,
+      byEndpoint: stats.requests.byEndpoint,
+      last24hByHour: Object.fromEntries(
+        Object.entries(stats.requests.byHour)
+          .filter(([hour]) => new Date(hour + ':00:00Z').getTime() > Date.now() - 86400000)
+          .sort((a, b) => a[0].localeCompare(b[0]))
+      ),
+    },
+    actions: stats.actions,
+    errors: stats.errors,
+    lastRequest: stats.lastRequest,
+  });
+});
+
 // Debug endpoint to check config (no secrets exposed)
 app.get('/debug/config', (c) => c.json({
   privy: {
@@ -226,6 +284,7 @@ app.post('/encrypt', async (c) => {
     }
     await arciumPrivacy.initialize();
     const encrypted = await arciumPrivacy.encryptStrategy(strategy);
+    stats.actions.encryptions++;
     return c.json({
       success: true,
       encrypted: {
@@ -237,6 +296,7 @@ app.post('/encrypt', async (c) => {
       },
     });
   } catch (error) {
+    stats.errors++;
     return c.json({ error: 'Encryption failed' }, 500);
   }
 });
@@ -253,10 +313,12 @@ app.get('/encrypt/test', async (c) => {
 app.post('/wallet/create', async (c) => {
   const client = await createPrivyClient();
   if (!client) {
+    stats.errors++;
     return c.json({ error: 'Privy not available', hint: 'Check PRIVY_APP_ID and PRIVY_APP_SECRET env vars' }, 503);
   }
   try {
     const wallet = await client.generateWallet();
+    stats.actions.walletsCreated++;
     return c.json({
       success: true,
       wallet: {
@@ -267,6 +329,7 @@ app.post('/wallet/create', async (c) => {
       hint: 'Store walletId - pass it in all future requests',
     });
   } catch (error: any) {
+    stats.errors++;
     return c.json({ error: 'Wallet creation failed', details: error.message }, 500);
   }
 });
@@ -640,6 +703,7 @@ app.post('/lp/execute', async (c) => {
     const { wallet } = await loadWalletById(walletId);
     const fee = value * FEE_CONFIG.FEE_BPS / 10000;
     
+    stats.actions.lpExecuted++;
     return c.json({
       success: true,
       walletId,
@@ -659,6 +723,7 @@ app.post('/lp/execute', async (c) => {
       note: 'Demo mode - production executes full pipeline',
     });
   } catch (error: any) {
+    stats.errors++;
     return c.json({ error: 'LP execute failed', details: error.message }, 500);
   }
 });
