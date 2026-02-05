@@ -339,7 +339,11 @@ export class LPPipeline {
         
         try {
           const priceUrl = `https://api.jup.ag/price/v2?ids=${poolInfo.tokenX.mint},${poolInfo.tokenY.mint}`;
-          const priceResp = await fetch(priceUrl);
+          const priceHeaders: Record<string, string> = {};
+          if (config.jupiter.apiKey) {
+            priceHeaders['x-api-key'] = config.jupiter.apiKey;
+          }
+          const priceResp = await fetch(priceUrl, { headers: priceHeaders });
           if (priceResp.ok) {
             const priceData = await priceResp.json() as { data: Record<string, { price: string }> };
             priceX = parseFloat(priceData.data[poolInfo.tokenX.mint]?.price || '1');
