@@ -1337,7 +1337,10 @@ app.post('/lp/withdraw/atomic', async (c) => {
   try {
     const { buildAtomicWithdraw } = await import('../lp/atomicWithdraw.js');
     const { sendBundle, waitForBundle } = await import('../jito/index.js');
-    const { positionAddress, poolAddress, tipSpeed, outputToken } = await c.req.json();
+    const body = await c.req.json();
+    const { positionAddress, poolAddress, tipSpeed } = body;
+    // Support both outputToken and convertToSol for convenience
+    const outputToken = body.outputToken || (body.convertToSol ? 'SOL' : null);
 
     if (!positionAddress) {
       return c.json<AgentResponse>({
@@ -1428,11 +1431,45 @@ app.post('/lp/withdraw/atomic', async (c) => {
     }
 
     const allSwapsSuccess = swapResults.length === 0 || swapResults.every(r => r.success);
-    const message = outputToken 
-      ? allSwapsSuccess 
-        ? `Withdrew and converted to ${targetToken}! 1% fee sent to treasury.`
-        : `Withdrew successfully. Some swaps failed - you have pool tokens. 1% fee sent to treasury.`
-      : `Atomic withdrawal complete! Bundle landed in slot ${result.slot}. 1% fee sent to treasury.`;
+    const failedSwaps = swapResults.filter(r => !r.success);
+    
+    // Build human-friendly token descriptions
+    const formatAmount = (amount: string, decimals: number, mint: string) => {
+      const ui = parseInt(amount) / Math.pow(10, decimals);
+      const symbol = mint === SOL_MINT ? 'SOL' : mint === USDC_MINT ? 'USDC' : mint.slice(0,4);
+      return `${ui.toFixed(4)} ${symbol}`;
+    };
+    
+    const tokenX = built.estimatedWithdraw.tokenX;
+    const tokenY = built.estimatedWithdraw.tokenY;
+    const xStr = formatAmount(tokenX.amount, tokenX.decimals, tokenX.mint);
+    const yStr = formatAmount(tokenY.amount, tokenY.decimals, tokenY.mint);
+    
+    // Generate appropriate message
+    let message: string;
+    let nextSteps: string[] | undefined;
+    
+    if (!outputToken) {
+      // No conversion requested
+      message = `Withdrew ${xStr} + ${yStr}. 1% fee sent to treasury.`;
+    } else if (allSwapsSuccess) {
+      // Full success
+      const totalReceived = swapResults.reduce((acc, r) => acc + (r.outAmount || 0), 0);
+      message = `Withdrew and converted to ${targetToken}! Ready to LP again.`;
+    } else if (failedSwaps.length > 0) {
+      // Fallback mode - some swaps failed
+      const failedTokens = failedSwaps.map(f => {
+        const sym = f.token === SOL_MINT ? 'SOL' : f.token === USDC_MINT ? 'USDC' : f.token.slice(0,4);
+        return sym;
+      }).join(', ');
+      message = `Withdrew ${xStr} + ${yStr}. Swap to ${targetToken} failed (${failedSwaps[0].error || 'slippage'}). Tokens in wallet.`;
+      nextSteps = [
+        `Run POST /swap to convert ${failedTokens} to ${targetToken} manually`,
+        `Or LP directly into a ${failedTokens} pool`,
+      ];
+    } else {
+      message = `Withdrew ${xStr} + ${yStr}. 1% fee sent to treasury.`;
+    }
 
     return c.json<AgentResponse>({
       success: true,
@@ -1446,6 +1483,9 @@ app.post('/lp/withdraw/atomic', async (c) => {
         arcium: built.encryptedStrategy,
         swaps: swapResults.length > 0 ? swapResults : undefined,
         outputToken: outputToken ? targetToken : undefined,
+        convertedToSol: outputToken === 'SOL' ? allSwapsSuccess : undefined,
+        fallback: failedSwaps.length > 0 ? true : undefined,
+        nextSteps,
       },
     });
   } catch (error) {
