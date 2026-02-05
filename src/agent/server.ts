@@ -844,6 +844,39 @@ app.post('/chat', async (c) => {
 
 // ============ Direct API Endpoints ============
 
+// Get detailed info for ANY pool (universal support)
+app.get('/pool/info', async (c) => {
+  const poolAddress = c.req.query('address');
+  if (!poolAddress) {
+    return c.json<AgentResponse>({ success: false, message: 'Missing address parameter' }, 400);
+  }
+  
+  try {
+    const { MeteoraDirectClient } = await import('../dex/meteora.js');
+    const meteoraClient = new MeteoraDirectClient(config.solana.rpc);
+    const poolInfo = await meteoraClient.getPoolInfoExtended(poolAddress);
+    
+    return c.json<AgentResponse>({
+      success: true,
+      message: `Pool info for ${poolAddress}`,
+      data: {
+        address: poolInfo.address,
+        activeBinId: poolInfo.activeBinId,
+        currentPrice: poolInfo.currentPrice,
+        binStep: poolInfo.binStep,
+        tokenX: poolInfo.tokenX,
+        tokenY: poolInfo.tokenY,
+      },
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to fetch pool info',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
 app.get('/pools/scan', async (c) => {
   const tokenA = c.req.query('tokenA');
   const tokenB = c.req.query('tokenB');
