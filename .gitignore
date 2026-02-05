@@ -38,3 +38,6 @@ test-*.ts
 *.key
 .env.local
 .env.production
+scripts/
+DEMO_PLAN.md
+.env.example
