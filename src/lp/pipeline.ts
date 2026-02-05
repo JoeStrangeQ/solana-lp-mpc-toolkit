@@ -9,9 +9,10 @@
  */
 
 import { Connection, PublicKey, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
-import { config } from '../config';
-import { jupiterClient, TOKENS } from '../swap';
-import { MeteoraDirectClient } from '../dex/meteora';
+import { config } from '../config/index.js';
+import { jupiterClient, TOKENS } from '../swap/index.js';
+import { MeteoraDirectClient } from '../dex/meteora.js';
+import { arciumPrivacy } from '../privacy/index.js';
 
 // Well-known pool addresses (Meteora DLMM)
 export const METEORA_POOLS = {
@@ -64,6 +65,7 @@ export interface ExecuteResult {
   lpTxid?: string;
   positionAddress?: string;
   binRange?: { min: number; max: number };
+  encryptedStrategy?: { ciphertext: string; nonce: string; mxeCluster: number };
   message: string;
 }
 
@@ -336,7 +338,30 @@ export class LPPipeline {
       }
     }
 
-    // Step 3: Add liquidity
+    // Step 3: Encrypt strategy with Arcium (privacy layer)
+    let encryptedStrategy: { ciphertext: string; nonce: string; mxeCluster: number } | undefined;
+    try {
+      await arciumPrivacy.initialize();
+      const encrypted = await arciumPrivacy.encryptStrategy({
+        intent: 'add_liquidity',
+        pair: `${tokenA}-${tokenB}`,
+        pool: prep.poolInfo.address,
+        amount: totalValueUsd,
+        amountA: prep.targetAmounts.amountXUi,
+        amountB: prep.targetAmounts.amountYUi,
+        slippage: 1.0, // 1% default
+      });
+      encryptedStrategy = {
+        ciphertext: encrypted.ciphertext.slice(0, 32) + '...', // Truncate for response
+        nonce: encrypted.nonce,
+        mxeCluster: encrypted.mxeCluster ?? 456,
+      };
+      console.log('[LP] Strategy encrypted with Arcium MXE cluster', encryptedStrategy.mxeCluster);
+    } catch (err) {
+      console.warn('[LP] Arcium encryption skipped:', err instanceof Error ? err.message : 'Unknown');
+    }
+
+    // Step 4: Add liquidity
     try {
       const lpResult = await this.executeLp(
         walletAddress,
@@ -352,6 +377,7 @@ export class LPPipeline {
         lpTxid: lpResult.txid,
         positionAddress: lpResult.positionAddress,
         binRange: lpResult.binRange,
+        encryptedStrategy, // Include Arcium encryption proof
         message: `Successfully added $${totalValueUsd} liquidity to ${tokenA}-${tokenB} pool`,
       };
     } catch (error) {
