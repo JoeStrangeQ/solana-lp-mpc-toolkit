@@ -8,6 +8,8 @@ import { serve } from '@hono/node-server';
 import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { arciumPrivacy } from './privacy';
 import { config } from './config';
+import { MeteoraDirectClient } from './dex/meteora';
+import DLMM from '@meteora-ag/dlmm';
 
 // Lazy-load Privy to avoid ESM/CJS issues at startup
 let PrivyWalletClient: any = null;
@@ -637,35 +639,130 @@ app.get('/swap/quote', async (c) => {
 
 // ============ Position Endpoints (Stateless) ============
 
+// Known DLMM pools to check for positions
+const KNOWN_POOLS = [
+  { address: 'BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y', name: 'SOL-USDC', tokenX: 'SOL', tokenY: 'USDC' },
+  { address: '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd', name: 'MET-USDC', tokenX: 'MET', tokenY: 'USDC' },
+  { address: 'C8Gr6AUuq9hEdSYJzoEpNcdjpojPZwqG5MtQbeouNNwg', name: 'JUP-SOL', tokenX: 'JUP', tokenY: 'SOL' },
+  { address: 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', name: 'SOL-USDC (alt)', tokenX: 'SOL', tokenY: 'USDC' },
+];
+
 // Get positions by walletId
 app.get('/positions/:walletId', async (c) => {
   const walletId = c.req.param('walletId');
   try {
     const { wallet } = await loadWalletById(walletId);
+    const walletAddress = wallet.address;
     
-    // In production: query on-chain positions for this wallet address
-    // For now: return empty (no positions yet)
+    // Query on-chain positions across all known pools
+    const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+    const userPubkey = new PublicKey(walletAddress);
+    const allPositions: any[] = [];
+    
+    for (const poolInfo of KNOWN_POOLS) {
+      try {
+        const pool = await DLMM.create(connection, new PublicKey(poolInfo.address));
+        const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
+        
+        for (const pos of positions.userPositions) {
+          const activeBin = await pool.getActiveBin();
+          allPositions.push({
+            address: pos.publicKey.toBase58(),
+            pool: {
+              address: poolInfo.address,
+              name: poolInfo.name,
+              tokenX: poolInfo.tokenX,
+              tokenY: poolInfo.tokenY,
+            },
+            binRange: {
+              lower: pos.positionData.lowerBinId,
+              upper: pos.positionData.upperBinId,
+            },
+            activeBinId: activeBin.binId,
+            inRange: activeBin.binId >= pos.positionData.lowerBinId && activeBin.binId <= pos.positionData.upperBinId,
+            solscanUrl: `https://solscan.io/account/${pos.publicKey.toBase58()}`,
+          });
+        }
+      } catch (e) {
+        // Pool query failed, skip
+        console.warn(`Failed to query pool ${poolInfo.name}:`, (e as Error).message);
+      }
+    }
+    
     return c.json({
       success: true,
-      walletId,
-      walletAddress: wallet.address,
-      positions: [],
-      message: 'No LP positions found for this wallet.',
-      hint: 'Call POST /lp/open with walletId to create a position',
+      message: `Found ${allPositions.length} positions`,
+      data: {
+        walletId,
+        walletAddress,
+        positions: allPositions,
+        totalPositions: allPositions.length,
+      },
     });
   } catch (error: any) {
     return c.json({ error: 'Failed to fetch positions', details: error.message }, 500);
   }
 });
 
-// Legacy endpoint - tells agent to use walletId
+// Query positions by wallet address (no Privy needed)
 app.get('/positions', async (c) => {
-  return c.json({
-    success: false,
-    error: 'Missing walletId',
-    hint: 'Use GET /positions/:walletId instead',
-    example: 'GET /positions/abc123-wallet-id',
-  });
+  const walletAddress = c.req.query('address') || c.req.query('walletAddress');
+  
+  if (!walletAddress) {
+    return c.json({
+      success: false,
+      error: 'Missing wallet address',
+      hint: 'Use GET /positions?address=YOUR_WALLET_ADDRESS or GET /positions/:walletId',
+      example: 'GET /positions?address=Ab6Cuvz9rZUSb4uVbBGR6vm12LeuVBE5dzKsnYUtAEi4',
+    });
+  }
+  
+  try {
+    const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+    const userPubkey = new PublicKey(walletAddress);
+    const allPositions: any[] = [];
+    
+    for (const poolInfo of KNOWN_POOLS) {
+      try {
+        const pool = await DLMM.create(connection, new PublicKey(poolInfo.address));
+        const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
+        
+        for (const pos of positions.userPositions) {
+          const activeBin = await pool.getActiveBin();
+          allPositions.push({
+            address: pos.publicKey.toBase58(),
+            pool: {
+              address: poolInfo.address,
+              name: poolInfo.name,
+              tokenX: poolInfo.tokenX,
+              tokenY: poolInfo.tokenY,
+            },
+            binRange: {
+              lower: pos.positionData.lowerBinId,
+              upper: pos.positionData.upperBinId,
+            },
+            activeBinId: activeBin.binId,
+            inRange: activeBin.binId >= pos.positionData.lowerBinId && activeBin.binId <= pos.positionData.upperBinId,
+            solscanUrl: `https://solscan.io/account/${pos.publicKey.toBase58()}`,
+          });
+        }
+      } catch (e) {
+        console.warn(`Failed to query pool ${poolInfo.name}:`, (e as Error).message);
+      }
+    }
+    
+    return c.json({
+      success: true,
+      message: `Found ${allPositions.length} positions`,
+      data: {
+        walletAddress,
+        positions: allPositions,
+        totalPositions: allPositions.length,
+      },
+    });
+  } catch (error: any) {
+    return c.json({ error: 'Failed to fetch positions', details: error.message }, 500);
+  }
 });
 
 // ============ LP Pipeline Endpoints ============
