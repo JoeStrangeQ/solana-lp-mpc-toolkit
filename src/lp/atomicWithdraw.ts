@@ -18,6 +18,7 @@ export interface AtomicWithdrawParams {
   walletAddress: string;
   poolAddress: string;
   positionAddress: string;
+  outputToken?: 'SOL' | 'USDC' | null; // Convert to single token (null = keep both)
   tipSpeed?: TipSpeed;
 }
 
