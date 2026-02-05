@@ -1337,7 +1337,7 @@ app.post('/lp/withdraw/atomic', async (c) => {
   try {
     const { buildAtomicWithdraw } = await import('../lp/atomicWithdraw.js');
     const { sendBundle, waitForBundle } = await import('../jito/index.js');
-    const { positionAddress, poolAddress, tipSpeed } = await c.req.json();
+    const { positionAddress, poolAddress, tipSpeed, outputToken } = await c.req.json();
 
     if (!positionAddress) {
       return c.json<AgentResponse>({
@@ -1383,9 +1383,60 @@ app.post('/lp/withdraw/atomic', async (c) => {
       });
     }
 
+    // 5. If outputToken specified, try to swap withdrawn tokens
+    const swapResults: { token: string; success: boolean; txid?: string; error?: string }[] = [];
+    const targetToken = (outputToken || 'SOL').toUpperCase();
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+    const targetMint = targetToken === 'SOL' ? SOL_MINT : targetToken === 'USDC' ? USDC_MINT : targetToken;
+
+    if (outputToken) {
+      console.log(`[AtomicWithdraw] Converting to ${targetToken}...`);
+      const jup = await loadSwapModule();
+      
+      if (jup) {
+        // Try to swap each withdrawn token to target
+        for (const tokenInfo of [built.estimatedWithdraw.tokenX, built.estimatedWithdraw.tokenY]) {
+          if (tokenInfo.mint === targetMint || parseInt(tokenInfo.amount) === 0) {
+            continue; // Skip if already target token or zero amount
+          }
+          
+          try {
+            const uiAmount = parseInt(tokenInfo.amount) / Math.pow(10, tokenInfo.decimals);
+            if (uiAmount < 0.001) continue; // Skip dust
+            
+            console.log(`[AtomicWithdraw] Swapping ${uiAmount} ${tokenInfo.mint.slice(0,8)}... to ${targetToken}`);
+            const quote = await jup.getQuote(tokenInfo.mint, targetMint, parseInt(tokenInfo.amount));
+            const swapResult = await jup.swap(quote, walletAddress);
+            const signedSwap = await walletClient.signTransaction(swapResult.swapTransaction);
+            const swapBuffer = Buffer.from(signedSwap, 'base64');
+            const swapTxid = await connection.sendRawTransaction(swapBuffer, { skipPreflight: false });
+            await connection.confirmTransaction(swapTxid, 'confirmed');
+            
+            swapResults.push({ token: tokenInfo.mint, success: true, txid: swapTxid });
+            console.log(`[AtomicWithdraw] Swap success: ${swapTxid}`);
+          } catch (swapError) {
+            console.error(`[AtomicWithdraw] Swap failed for ${tokenInfo.mint}:`, swapError);
+            swapResults.push({ 
+              token: tokenInfo.mint, 
+              success: false, 
+              error: swapError instanceof Error ? swapError.message : 'Swap failed'
+            });
+          }
+        }
+      }
+    }
+
+    const allSwapsSuccess = swapResults.length === 0 || swapResults.every(r => r.success);
+    const message = outputToken 
+      ? allSwapsSuccess 
+        ? `Withdrew and converted to ${targetToken}! 1% fee sent to treasury.`
+        : `Withdrew successfully. Some swaps failed - you have pool tokens. 1% fee sent to treasury.`
+      : `Atomic withdrawal complete! Bundle landed in slot ${result.slot}. 1% fee sent to treasury.`;
+
     return c.json<AgentResponse>({
       success: true,
-      message: `Atomic withdrawal complete! Bundle landed in slot ${result.slot}. 1% fee sent to treasury.`,
+      message,
       data: {
         bundleId,
         positionAddress,
@@ -1393,6 +1444,8 @@ app.post('/lp/withdraw/atomic', async (c) => {
         estimatedWithdraw: built.estimatedWithdraw,
         fee: built.fee,
         arcium: built.encryptedStrategy,
+        swaps: swapResults.length > 0 ? swapResults : undefined,
+        outputToken: outputToken ? targetToken : undefined,
       },
     });
   } catch (error) {
