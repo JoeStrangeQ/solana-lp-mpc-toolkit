@@ -781,6 +781,7 @@ app.post('/lp/execute', async (c) => {
         lpTxid: result.lpTxid,
         positionAddress: result.positionAddress,
         binRange: result.binRange,
+        arcium: result.encryptedStrategy, // Arcium privacy proof
       },
       transaction: result.lpTxid ? { unsigned: '', txid: result.lpTxid } : undefined,
     });
