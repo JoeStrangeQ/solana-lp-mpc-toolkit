@@ -94,6 +94,56 @@ let localKeypairClient: LocalKeypairClient | null = null;
 let gatewayClient: GatewayClient | null = null;
 let connection: Connection;
 
+// ============ Skill File for Agents ============
+
+const SKILL_MD = `# LP Agent Toolkit - Agent Skill
+
+AI-native liquidity provision on Solana with Arcium privacy.
+
+## Base URL
+\`\`\`
+https://lp-agent-api-production.up.railway.app
+\`\`\`
+
+## Quick Start
+
+### 1. Create Wallet
+\`\`\`bash
+curl -X POST $BASE_URL/wallet/create -H "Content-Type: application/json"
+\`\`\`
+
+### 2. Fund Wallet
+Send SOL + tokens to the returned wallet address.
+
+### 3. Execute LP
+\`\`\`bash
+curl -X POST $BASE_URL/lp/execute -H "Content-Type: application/json" -d '{"tokenA":"SOL","tokenB":"USDC","amount":10}'
+\`\`\`
+
+### 4. Withdraw
+\`\`\`bash
+curl -X POST $BASE_URL/lp/withdraw -H "Content-Type: application/json" -d '{"positionAddress":"..."}'
+\`\`\`
+
+## Endpoints
+- POST /wallet/create - Create Privy wallet
+- POST /wallet/load - Load wallet by ID
+- POST /wallet/transfer - Transfer SOL/tokens
+- POST /lp/prepare - Check balances
+- POST /lp/execute - Add liquidity (with Arcium)
+- POST /lp/withdraw - Remove liquidity
+
+## Privacy
+Strategies encrypted with Arcium (x25519-aes256gcm).
+
+## Fees
+1% protocol fee. Treasury: fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt
+`;
+
+app.get('/skill.md', (c) => {
+  return c.text(SKILL_MD, 200, { 'Content-Type': 'text/markdown' });
+});
+
 // ============ Health & Status ============
 
 app.get('/', (c) => c.json({
