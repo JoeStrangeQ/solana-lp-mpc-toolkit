@@ -11,7 +11,7 @@ Built for the [Colosseum Agent Hackathon](https://www.colosseum.org/) (Feb 2-12,
 A toolkit that enables AI agents to manage LP positions and execute swaps through natural language:
 
 ```bash
-curl -X POST https://lp-agent-api-production.up.railway.app/chat -d '{"message": "LP $500 into SOL-USDC"}'
+curl -X POST https://api.mnm.ag/chat -d '{"message": "LP $500 into SOL-USDC"}'
 ```
 
 ---
@@ -76,12 +76,6 @@ cp .env.example .env
 pnpm start
 ```
 
-### Deploy to Railway
-
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit)
-
----
-
 ## 📡 API Endpoints
 
 | Endpoint | Method | Description |
@@ -105,12 +99,12 @@ pnpm start
 
 ```bash
 # 1. Load wallet
-curl -X POST https://lp-agent-api-production.up.railway.app/wallet/load \
+curl -X POST https://api.mnm.ag/wallet/load \
   -H "Content-Type: application/json" \
   -d '{"walletId":"eouu630z8fl0ddzubzn4tt4b"}'
 
 # 2. Execute LP with Arcium encryption
-curl -X POST https://lp-agent-api-production.up.railway.app/lp/execute \
+curl -X POST https://api.mnm.ag/lp/execute \
   -H "Content-Type: application/json" \
   -d '{"tokenA":"SOL","tokenB":"USDC","amount":3}'
 
@@ -125,7 +119,7 @@ curl -X POST https://lp-agent-api-production.up.railway.app/lp/execute \
 # }
 
 # 3. Withdraw position
-curl -X POST https://lp-agent-api-production.up.railway.app/lp/withdraw \
+curl -X POST https://api.mnm.ag/lp/withdraw \
   -H "Content-Type: application/json" \
   -d '{"positionAddress":"2kwmZfNvCD8znYVX6ipjCbeVrG916dhDKLnsMLBZCLdf"}'
 ```
@@ -138,8 +132,7 @@ curl -X POST https://lp-agent-api-production.up.railway.app/lp/withdraw \
 
 ## 🔗 Links
 
-- **Frontend**: [mnm-web-seven.vercel.app](https://mnm-web-seven.vercel.app)
-- **API**: [lp-agent-api-production.up.railway.app](https://lp-agent-api-production.up.railway.app)
+- **API**: [api.mnm.ag](https://api.mnm.ag)
 - **GitHub**: [github.com/JoeStrangeQ/solana-lp-mpc-toolkit](https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit)
 
 ---
