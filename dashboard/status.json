@@ -1,0 +1,38 @@
+{
+  "lastUpdated": "2026-02-05T05:50:00Z",
+  "status": "operational",
+  "components": {
+    "api": { "status": "healthy", "url": "https://lp-agent-api-production.up.railway.app" },
+    "frontend": { "status": "healthy", "url": "https://mnm-web-seven.vercel.app" },
+    "privy": { "status": "configured" },
+    "arcium": { "status": "ready", "cluster": 456 },
+    "solana_rpc": { "status": "connected" }
+  },
+  "wallet": {
+    "address": "Ab6Cuvz9rZUSb4uVbBGR6vm12LeuVBE5dzKsnYUtAEi4",
+    "balance": 6.68,
+    "consolidated": true
+  },
+  "hackathon": {
+    "name": "Colosseum Agent Hackathon",
+    "deadline": "2026-02-12",
+    "daysRemaining": 7,
+    "status": "active"
+  },
+  "features": {
+    "wallet_create": true,
+    "wallet_transfer": true,
+    "lp_execute": true,
+    "lp_withdraw": true,
+    "swap": true,
+    "encryption": true,
+    "natural_language": true
+  },
+  "recentActivity": [
+    { "time": "23:47", "action": "Wallet consolidated", "amount": "6.68 SOL" },
+    { "time": "23:20", "action": "Recovered from wzv5hy47...", "amount": "+5.34 SOL" },
+    { "time": "23:13", "action": "Recovered from old wallet", "amount": "+0.10 SOL" },
+    { "time": "23:06", "action": "NL examples added to frontend" },
+    { "time": "22:50", "action": "LP position withdrawn" }
+  ]
+}
