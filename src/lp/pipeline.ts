@@ -270,7 +270,7 @@ export class LPPipeline {
       userPublicKey: walletAddress,
       amountX,
       amountY,
-      slippageBps: 100, // 1% slippage
+      slippageBps: 300, // 3% slippage for DLMM (bins move fast)
       strategy: options?.strategy,
       minBinId: options?.minBinId,
       maxBinId: options?.maxBinId,
