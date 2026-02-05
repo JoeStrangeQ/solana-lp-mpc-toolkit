@@ -97,10 +97,12 @@ export class MeteoraDirectClient {
     const { blockhash } = await this.connection.getLatestBlockhash();
     
     if ('recentBlockhash' in tx) {
-      // Legacy Transaction - serialize WITHOUT position signature
+      // Legacy Transaction - add position as a signer
       tx.recentBlockhash = blockhash;
       tx.feePayer = new PublicKey(userPublicKey);
-      // DON'T sign with position keypair here - return it for later signing
+      // Manually add the position keypair as a signer before serializing
+      tx.partialSign(newPosition);
+      // Serialize WITHOUT user signature, but WITH position signature placeholder
       serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64');
     } else if ('version' in tx) {
       // VersionedTransaction - serialize without signing
