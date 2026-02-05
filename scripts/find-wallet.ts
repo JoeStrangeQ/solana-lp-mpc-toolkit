@@ -1,7 +1,12 @@
 import { PrivyClient } from '@privy-io/node';
 import { config } from '../src/config';
 
-const TARGET_ADDRESS = 'Ab6Cuvz9rZUSb4uVbBGR6vm12LeuVBE5dzKsnYUtAEi4';
+const TARGET_ADDRESS = process.env.TARGET_ADDRESS || '';
+
+if (!TARGET_ADDRESS) {
+  console.error('Set TARGET_ADDRESS env var');
+  process.exit(1);
+}
 
 async function main() {
   console.log('App ID:', config.privy.appId?.substring(0, 10) + '...');
