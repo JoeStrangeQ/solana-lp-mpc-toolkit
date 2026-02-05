@@ -71,32 +71,22 @@ export function buildTipTransaction(params: {
 
 /**
  * Send a bundle of transactions via Jito block engine
- * All transactions execute atomically - either all succeed or all fail
  */
 export async function sendBundle(
-  signedTransactions: string[], // Base64 encoded signed transactions
-  authToken?: string
+  signedTransactions: string[] // Base64 encoded signed transactions
 ): Promise<{ bundleId: string }> {
   if (signedTransactions.length > 5) {
     throw new Error('Jito bundle cannot contain more than 5 transactions');
   }
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  
-  if (authToken) {
-    headers['x-jito-auth'] = authToken;
-  }
-
   const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
     method: 'POST',
-    headers,
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
       method: 'sendBundle',
-      params: [signedTransactions, { encoding: 'base64' }],
+      params: [signedTransactions],
     }),
   });
 
@@ -111,95 +101,11 @@ export async function sendBundle(
     throw new Error(`Jito error: ${json.error.message || JSON.stringify(json.error)}`);
   }
 
-  return { bundleId: json.result as string };
-}
-
-/**
- * Check bundle status
- */
-export async function getBundleStatus(bundleId: string, authToken?: string): Promise<{
-  found: boolean;
-  status?: 'Pending' | 'Landed' | 'Failed' | 'Invalid' | 'not_found';
-  slot?: number;
-  confirmationStatus?: 'processed' | 'confirmed' | 'finalized';
-  error?: string;
-}> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  
-  if (authToken) {
-    headers['x-jito-auth'] = authToken;
+  if (!json.result) {
+    throw new Error('Jito sendBundle returned no result');
   }
 
-  // Check inflight status first
-  const inflightResponse = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/getInflightBundleStatuses`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getInflightBundleStatuses',
-      params: [[bundleId]],
-    }),
-  });
-
-  if (inflightResponse.ok) {
-    const inflightJson = await inflightResponse.json() as { result?: { value?: Array<{ status: string; landed_slot?: number }> } };
-    const bundle = inflightJson.result?.value?.[0];
-    
-    if (bundle) {
-      if (bundle.status === 'Landed') {
-        return {
-          found: true,
-          status: 'Landed',
-          slot: bundle.landed_slot,
-        };
-      } else if (bundle.status === 'Failed') {
-        return {
-          found: true,
-          status: 'Failed',
-          error: 'Bundle failed before landing',
-        };
-      } else if (bundle.status === 'Pending') {
-        return {
-          found: true,
-          status: 'Pending',
-        };
-      }
-    }
-  }
-
-  // Fallback to getBundleStatuses for finalized status
-  const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/getBundleStatuses`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getBundleStatuses',
-      params: [[bundleId]],
-    }),
-  });
-
-  if (!response.ok) {
-    return { found: false, status: 'not_found' };
-  }
-
-  const json = await response.json() as { result?: { value?: Array<{ slot: number; confirmation_status: 'processed' | 'confirmed' | 'finalized' }> } };
-  const bundles = json.result?.value;
-
-  if (!bundles || bundles.length === 0) {
-    return { found: false, status: 'not_found' };
-  }
-
-  const bundle = bundles[0];
-  return {
-    found: true,
-    status: 'Landed',
-    slot: bundle.slot,
-    confirmationStatus: bundle.confirmation_status,
-  };
+  return { bundleId: json.result };
 }
 
 /**
@@ -207,33 +113,38 @@ export async function getBundleStatus(bundleId: string, authToken?: string): Pro
  */
 export async function waitForBundle(
   bundleId: string,
-  options?: {
-    authToken?: string;
-    timeoutMs?: number;
-    intervalMs?: number;
-  }
+  options?: { timeoutMs?: number; intervalMs?: number; }
 ): Promise<{ landed: boolean; slot?: number; error?: string }> {
-  const { authToken, timeoutMs = 30000, intervalMs = 1000 } = options || {};
+  const { timeoutMs = 30000, intervalMs = 1000 } = options || {};
   const start = Date.now();
 
   while (Date.now() - start < timeoutMs) {
-    const status = await getBundleStatus(bundleId, authToken);
+    const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/getBundleStatuses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'getBundleStatuses',
+        params: [[bundleId]],
+      }),
+    });
 
-    if (status.status === 'Landed') {
-      console.log(`✅ Bundle ${bundleId} landed in slot ${status.slot}`);
-      return { landed: true, slot: status.slot };
+    if (response.ok) {
+      const json = await response.json() as { result?: { value?: Array<{ slot: number; confirmation_status: string; err?: any }> } };
+      const bundle = json.result?.value?.[0];
+
+      if (bundle) {
+        if (bundle.err) {
+          return { landed: false, error: JSON.stringify(bundle.err) };
+        }
+        if (bundle.confirmation_status === 'finalized' || bundle.confirmation_status === 'confirmed') {
+          return { landed: true, slot: bundle.slot };
+        }
+      }
     }
-
-    if (status.status === 'Failed') {
-      console.log(`❌ Bundle ${bundleId} failed`);
-      return { landed: false, error: status.error || 'Bundle failed' };
-    }
-
-    if (status.status === 'Invalid') {
-      return { landed: false, error: 'Bundle is invalid' };
-    }
-
-    console.log(`⏳ Bundle ${bundleId} status: ${status.status || 'checking'}...`);
+    
+    console.log(`⏳ Bundle ${bundleId} status: checking...`);
     await new Promise(r => setTimeout(r, intervalMs));
   }
 
@@ -243,6 +154,5 @@ export async function waitForBundle(
 export default {
   buildTipTransaction,
   sendBundle,
-  getBundleStatus,
   waitForBundle,
 };
