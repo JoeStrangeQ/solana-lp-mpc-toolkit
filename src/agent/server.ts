@@ -1176,6 +1176,7 @@ app.post('/lp/execute', async (c) => {
 });
 
 // Atomic LP: Swap + LP in one Jito bundle (MEV protected, atomic execution)
+// Auto-retries with increasing slippage on bin tolerance errors
 app.post('/lp/atomic', async (c) => {
   const walletClient = getWalletClient();
   if (!walletClient) {
@@ -1188,7 +1189,7 @@ app.post('/lp/atomic', async (c) => {
   try {
     const { buildAtomicLP } = await import('../lp/atomic.js');
     const { sendBundle, waitForBundle } = await import('../jito/index.js');
-    const { poolAddress, amount, strategy, shape, tipSpeed } = await c.req.json();
+    const { poolAddress, amount, strategy, shape, tipSpeed, slippageBps: userSlippage } = await c.req.json();
 
     if (!poolAddress) {
       return c.json<AgentResponse>({
@@ -1207,58 +1208,90 @@ app.post('/lp/atomic', async (c) => {
     const walletAddress = walletClient.getAddress();
     const SOL_MINT = 'So11111111111111111111111111111111111111112';
     const collateralLamports = Math.floor(amount * 1e9);
+    
+    // Slippage escalation: start at user value or 300 bps (3%), max 1000 bps (10%)
+    const SLIPPAGE_LEVELS = [userSlippage || 300, 500, 750, 1000];
+    const MAX_RETRIES = SLIPPAGE_LEVELS.length;
+    
+    let lastError: string = '';
+    let attempt = 0;
+    
+    for (const slippageBps of SLIPPAGE_LEVELS) {
+      attempt++;
+      console.log(`[AtomicLP] Attempt ${attempt}/${MAX_RETRIES} with ${slippageBps} bps slippage...`);
+      
+      try {
+        // 1. Build all unsigned transactions
+        const built = await buildAtomicLP({
+          walletAddress,
+          poolAddress,
+          collateralMint: SOL_MINT,
+          collateralAmount: collateralLamports,
+          strategy: strategy || 'concentrated',
+          shape: shape || 'spot',
+          tipSpeed: tipSpeed || 'fast',
+          slippageBps,
+        });
 
-    // 1. Build all unsigned transactions
-    console.log('[AtomicLP] Building transactions...');
-    const built = await buildAtomicLP({
-      walletAddress,
-      poolAddress,
-      collateralMint: SOL_MINT,
-      collateralAmount: collateralLamports,
-      strategy: strategy || 'concentrated',
-      shape: shape || 'spot',
-      tipSpeed: tipSpeed || 'fast',
-    });
+        // 2. Sign all transactions with the wallet
+        console.log(`[AtomicLP] Signing ${built.unsignedTransactions.length} transactions...`);
+        const signedTransactions: string[] = [];
+        for (const unsignedTx of built.unsignedTransactions) {
+          const signedTx = await walletClient.signTransaction(unsignedTx);
+          signedTransactions.push(signedTx);
+        }
 
-    // 2. Sign all transactions with the wallet
-    console.log(`[AtomicLP] Signing ${built.unsignedTransactions.length} transactions...`);
-    const signedTransactions: string[] = [];
-    for (const unsignedTx of built.unsignedTransactions) {
-      const signedTx = await walletClient.signTransaction(unsignedTx);
-      signedTransactions.push(signedTx);
+        // 3. Send bundle via Jito
+        console.log('[AtomicLP] Sending Jito bundle...');
+        const { bundleId } = await sendBundle(signedTransactions);
+        console.log(`[AtomicLP] Bundle submitted: ${bundleId}`);
+
+        // 4. Wait for bundle to land
+        const result = await waitForBundle(bundleId, { timeoutMs: 30000 });
+
+        if (!result.landed) {
+          lastError = result.error || 'Bundle timeout';
+          console.log(`[AtomicLP] Bundle failed: ${lastError}`);
+          // Continue to next slippage level
+          continue;
+        }
+
+        // 5. Extract position address from keypair
+        const { Keypair } = await import('@solana/web3.js');
+        const positionKeypair = Keypair.fromSecretKey(Buffer.from(built.positionKeypair, 'base64'));
+        const positionAddress = positionKeypair.publicKey.toBase58();
+
+        return c.json<AgentResponse>({
+          success: true,
+          message: `Atomic LP executed! Bundle landed in slot ${result.slot}` + (attempt > 1 ? ` (retry ${attempt}, ${slippageBps}bps slippage)` : ''),
+          data: {
+            bundleId,
+            positionAddress,
+            binRange: built.binRange,
+            arcium: built.encryptedStrategy,
+            slippageUsed: slippageBps,
+            attempts: attempt,
+          },
+        });
+      } catch (buildError) {
+        lastError = buildError instanceof Error ? buildError.message : 'Build failed';
+        console.log(`[AtomicLP] Build error at ${slippageBps}bps: ${lastError}`);
+        
+        // If it's a bin slippage error, retry with higher slippage
+        if (lastError.includes('slippage') || lastError.includes('6004') || lastError.includes('0x1774')) {
+          continue;
+        }
+        // For other errors, don't retry
+        break;
+      }
     }
-
-    // 3. Send bundle via Jito
-    console.log('[AtomicLP] Sending Jito bundle...');
-    const { bundleId } = await sendBundle(signedTransactions);
-    console.log(`[AtomicLP] Bundle submitted: ${bundleId}`);
-
-    // 4. Wait for bundle to land
-    const result = await waitForBundle(bundleId, { timeoutMs: 30000 });
-
-    if (!result.landed) {
-      return c.json<AgentResponse>({
-        success: false,
-        message: `Bundle failed to land: ${result.error}`,
-        data: { bundleId },
-      });
-    }
-
-    // 5. Extract position address from keypair
-    const { Keypair } = await import('@solana/web3.js');
-    const positionKeypair = Keypair.fromSecretKey(Buffer.from(built.positionKeypair, 'base64'));
-    const positionAddress = positionKeypair.publicKey.toBase58();
-
+    
+    // All retries exhausted
     return c.json<AgentResponse>({
-      success: true,
-      message: `Atomic LP executed! Bundle landed in slot ${result.slot}`,
-      data: {
-        bundleId,
-        positionAddress,
-        binRange: built.binRange,
-        arcium: built.encryptedStrategy,
-      },
-    });
+      success: false,
+      message: `Atomic LP failed after ${attempt} attempts: ${lastError}`,
+      data: { attempts: attempt, lastSlippage: SLIPPAGE_LEVELS[attempt - 1] },
+    }, 500);
   } catch (error) {
     return c.json<AgentResponse>({
       success: false,

@@ -30,6 +30,7 @@ export interface AtomicLPParams {
   minBinId?: number;
   maxBinId?: number;
   tipSpeed?: TipSpeed;
+  slippageBps?: number; // Slippage in basis points (default: 300 = 3%)
 }
 
 export interface BuiltAtomicLP {
@@ -97,8 +98,11 @@ async function getSwapTransaction(params: {
  * Main function to build the atomic LP bundle
  */
 export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomicLP> {
-  const { walletAddress, poolAddress, collateralMint, collateralAmount, strategy, shape, minBinId, maxBinId, tipSpeed } = params;
+  const { walletAddress, poolAddress, collateralMint, collateralAmount, strategy, shape, minBinId, maxBinId, tipSpeed, slippageBps = 300 } = params;
   const connection = new Connection(config.solana.rpc);
+  
+  // Convert bps to percentage for Meteora (300 bps = 3%)
+  const meteoraSlippage = slippageBps / 100;
 
   // 1. Encrypt strategy (Arcium compatible)
   const encrypted = await arciumPrivacy.encryptStrategy({ intent: 'atomic_lp', pool: poolAddress, amount: collateralAmount });
@@ -118,7 +122,7 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
 
   // Swap #1: Collateral -> TokenX
   if (collateralMint !== tokenXMint) {
-    const quoteX = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenXMint, amount: halfCollateral });
+    const quoteX = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenXMint, amount: halfCollateral, slippageBps });
     const swapTxX_b64 = await getSwapTransaction({ quoteResponse: quoteX, userPublicKey: walletAddress });
     unsignedTransactions.push(VersionedTransaction.deserialize(Buffer.from(swapTxX_b64, 'base64')));
     amountXToLP = new BN(quoteX.outAmount);
@@ -128,7 +132,7 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
 
   // Swap #2: Collateral -> TokenY
   if (collateralMint !== tokenYMint) {
-    const quoteY = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenYMint, amount: halfCollateral });
+    const quoteY = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenYMint, amount: halfCollateral, slippageBps });
     const swapTxY_b64 = await getSwapTransaction({ quoteResponse: quoteY, userPublicKey: walletAddress });
     unsignedTransactions.push(VersionedTransaction.deserialize(Buffer.from(swapTxY_b64, 'base64')));
     amountYToLP = new BN(quoteY.outAmount);
@@ -154,6 +158,7 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
     totalXAmount: amountXToLP,
     totalYAmount: amountYToLP,
     strategy: { minBinId: minBin, maxBinId: maxBin, strategyType },
+    slippage: meteoraSlippage, // Pass slippage to Meteora (e.g., 3 = 3%)
   });
   
   const lpMsg = new TransactionMessage({
