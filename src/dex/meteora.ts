@@ -14,7 +14,7 @@ export interface AddLiquidityParams {
   userPublicKey: string;
   amountX: number; // Amount in lamports/base units
   amountY: number;
-  slippageBps?: number; // Default 100 = 1%
+  slippageBps?: number; // Default 300 = 3% (DLMM bins move fast)
   strategy?: 'concentrated' | 'wide' | 'custom'; // Default 'concentrated'
   minBinId?: number; // For custom strategy
   maxBinId?: number; // For custom strategy
@@ -69,7 +69,7 @@ export class MeteoraDirectClient {
       userPublicKey, 
       amountX, 
       amountY, 
-      slippageBps = 100,
+      slippageBps = 300,
       strategy = 'concentrated',
       minBinId: customMinBin,
       maxBinId: customMaxBin,
