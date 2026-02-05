@@ -96,81 +96,242 @@ let connection: Connection;
 
 // ============ Skill File for Agents ============
 
-const SKILL_MD = `# LP Agent Toolkit - Agent Skill
+const SKILL_MD = `# Private LP Toolkit - Agent Skill
 
-AI-native liquidity provision on Solana with Arcium privacy.
+> AI-native liquidity provision on Solana with MPC custody and Arcium privacy.
+
+## Overview
+
+This toolkit enables AI agents to:
+- **Create wallets** with MPC custody (no private keys exposed)
+- **Execute LP positions** on Meteora DLMM pools
+- **Swap tokens** via Jupiter aggregator
+- **Encrypt strategies** with Arcium to prevent frontrunning
 
 ## Base URL
 \`\`\`
 https://lp-agent-api-production.up.railway.app
 \`\`\`
 
+---
+
 ## Quick Start
 
-### 1. Create Wallet
+### 1. Create a Wallet
 \`\`\`bash
-curl -X POST $BASE_URL/wallet/create
+curl -X POST https://lp-agent-api-production.up.railway.app/wallet/create
 \`\`\`
-Returns: { walletId, address } - Store walletId for future calls.
+**Response:**
+\`\`\`json
+{
+  "success": true,
+  "data": { "walletId": "abc123", "address": "Ab6Cuvz9..." }
+}
+\`\`\`
+⚠️ **Store the walletId** - you'll need it for all future calls.
 
-### 2. Load Wallet (if you have walletId)
+### 2. Fund Your Wallet
+Send SOL to the wallet address. You can also send USDC or other tokens.
+
+### 3. Check Balance (optional)
 \`\`\`bash
-curl -X POST $BASE_URL/wallet/load -d '{"walletId":"YOUR_WALLET_ID"}'
+curl https://lp-agent-api-production.up.railway.app/health
 \`\`\`
 
-### 3. Fund Wallet
-Send SOL + tokens to the returned wallet address.
+---
 
-### 4. Execute LP (any pool, any strategy)
+## Natural Language Commands
+
+The toolkit understands plain English:
+
+| Say this | It does this |
+|----------|--------------|
+| "LP $500 into SOL-USDC" | Finds best pool, adds liquidity |
+| "Swap all my USDC to SOL" | Executes Jupiter swap |
+| "Withdraw my SOL-USDC position" | Closes LP position |
+| "Show pools for SOL-USDC" | Lists available pools with APY |
+
+---
+
+## API Endpoints
+
+### Wallet Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| \`/wallet/create\` | POST | Create new Privy MPC wallet |
+| \`/wallet/load\` | POST | Load wallet by walletId |
+| \`/wallet/transfer\` | POST | Transfer SOL or SPL tokens |
+
+**Create Wallet:**
 \`\`\`bash
-curl -X POST $BASE_URL/lp/execute -d '{
-  "poolAddress": "BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE",
-  "amount": 50,
-  "strategy": "concentrated"
-}'
+curl -X POST https://lp-agent-api-production.up.railway.app/wallet/create
+\`\`\`
+
+**Load Wallet:**
+\`\`\`bash
+curl -X POST https://lp-agent-api-production.up.railway.app/wallet/load \\
+  -H "Content-Type: application/json" \\
+  -d '{"walletId": "YOUR_WALLET_ID"}'
+\`\`\`
+
+**Transfer SOL:**
+\`\`\`bash
+curl -X POST https://lp-agent-api-production.up.railway.app/wallet/transfer \\
+  -H "Content-Type: application/json" \\
+  -d '{"to": "RECIPIENT_ADDRESS", "amount": 1.5}'
+\`\`\`
+
+---
+
+### Pool Discovery
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| \`/pools/scan\` | GET | Find Meteora DLMM pools |
+
+**Find SOL-USDC Pools:**
+\`\`\`bash
+curl "https://lp-agent-api-production.up.railway.app/pools/scan?tokenA=SOL&tokenB=USDC"
+\`\`\`
+
+**Response:**
+\`\`\`json
+{
+  "success": true,
+  "data": {
+    "pools": [
+      {
+        "address": "BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y",
+        "name": "SOL-USDC",
+        "liquidity": "$5.14M",
+        "apy": "819.02%",
+        "binStep": 10
+      }
+    ]
+  }
+}
+\`\`\`
+
+---
+
+### Liquidity Provision
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| \`/lp/execute\` | POST | Add liquidity to a pool |
+| \`/lp/withdraw\` | POST | Remove liquidity and close position |
+| \`/positions\` | GET | List open positions |
+
+**Add Liquidity:**
+\`\`\`bash
+curl -X POST https://lp-agent-api-production.up.railway.app/lp/execute \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "poolAddress": "BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y",
+    "amount": 50,
+    "strategy": "concentrated"
+  }'
 \`\`\`
 
 **Strategy Options:**
-- \`concentrated\` - ±5 bins (tight, more capital efficient)
+- \`concentrated\` - ±5 bins (tight range, higher capital efficiency)
 - \`wide\` - ±20 bins (broader range, less impermanent loss)
-- \`custom\` - use minBinId/maxBinId for exact control
+- \`custom\` - specify exact bin range with \`minBinId\` and \`maxBinId\`
 
 **Custom Bin Range:**
 \`\`\`bash
-curl -X POST $BASE_URL/lp/execute -d '{
-  "poolAddress": "...",
-  "amount": 100,
-  "strategy": "custom",
-  "minBinId": -15,
-  "maxBinId": 10
-}'
+curl -X POST https://lp-agent-api-production.up.railway.app/lp/execute \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "poolAddress": "BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y",
+    "amount": 100,
+    "strategy": "custom",
+    "minBinId": -15,
+    "maxBinId": 10
+  }'
 \`\`\`
 
-### 5. Withdraw
+**Withdraw Position:**
 \`\`\`bash
-curl -X POST $BASE_URL/lp/withdraw -d '{"positionAddress":"...", "poolAddress":"..."}'
+curl -X POST https://lp-agent-api-production.up.railway.app/lp/withdraw \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "positionAddress": "YOUR_POSITION_ADDRESS",
+    "poolAddress": "BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y"
+  }'
 \`\`\`
 
-## Pool Discovery
+---
+
+### Token Swaps
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| \`/swap/quote\` | GET | Get Jupiter swap quote |
+| \`/swap\` | POST | Execute swap |
+| \`/swap/tokens\` | GET | List supported tokens |
+
+**Get Quote:**
 \`\`\`bash
-curl "$BASE_URL/pools/scan?tokenA=SOL&tokenB=USDC"
+curl "https://lp-agent-api-production.up.railway.app/swap/quote?inputMint=USDC&outputMint=SOL&amount=100"
 \`\`\`
 
-## Endpoints
-- POST /wallet/create - Create Privy MPC wallet
-- POST /wallet/load - Load wallet by walletId
-- POST /wallet/transfer - Transfer SOL/tokens
-- GET /pools/scan - Discover pools
-- POST /lp/execute - Add liquidity (with Arcium encryption)
-- POST /lp/withdraw - Remove liquidity
-- GET /swap/quote - Jupiter swap quotes
-- POST /swap - Execute swap
+**Execute Swap:**
+\`\`\`bash
+curl -X POST https://lp-agent-api-production.up.railway.app/swap \\
+  -H "Content-Type: application/json" \\
+  -d '{"inputToken": "USDC", "outputToken": "SOL", "amount": 100}'
+\`\`\`
 
-## Privacy
-Strategies encrypted with Arcium (x25519-aes256gcm) before execution.
+---
+
+### Encryption
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| \`/encrypt\` | POST | Encrypt data with Arcium |
+| \`/encrypt/test\` | GET | Verify encryption working |
+
+**Encrypt Strategy:**
+\`\`\`bash
+curl -X POST https://lp-agent-api-production.up.railway.app/encrypt \\
+  -H "Content-Type: application/json" \\
+  -d '{"data": {"strategy": "concentrated", "amount": 1000}}'
+\`\`\`
+
+---
+
+## Security
+
+### MPC Custody (Privy)
+- Wallets use threshold signing - no single party holds the full private key
+- Agents never see raw private keys
+- Authorization keys required for signing
+
+### Arcium Privacy
+- Strategy parameters encrypted with x25519-aes256gcm
+- MEV bots can't see your intent before execution
+- MXE cluster: 456 (devnet)
+
+---
 
 ## Fees
-0.1% protocol fee. Treasury: fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt
+
+- **Protocol Fee:** 0.1% per transaction
+- **Treasury:** \`fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt\`
+
+---
+
+## Links
+
+- **API:** https://lp-agent-api-production.up.railway.app
+- **Frontend:** https://mnm-web-seven.vercel.app
+- **GitHub:** https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit
+
+---
+
+Built by Nemmie 🦐 for AI agents.
 `;
 
 app.get('/skill.md', (c) => {
