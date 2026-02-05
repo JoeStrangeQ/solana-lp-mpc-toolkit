@@ -384,9 +384,10 @@ app.get('/fees', (c) => {
       lamports: FEE_CONFIG.MIN_FEE_LAMPORTS,
       description: 'Minimum fee threshold to avoid dust',
     },
-    exemptThreshold: {
-      usd: FEE_CONFIG.EXEMPT_THRESHOLD_USD,
-      description: 'Transactions below this USD value are fee-exempt',
+    minWithdraw: {
+      lamports: FEE_CONFIG.MIN_WITHDRAW_LAMPORTS,
+      usd: FEE_CONFIG.MIN_WITHDRAW_USD,
+      description: 'Minimum withdrawal amount',
     },
     calculate: '/fees/calculate?amount=1000 - Calculate fee for specific amount',
   });
@@ -1269,6 +1270,87 @@ app.post('/lp/withdraw', async (c) => {
     return c.json<AgentResponse>({
       success: false,
       message: 'Withdraw failed',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+// Atomic Withdraw: Withdraw + Fee in one Jito bundle (MEV protected, atomic)
+app.post('/lp/withdraw/atomic', async (c) => {
+  const walletClient = getWalletClient();
+  if (!walletClient) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'No wallet loaded. Create or load a wallet first.',
+    }, 400);
+  }
+
+  try {
+    const { buildAtomicWithdraw } = await import('../lp/atomicWithdraw.js');
+    const { sendBundle, waitForBundle } = await import('../jito/index.js');
+    const { positionAddress, poolAddress, tipSpeed } = await c.req.json();
+
+    if (!positionAddress) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: 'Missing positionAddress. Get positions via /positions?address=YOUR_WALLET',
+      }, 400);
+    }
+
+    // Default to SOL-USDC pool if not specified
+    const pool = poolAddress || 'BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y';
+    const walletAddress = walletClient.getAddress();
+
+    // 1. Build all unsigned transactions (withdraw + fee + tip)
+    console.log('[AtomicWithdraw] Building transactions...');
+    const built = await buildAtomicWithdraw({
+      walletAddress,
+      poolAddress: pool,
+      positionAddress,
+      tipSpeed: tipSpeed || 'fast',
+    });
+
+    // 2. Sign all transactions with the wallet
+    console.log(`[AtomicWithdraw] Signing ${built.unsignedTransactions.length} transactions...`);
+    const signedTransactions: string[] = [];
+    for (const unsignedTx of built.unsignedTransactions) {
+      const signedTx = await walletClient.signTransaction(unsignedTx);
+      signedTransactions.push(signedTx);
+    }
+
+    // 3. Send bundle via Jito
+    console.log('[AtomicWithdraw] Sending Jito bundle...');
+    const { bundleId } = await sendBundle(signedTransactions);
+    console.log(`[AtomicWithdraw] Bundle submitted: ${bundleId}`);
+
+    // 4. Wait for bundle to land
+    const result = await waitForBundle(bundleId, { timeoutMs: 30000 });
+
+    if (!result.landed) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: `Bundle failed to land: ${result.error}`,
+        data: { bundleId },
+      });
+    }
+
+    return c.json<AgentResponse>({
+      success: true,
+      message: `Atomic withdrawal complete! Bundle landed in slot ${result.slot}. 1% fee sent to treasury.`,
+      data: {
+        bundleId,
+        positionAddress,
+        slot: result.slot,
+        estimatedWithdraw: built.estimatedWithdraw,
+        fee: built.fee,
+        arcium: built.encryptedStrategy,
+      },
+    });
+  } catch (error) {
+    console.error('[AtomicWithdraw] Error:', error);
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Atomic withdraw failed',
       error: error instanceof Error ? error.message : 'Unknown error',
     }, 500);
   }

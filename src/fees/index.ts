@@ -14,17 +14,20 @@ import {
 
 // Protocol fee configuration
 export const FEE_CONFIG = {
-  // 1% fee on every transaction
-  FEE_BPS: 10, // 10 basis points = 0.1%
+  // 1% fee on withdrawals
+  FEE_BPS: 100, // 100 basis points = 1%
   
   // Protocol treasury (receives fees)
   TREASURY_ADDRESS: new PublicKey('fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt'),
   
   // Minimum fee to avoid dust (in lamports for SOL, or token units)
-  MIN_FEE_LAMPORTS: 10000, // 0.00001 SOL
+  MIN_FEE_LAMPORTS: 100000, // 0.0001 SOL minimum fee
   
-  // Fee exemption threshold (small txs below this don't pay fees)
-  EXEMPT_THRESHOLD_USD: 1,
+  // Minimum withdrawal amount (in USD equivalent)
+  MIN_WITHDRAW_USD: 5,
+  
+  // Minimum withdrawal in lamports (for SOL)
+  MIN_WITHDRAW_LAMPORTS: 10_000_000, // 0.01 SOL minimum
 };
 
 export interface FeeCalculation {
