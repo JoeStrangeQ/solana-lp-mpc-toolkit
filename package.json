@@ -1,6 +1,6 @@
 {
   "name": "lp-agent-toolkit",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "AI-native liquidity provision across Solana DEXs with MPC custody and Arcium privacy",
   "main": "dist/index.js",
   "pnpm": {
