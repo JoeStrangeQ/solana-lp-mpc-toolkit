@@ -565,7 +565,14 @@ export class LPPipeline {
       skipPreflight: false,
       preflightCommitment: 'confirmed',
     });
-    await this.connection.confirmTransaction(txid, 'confirmed');
+    
+    // Wait for confirmation and check if it actually succeeded
+    const confirmation = await this.connection.confirmTransaction(txid, 'confirmed');
+    
+    if (confirmation.value.err) {
+      throw new Error(`Transaction failed: ${JSON.stringify(confirmation.value.err)}`);
+    }
+    
     return txid;
   }
 
