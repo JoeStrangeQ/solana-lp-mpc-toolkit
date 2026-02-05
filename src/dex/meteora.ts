@@ -105,8 +105,10 @@ export class MeteoraDirectClient {
       // Serialize WITHOUT user signature, but WITH position signature placeholder
       serialized = tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64');
     } else if ('version' in tx) {
-      // VersionedTransaction - serialize without signing
-      serialized = Buffer.from((tx as unknown as VersionedTransaction).serialize()).toString('base64');
+      // VersionedTransaction - sign with position keypair first
+      const vTx = tx as unknown as VersionedTransaction;
+      vTx.sign([newPosition]);
+      serialized = Buffer.from(vTx.serialize()).toString('base64');
     } else {
       // Unknown transaction type - try to serialize anyway
       serialized = Buffer.from((tx as { serialize(): Uint8Array }).serialize()).toString('base64');
