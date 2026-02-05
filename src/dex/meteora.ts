@@ -18,6 +18,7 @@ export interface AddLiquidityParams {
   strategy?: 'concentrated' | 'wide' | 'custom'; // Default 'concentrated'
   minBinId?: number; // For custom strategy
   maxBinId?: number; // For custom strategy
+  shape?: 'spot' | 'curve' | 'bidask'; // DLMM distribution shape (default: spot)
 }
 
 export interface AddLiquidityResult {
@@ -72,6 +73,7 @@ export class MeteoraDirectClient {
       strategy = 'concentrated',
       minBinId: customMinBin,
       maxBinId: customMaxBin,
+      shape = 'spot',
     } = params;
     
     const pool = await DLMM.create(this.connection, new PublicKey(poolAddress));
@@ -98,6 +100,21 @@ export class MeteoraDirectClient {
       maxBinId = activeBin.binId + 5;
     }
     
+    // Map shape parameter to StrategyType
+    let strategyType: StrategyType;
+    switch (shape) {
+      case 'curve':
+        strategyType = StrategyType.Curve; // Bell curve distribution
+        break;
+      case 'bidask':
+        strategyType = StrategyType.BidAsk; // Two-sided distribution
+        break;
+      case 'spot':
+      default:
+        strategyType = StrategyType.Spot; // Uniform/balanced distribution
+        break;
+    }
+
     // Build transaction to INITIALIZE position AND add liquidity (for new positions)
     // This is the correct method that includes the position keypair as a signer
     const initAndAddTx = await pool.initializePositionAndAddLiquidityByStrategy({
@@ -108,7 +125,7 @@ export class MeteoraDirectClient {
       strategy: {
         maxBinId,
         minBinId,
-        strategyType: StrategyType.Spot, // Spot = balanced distribution
+        strategyType, // Use the mapped strategy type
       },
       slippage: slippageBps / 10000, // Convert bps to decimal
     });

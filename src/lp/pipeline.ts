@@ -74,6 +74,7 @@ export interface ExecuteOptions {
   strategy?: 'concentrated' | 'wide' | 'custom';
   minBinId?: number; // For custom strategy (relative to active bin)
   maxBinId?: number;
+  shape?: 'spot' | 'curve' | 'bidask'; // DLMM distribution shape (default: spot)
 }
 
 export class LPPipeline {
@@ -261,7 +262,7 @@ export class LPPipeline {
     amountX: number,
     amountY: number,
     signTransaction: (tx: string) => Promise<string>,
-    options?: { strategy?: 'concentrated' | 'wide' | 'custom'; minBinId?: number; maxBinId?: number }
+    options?: { strategy?: 'concentrated' | 'wide' | 'custom'; minBinId?: number; maxBinId?: number; shape?: 'spot' | 'curve' | 'bidask' }
   ): Promise<{ txid: string; positionAddress: string; binRange: { min: number; max: number } }> {
     // Build the add liquidity transaction
     const lpResult = await this.meteoraClient.buildAddLiquidityTx({
@@ -273,6 +274,7 @@ export class LPPipeline {
       strategy: options?.strategy,
       minBinId: options?.minBinId,
       maxBinId: options?.maxBinId,
+      shape: options?.shape,
     });
 
     // Step 1: Send UNSIGNED transaction to Privy for user wallet signature
@@ -432,6 +434,7 @@ export class LPPipeline {
           strategy: options?.strategy,
           minBinId: options?.minBinId,
           maxBinId: options?.maxBinId,
+          shape: options?.shape,
         }
       );
 

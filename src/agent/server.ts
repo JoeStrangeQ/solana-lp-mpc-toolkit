@@ -1035,7 +1035,7 @@ app.post('/lp/execute', async (c) => {
       return c.json<AgentResponse>({ success: false, message: 'LP module not available' }, 503);
     }
 
-    const { tokenA, tokenB, amount, poolAddress, strategy, minBinId, maxBinId } = await c.req.json();
+    const { tokenA, tokenB, amount, poolAddress, strategy, minBinId, maxBinId, shape } = await c.req.json();
 
     if ((!tokenA || !tokenB) && !poolAddress) {
       return c.json<AgentResponse>({
@@ -1067,6 +1067,7 @@ app.post('/lp/execute', async (c) => {
         strategy: strategy as 'concentrated' | 'wide' | 'custom' | undefined,
         minBinId,
         maxBinId,
+        shape: shape as 'spot' | 'curve' | 'bidask' | undefined,
       }
     );
 
