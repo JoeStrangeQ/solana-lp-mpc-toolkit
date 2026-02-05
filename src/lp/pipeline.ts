@@ -345,6 +345,15 @@ export class LPPipeline {
             priceX = parseFloat(priceData.data[poolInfo.tokenX.mint]?.price || '1');
             priceY = parseFloat(priceData.data[poolInfo.tokenY.mint]?.price || '1');
             console.log(`[LP] USD Prices: tokenX=$${priceX}, tokenY=$${priceY}`);
+          } else {
+            // API returned non-OK (401, 429, etc.) - use pool ratio fallback
+            console.warn(`[LP] Price API returned ${priceResp.status}, using pool ratio fallback`);
+            const isYStable = poolInfo.tokenY.mint.startsWith('EPjFWdd5') || poolInfo.tokenY.mint.startsWith('Es9vMFr');
+            if (isYStable) {
+              priceY = 1;
+              priceX = poolInfo.currentPrice; // Pool ratio = X price in terms of stablecoin Y
+              console.log(`[LP] Fallback prices: tokenX=$${priceX}, tokenY=$${priceY}`);
+            }
           }
         } catch (e) {
           console.warn('[LP] Failed to fetch USD prices, using pool ratio');
