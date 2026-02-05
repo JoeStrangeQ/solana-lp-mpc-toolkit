@@ -325,15 +325,26 @@ export class LPPipeline {
       // Custom pool address provided - get pool info directly
       try {
         const poolInfo = await this.meteoraClient.getPoolInfo(options.poolAddress);
+        
+        // Determine decimals: SOL=9, most SPL tokens=6
+        const isTokenXSol = poolInfo.tokenX === TOKENS.SOL;
+        const isTokenYSol = poolInfo.tokenY === TOKENS.SOL;
+        const decimalsX = isTokenXSol ? 9 : 6;
+        const decimalsY = isTokenYSol ? 9 : 6;
+        
+        // Calculate amounts based on USD value and current price
+        const amountXUi = totalValueUsd / 2 / poolInfo.currentPrice;
+        const amountYUi = totalValueUsd / 2;
+        
         prep = {
           ready: true,
           needsSwap: false, // Skip swap for custom pool, user manages balance
           currentBalances: {} as PrepareResult['currentBalances'],
           targetAmounts: {
-            amountX: Math.floor(totalValueUsd / 2 / poolInfo.currentPrice * 1e9), // Rough SOL estimate
-            amountXUi: totalValueUsd / 2 / poolInfo.currentPrice,
-            amountY: Math.floor(totalValueUsd / 2 * 1e6), // USDC
-            amountYUi: totalValueUsd / 2,
+            amountX: Math.floor(amountXUi * Math.pow(10, decimalsX)),
+            amountXUi,
+            amountY: Math.floor(amountYUi * Math.pow(10, decimalsY)),
+            amountYUi,
           },
           poolInfo: {
             address: options.poolAddress,
@@ -345,6 +356,8 @@ export class LPPipeline {
           },
           message: `Using custom pool ${options.poolAddress}`,
         };
+        console.log(`[LP] Custom pool: ${poolInfo.tokenX} (${decimalsX}d) / ${poolInfo.tokenY} (${decimalsY}d), price=${poolInfo.currentPrice}`);
+        console.log(`[LP] Target amounts: X=${prep.targetAmounts.amountX} (${amountXUi}), Y=${prep.targetAmounts.amountY} (${amountYUi})`);
       } catch (error) {
         return {
           success: false,
