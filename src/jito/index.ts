@@ -146,11 +146,17 @@ export async function waitForBundle(
       const bundle = json.result?.value?.[0];
 
       if (bundle) {
-        if (bundle.err) {
-          return { landed: false, error: JSON.stringify(bundle.err) };
-        }
+        // Check confirmation status first
         if (bundle.confirmation_status === 'finalized' || bundle.confirmation_status === 'confirmed') {
-          return { landed: true, slot: bundle.slot };
+          // {"Ok": null} is Solana success - not an error
+          const isSuccess = !bundle.err || (bundle.err && 'Ok' in bundle.err);
+          if (isSuccess) {
+            return { landed: true, slot: bundle.slot };
+          }
+        }
+        // Only treat as error if err exists and is NOT {"Ok": null}
+        if (bundle.err && !('Ok' in bundle.err)) {
+          return { landed: false, error: JSON.stringify(bundle.err) };
         }
       }
     }
