@@ -1136,7 +1136,8 @@ app.post('/lp/atomic', async (c) => {
   }
 
   try {
-    const { executeAtomicLP } = await import('../lp/atomic.js');
+    const { buildAtomicLP } = await import('../lp/atomic.js');
+    const { sendBundle, waitForBundle } = await import('../jito/index.js');
     const { poolAddress, amount, strategy, shape, tipSpeed } = await c.req.json();
 
     if (!poolAddress) {
@@ -1154,33 +1155,59 @@ app.post('/lp/atomic', async (c) => {
     }
 
     const walletAddress = walletClient.getAddress();
-    const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
-
-    // SOL as default collateral
     const SOL_MINT = 'So11111111111111111111111111111111111111112';
     const collateralLamports = Math.floor(amount * 1e9);
 
-    const result = await executeAtomicLP({
+    // 1. Build all unsigned transactions
+    console.log('[AtomicLP] Building transactions...');
+    const built = await buildAtomicLP({
       walletAddress,
       poolAddress,
       collateralMint: SOL_MINT,
       collateralAmount: collateralLamports,
-      collateralDecimals: 9,
       strategy: strategy || 'concentrated',
       shape: shape || 'spot',
       tipSpeed: tipSpeed || 'fast',
-      signTransaction,
     });
 
+    // 2. Sign all transactions with the wallet
+    console.log(`[AtomicLP] Signing ${built.unsignedTransactions.length} transactions...`);
+    const signedTransactions: string[] = [];
+    for (const unsignedTx of built.unsignedTransactions) {
+      const signedTx = await walletClient.signTransaction(unsignedTx);
+      signedTransactions.push(signedTx);
+    }
+
+    // 3. Send bundle via Jito
+    console.log('[AtomicLP] Sending Jito bundle...');
+    const { bundleId } = await sendBundle(signedTransactions);
+    console.log(`[AtomicLP] Bundle submitted: ${bundleId}`);
+
+    // 4. Wait for bundle to land
+    const result = await waitForBundle(bundleId, { timeoutMs: 30000 });
+
+    if (!result.landed) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: `Bundle failed to land: ${result.error}`,
+        data: { bundleId },
+      });
+    }
+
+    // 5. Extract position address from keypair
+    const { Keypair } = await import('@solana/web3.js');
+    const positionKeypair = Keypair.fromSecretKey(Buffer.from(built.positionKeypair, 'base64'));
+    const positionAddress = positionKeypair.publicKey.toBase58();
+
     return c.json<AgentResponse>({
-      success: result.success,
-      message: result.message,
+      success: true,
+      message: `Atomic LP executed! Bundle landed in slot ${result.slot}`,
       data: {
-        bundleId: result.bundleId,
-        positionAddress: result.positionAddress,
-        arcium: result.encryptedStrategy,
+        bundleId,
+        positionAddress,
+        binRange: built.binRange,
+        arcium: built.encryptedStrategy,
       },
-      error: result.error,
     });
   } catch (error) {
     return c.json<AgentResponse>({
