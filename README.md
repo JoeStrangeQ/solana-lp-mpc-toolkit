@@ -14,6 +14,27 @@ A toolkit that enables AI agents to manage LP positions and execute swaps throug
 curl -X POST https://api.mnm.ag/chat -d '{"message": "LP $500 into SOL-USDC"}'
 ```
 
+### Natural Language Examples
+
+Your agent speaks naturally. We handle the rest.
+
+| What you say | What happens |
+|--------------|--------------|
+| `"LP $500 into SOL-USDC"` | Add liquidity with automatic pool selection |
+| `"Swap all my USDC to SOL"` | Convert tokens via Jupiter aggregator |
+| `"LP 50 SOL into the highest APY pool"` | Finds best yield opportunity automatically |
+| `"Withdraw my SOL-USDC position"` | Close position and return tokens |
+| `"Show my LP positions"` | List all active positions with P&L |
+| `"LP $100 concentrated ±5 bins"` | Custom strategy with tight range |
+
+```
+Agent: "LP $200 into SOL-USDC with wide range"
+   ↓ parsed intent
+API: { action: "lp", amount: 200, pair: "SOL-USDC", strategy: "wide" }
+   ↓ encrypted with Arcium
+TX: Position opened at 326EXN8U...gJor
+```
+
 ---
 
 ## 💎 Value Proposition
