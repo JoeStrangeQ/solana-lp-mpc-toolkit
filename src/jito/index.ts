@@ -14,6 +14,7 @@ import {
 } from '@solana/web3.js';
 
 const JITO_BLOCK_ENGINE_URL = 'https://mainnet.block-engine.jito.wtf';
+const JITO_API_KEY = process.env.JITO_API_KEY || '';
 const JITO_TIP_ACCOUNTS = [
   '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
   'HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe',
@@ -79,9 +80,14 @@ export async function sendBundle(
     throw new Error('Jito bundle cannot contain more than 5 transactions');
   }
 
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (JITO_API_KEY) {
+    headers['x-jito-auth'] = JITO_API_KEY;
+  }
+
   const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/bundles`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       jsonrpc: '2.0',
       id: 1,
@@ -119,9 +125,14 @@ export async function waitForBundle(
   const start = Date.now();
 
   while (Date.now() - start < timeoutMs) {
+    const statusHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (JITO_API_KEY) {
+      statusHeaders['x-jito-auth'] = JITO_API_KEY;
+    }
+
     const response = await fetch(`${JITO_BLOCK_ENGINE_URL}/api/v1/getBundleStatuses`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: statusHeaders,
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
