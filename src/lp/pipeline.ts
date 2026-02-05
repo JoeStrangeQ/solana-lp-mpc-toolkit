@@ -324,15 +324,14 @@ export class LPPipeline {
     let prep: PrepareResult;
     
     if (options?.poolAddress) {
-      // Custom pool address provided - get pool info directly
+      // Custom pool address provided - get EXTENDED pool info with actual decimals
       try {
-        const poolInfo = await this.meteoraClient.getPoolInfo(options.poolAddress);
+        // Use getPoolInfoExtended to get actual decimals from chain (not hardcoded)
+        const poolInfo = await this.meteoraClient.getPoolInfoExtended(options.poolAddress);
         
-        // Determine decimals: SOL=9, most SPL tokens=6
-        const isTokenXSol = poolInfo.tokenX === TOKENS.SOL;
-        const isTokenYSol = poolInfo.tokenY === TOKENS.SOL;
-        const decimalsX = isTokenXSol ? 9 : 6;
-        const decimalsY = isTokenYSol ? 9 : 6;
+        // Use actual decimals from the pool (universal support for any token)
+        const decimalsX = poolInfo.tokenX.decimals;
+        const decimalsY = poolInfo.tokenY.decimals;
         
         // Calculate amounts based on USD value and current price
         const amountXUi = totalValueUsd / 2 / poolInfo.currentPrice;
@@ -353,12 +352,12 @@ export class LPPipeline {
             currentPrice: poolInfo.currentPrice,
             activeBinId: poolInfo.activeBinId,
             binStep: poolInfo.binStep,
-            tokenX: poolInfo.tokenX,
-            tokenY: poolInfo.tokenY,
+            tokenX: poolInfo.tokenX.mint,
+            tokenY: poolInfo.tokenY.mint,
           },
-          message: `Using custom pool ${options.poolAddress}`,
+          message: `Using pool ${options.poolAddress}`,
         };
-        console.log(`[LP] Custom pool: ${poolInfo.tokenX} (${decimalsX}d) / ${poolInfo.tokenY} (${decimalsY}d), price=${poolInfo.currentPrice}`);
+        console.log(`[LP] Pool: ${poolInfo.tokenX.mint.slice(0,8)}... (${decimalsX}d) / ${poolInfo.tokenY.mint.slice(0,8)}... (${decimalsY}d), price=${poolInfo.currentPrice}`);
         console.log(`[LP] Target amounts: X=${prep.targetAmounts.amountX} (${amountXUi}), Y=${prep.targetAmounts.amountY} (${amountYUi})`);
       } catch (error) {
         return {

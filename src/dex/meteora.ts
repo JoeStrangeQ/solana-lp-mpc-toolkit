@@ -236,6 +236,80 @@ export class MeteoraDirectClient {
   }
 
   /**
+   * Get extended pool info including decimals and token metadata
+   * Works for ANY pool address on Meteora DLMM
+   */
+  async getPoolInfoExtended(poolAddress: string): Promise<{
+    address: string;
+    activeBinId: number;
+    currentPrice: number;
+    binStep: number;
+    tokenX: { mint: string; decimals: number; symbol?: string };
+    tokenY: { mint: string; decimals: number; symbol?: string };
+  }> {
+    const pool = await DLMM.create(this.connection, new PublicKey(poolAddress));
+    const activeBin = await pool.getActiveBin();
+    
+    return {
+      address: poolAddress,
+      activeBinId: activeBin.binId,
+      currentPrice: Number(pool.fromPricePerLamport(Number(activeBin.price))),
+      binStep: Number(pool.lbPair.binStep),
+      tokenX: {
+        mint: pool.tokenX.publicKey.toBase58(),
+        decimals: pool.tokenX.mint.decimals,
+      },
+      tokenY: {
+        mint: pool.tokenY.publicKey.toBase58(),
+        decimals: pool.tokenY.mint.decimals,
+      },
+    };
+  }
+
+  /**
+   * Get ALL positions for a user across ALL Meteora DLMM pools
+   * This is the universal portfolio view
+   */
+  async getAllUserPositions(userPublicKey: string): Promise<{
+    poolAddress: string;
+    positions: Array<{
+      address: string;
+      lowerBinId: number;
+      upperBinId: number;
+      liquidityShares: string;
+    }>;
+  }[]> {
+    const userPubkey = new PublicKey(userPublicKey);
+    const allPositions = await DLMM.getAllLbPairPositionsByUser(this.connection, userPubkey);
+    
+    const result: {
+      poolAddress: string;
+      positions: Array<{
+        address: string;
+        lowerBinId: number;
+        upperBinId: number;
+        liquidityShares: string;
+      }>;
+    }[] = [];
+    
+    for (const [poolAddress, positionInfo] of allPositions.entries()) {
+      // lbPairPositionsData contains the positions for this pool
+      const positions = (positionInfo.lbPairPositionsData || []).map((pos) => ({
+        address: pos.publicKey.toBase58(),
+        lowerBinId: pos.positionData.lowerBinId,
+        upperBinId: pos.positionData.upperBinId,
+        liquidityShares: pos.positionData.totalClaimedFeeXAmount?.toString() || '0',
+      }));
+      
+      if (positions.length > 0) {
+        result.push({ poolAddress, positions });
+      }
+    }
+    
+    return result;
+  }
+
+  /**
    * Search for DLMM pools by token pair
    */
   async searchPools(tokenA?: string, tokenB?: string): Promise<{

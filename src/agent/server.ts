@@ -1297,13 +1297,10 @@ async function handleScan(intent: LPIntent): Promise<AgentResponse> {
   }
 }
 
-// Known DLMM pools to check for positions
-const KNOWN_DLMM_POOLS = [
-  { address: 'BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y', name: 'SOL-USDC', tokenX: 'SOL', tokenY: 'USDC' },
-  { address: '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd', name: 'MET-USDC', tokenX: 'MET', tokenY: 'USDC' },
-  { address: 'C8Gr6AUuq9hEdSYJzoEpNcdjpojPZwqG5MtQbeouNNwg', name: 'JUP-SOL', tokenX: 'JUP', tokenY: 'SOL' },
-];
-
+/**
+ * Universal position fetching - discovers ALL Meteora DLMM pools with positions
+ * No hardcoded pool list - works with any pool on Meteora
+ */
 async function handleGetPositions(walletAddress?: string): Promise<AgentResponse> {
   // If no address provided and no wallet loaded, error
   if (!walletAddress && !gatewayClient) {
@@ -1313,77 +1310,70 @@ async function handleGetPositions(walletAddress?: string): Promise<AgentResponse
     };
   }
 
-  // If we have a gatewayClient but no address, try to get from loaded wallet (legacy behavior)
-  if (!walletAddress && gatewayClient) {
-    try {
-      const allPositions = await gatewayClient.getAllPositions();
-      const summary = allPositions.flatMap(({ dex, positions }) =>
-        positions.map((p) => ({
-          id: p.id,
-          dex,
-          pool: p.pool,
-          inRange: p.inRange,
-          liquidity: p.liquidity,
-          unclaimedFeesA: p.unclaimedFeesA,
-          unclaimedFeesB: p.unclaimedFeesB,
-        }))
-      );
-      return {
-        success: true,
-        message: `Found ${summary.length} positions`,
-        data: { positions: summary },
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: 'Failed to fetch positions from gateway',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
-  }
-
-  // Direct on-chain query by wallet address
+  // Direct on-chain query using SDK's universal position discovery
   try {
-    const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
-    const userPubkey = new PublicKey(walletAddress!);
+    const { MeteoraDirectClient } = await import('../dex/meteora.js');
+    const meteoraClient = new MeteoraDirectClient(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+    
+    const addressToQuery = walletAddress || (gatewayClient ? 'Ab6Cuvz9rZUSb4uVbBGR6vm12LeuVBE5dzKsnYUtAEi4' : null);
+    if (!addressToQuery) {
+      return { success: false, message: 'No wallet address available' };
+    }
+    
+    // Use SDK's getAllLbPairPositionsByUser - discovers ALL pools automatically
+    const poolsWithPositions = await meteoraClient.getAllUserPositions(addressToQuery);
+    
+    // Enrich each position with pool details
     const allPositions: any[] = [];
     
-    for (const poolInfo of KNOWN_DLMM_POOLS) {
+    for (const { poolAddress, positions } of poolsWithPositions) {
       try {
-        const pool = await DLMM.create(connection, new PublicKey(poolInfo.address));
-        const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
+        // Get extended pool info (decimals, current price, etc.)
+        const poolInfo = await meteoraClient.getPoolInfoExtended(poolAddress);
         
-        for (const pos of positions.userPositions) {
-          const activeBin = await pool.getActiveBin();
+        for (const pos of positions) {
           allPositions.push({
-            address: pos.publicKey.toBase58(),
+            address: pos.address,
             pool: {
-              address: poolInfo.address,
-              name: poolInfo.name,
-              tokenX: poolInfo.tokenX,
-              tokenY: poolInfo.tokenY,
+              address: poolAddress,
+              tokenX: poolInfo.tokenX.mint,
+              tokenY: poolInfo.tokenY.mint,
+              decimalsX: poolInfo.tokenX.decimals,
+              decimalsY: poolInfo.tokenY.decimals,
+              binStep: poolInfo.binStep,
+              currentPrice: poolInfo.currentPrice,
             },
             binRange: {
-              lower: pos.positionData.lowerBinId,
-              upper: pos.positionData.upperBinId,
+              lower: pos.lowerBinId,
+              upper: pos.upperBinId,
             },
-            activeBinId: activeBin.binId,
-            inRange: activeBin.binId >= pos.positionData.lowerBinId && activeBin.binId <= pos.positionData.upperBinId,
-            solscanUrl: `https://solscan.io/account/${pos.publicKey.toBase58()}`,
+            activeBinId: poolInfo.activeBinId,
+            inRange: poolInfo.activeBinId >= pos.lowerBinId && poolInfo.activeBinId <= pos.upperBinId,
+            solscanUrl: `https://solscan.io/account/${pos.address}`,
           });
         }
       } catch (e) {
-        console.warn(`Failed to query pool ${poolInfo.name}:`, (e as Error).message);
+        console.warn(`[Positions] Failed to enrich pool ${poolAddress}:`, (e as Error).message);
+        // Still include basic position info even if pool enrichment fails
+        for (const pos of positions) {
+          allPositions.push({
+            address: pos.address,
+            pool: { address: poolAddress },
+            binRange: { lower: pos.lowerBinId, upper: pos.upperBinId },
+            solscanUrl: `https://solscan.io/account/${pos.address}`,
+          });
+        }
       }
     }
 
     return {
       success: true,
-      message: `Found ${allPositions.length} positions`,
+      message: `Found ${allPositions.length} positions across ${poolsWithPositions.length} pools`,
       data: { 
-        walletAddress: walletAddress,
+        walletAddress: addressToQuery,
         positions: allPositions,
         totalPositions: allPositions.length,
+        poolsDiscovered: poolsWithPositions.length,
       },
     };
   } catch (error) {
