@@ -267,23 +267,41 @@ export class LPPipeline {
     const unsignedTxBuffer = Buffer.from(lpResult.transaction, 'base64');
     
     let positionSignedTx: string;
+    let isVersioned = false;
     try {
       // Try as VersionedTransaction first
       const vTx = VersionedTransaction.deserialize(unsignedTxBuffer);
       vTx.sign([positionKeypair]);
       positionSignedTx = Buffer.from(vTx.serialize()).toString('base64');
-    } catch {
+      isVersioned = true;
+      console.log('[LP] Position signed VersionedTransaction, pubkey:', positionKeypair.publicKey.toBase58());
+    } catch (e) {
       // Fall back to legacy Transaction
+      console.log('[LP] Using legacy Transaction, error with versioned:', (e as Error).message);
       const tx = Transaction.from(unsignedTxBuffer);
       tx.partialSign(positionKeypair);
       positionSignedTx = tx.serialize({ requireAllSignatures: false }).toString('base64');
+      console.log('[LP] Position signed legacy Transaction, pubkey:', positionKeypair.publicKey.toBase58());
     }
 
-    // Now sign with user wallet (via Privy)
-    const fullySignedTx = await signTransaction(positionSignedTx);
-
-    // Broadcast
-    const txid = await this.broadcastTransaction(fullySignedTx);
+    // Now sign with user wallet (via Privy) - this will also broadcast
+    console.log('[LP] Sending to Privy for signing and broadcast...');
+    const txid = await signTransaction(positionSignedTx);
+    console.log('[LP] Transaction result:', txid);
+    
+    // If signTransaction returns the txid directly (from signAndSend), use it
+    // Otherwise broadcast ourselves
+    if (txid && txid.length < 100) {
+      // Looks like a txid
+      return {
+        txid,
+        positionAddress: lpResult.positionAddress,
+        binRange: lpResult.binRange,
+      };
+    }
+    
+    // Otherwise it's a signed transaction, broadcast it
+    const broadcastTxid = await this.broadcastTransaction(txid);
 
     return {
       txid,

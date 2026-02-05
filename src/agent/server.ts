@@ -732,7 +732,20 @@ app.post('/lp/execute', async (c) => {
     }
 
     const walletAddress = walletClient.getAddress();
-    const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
+    // Use signAndSendTransaction to let Privy handle broadcasting
+    // This works better for multi-sig transactions
+    const signTransaction = async (tx: string) => {
+      try {
+        // Try signAndSendTransaction first if available (handles multi-sig better)
+        if ('signAndSendTransaction' in walletClient) {
+          return await (walletClient as any).signAndSendTransaction(tx);
+        }
+        return await walletClient.signTransaction(tx);
+      } catch (e) {
+        console.log('[LP] signAndSendTransaction failed, trying signTransaction:', (e as Error).message);
+        return await walletClient.signTransaction(tx);
+      }
+    };
 
     const result = await lp.execute(walletAddress, tokenA, tokenB, amount, signTransaction);
 
