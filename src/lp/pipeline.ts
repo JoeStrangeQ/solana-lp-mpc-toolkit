@@ -333,9 +333,33 @@ export class LPPipeline {
         const decimalsX = poolInfo.tokenX.decimals;
         const decimalsY = poolInfo.tokenY.decimals;
         
-        // Calculate amounts based on USD value and current price
-        const amountXUi = totalValueUsd / 2 / poolInfo.currentPrice;
-        const amountYUi = totalValueUsd / 2;
+        // Get USD prices for both tokens from Jupiter Price API
+        let priceX = 1; // Default to 1 for stablecoins
+        let priceY = 1;
+        
+        try {
+          const priceUrl = `https://api.jup.ag/price/v2?ids=${poolInfo.tokenX.mint},${poolInfo.tokenY.mint}`;
+          const priceResp = await fetch(priceUrl);
+          if (priceResp.ok) {
+            const priceData = await priceResp.json() as { data: Record<string, { price: string }> };
+            priceX = parseFloat(priceData.data[poolInfo.tokenX.mint]?.price || '1');
+            priceY = parseFloat(priceData.data[poolInfo.tokenY.mint]?.price || '1');
+            console.log(`[LP] USD Prices: tokenX=$${priceX}, tokenY=$${priceY}`);
+          }
+        } catch (e) {
+          console.warn('[LP] Failed to fetch USD prices, using pool ratio');
+          // Fallback: if tokenY looks like USDC/USDT, assume $1
+          const isYStable = poolInfo.tokenY.mint.startsWith('EPjFWdd5') || poolInfo.tokenY.mint.startsWith('Es9vMFr');
+          if (isYStable) {
+            priceY = 1;
+            priceX = poolInfo.currentPrice; // Price in terms of stablecoin
+          }
+        }
+        
+        // Calculate amounts: split USD value 50/50
+        const halfValueUsd = totalValueUsd / 2;
+        const amountXUi = halfValueUsd / priceX;
+        const amountYUi = halfValueUsd / priceY;
         
         prep = {
           ready: true,
@@ -357,8 +381,8 @@ export class LPPipeline {
           },
           message: `Using pool ${options.poolAddress}`,
         };
-        console.log(`[LP] Pool: ${poolInfo.tokenX.mint.slice(0,8)}... (${decimalsX}d) / ${poolInfo.tokenY.mint.slice(0,8)}... (${decimalsY}d), price=${poolInfo.currentPrice}`);
-        console.log(`[LP] Target amounts: X=${prep.targetAmounts.amountX} (${amountXUi}), Y=${prep.targetAmounts.amountY} (${amountYUi})`);
+        console.log(`[LP] Pool: ${poolInfo.tokenX.mint.slice(0,8)}... (${decimalsX}d) / ${poolInfo.tokenY.mint.slice(0,8)}... (${decimalsY}d), poolRatio=${poolInfo.currentPrice}`);
+        console.log(`[LP] Target amounts: X=${prep.targetAmounts.amountX} (${amountXUi.toFixed(6)} @ $${priceX}), Y=${prep.targetAmounts.amountY} (${amountYUi.toFixed(6)} @ $${priceY})`);
       } catch (error) {
         return {
           success: false,
