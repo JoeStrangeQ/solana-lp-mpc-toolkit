@@ -11,7 +11,7 @@ Built for the [Colosseum Agent Hackathon](https://www.colosseum.org/) (Feb 2-12,
 A toolkit that enables AI agents to manage LP positions and execute swaps through natural language:
 
 ```bash
-curl -X POST https://api.mnm.ag/chat -d '{"message": "LP $500 into SOL-USDC"}'
+curl -X POST https://lp-agent-api-production.up.railway.app/chat -d '{"message": "LP $500 into SOL-USDC"}'
 ```
 
 ---
@@ -138,7 +138,7 @@ curl -X POST https://lp-agent-api-production.up.railway.app/lp/withdraw \
 
 ## 🔗 Links
 
-- **Frontend**: [api.mnm.ag](https://api.mnm.ag)
+- **Frontend**: [mnm-web-seven.vercel.app](https://mnm-web-seven.vercel.app)
 - **API**: [lp-agent-api-production.up.railway.app](https://lp-agent-api-production.up.railway.app)
 - **GitHub**: [github.com/JoeStrangeQ/solana-lp-mpc-toolkit](https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit)
 

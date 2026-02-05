@@ -8,10 +8,15 @@ import { Connection, PublicKey, SystemProgram, Transaction } from '@solana/web3.
 import { getOrCreateAssociatedTokenAccount, createTransferInstruction, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../src/config';
 
-// --- CONFIGURATION ---
-const SOURCE_WALLET_ID = 'jqxuyjcsw32oyup8duo7drie'; // Has ~0.05 SOL & 5 USDC
-const DESTINATION_WALLET_ADDRESS = 'Ab6Cuvz9rZUSb4uVbBGR6vm12LeuVBE5dzKsnYUtAEi4';
-const API_URL = 'https://lp-agent-api-production.up.railway.app';
+// --- CONFIGURATION (via env vars) ---
+const SOURCE_WALLET_ID = process.env.SOURCE_WALLET_ID || '';
+const DESTINATION_WALLET_ADDRESS = process.env.DESTINATION_WALLET || '';
+const API_URL = process.env.API_URL || 'https://lp-agent-api-production.up.railway.app';
+
+if (!SOURCE_WALLET_ID || !DESTINATION_WALLET_ADDRESS) {
+  console.error('Set SOURCE_WALLET_ID and DESTINATION_WALLET env vars');
+  process.exit(1);
+}
 const USDC_MINT = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
 // ---
 
