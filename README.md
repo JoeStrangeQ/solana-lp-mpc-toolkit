@@ -1,6 +1,6 @@
 # LP Agent Toolkit
 
-**AI-native liquidity provision on Solana with MPC custody and Arcium privacy.**
+**AI-native liquidity provision on Solana with MPC custody, Arcium privacy, and Jito MEV protection.**
 
 Built for the [Colosseum Agent Hackathon](https://www.colosseum.org/) (Feb 2-12, 2026).
 
@@ -8,153 +8,204 @@ Built for the [Colosseum Agent Hackathon](https://www.colosseum.org/) (Feb 2-12,
 
 ## 🎯 What is this?
 
-A toolkit that enables AI agents to manage LP positions and execute swaps through natural language:
+A toolkit that enables AI agents to manage LP positions through natural language or direct API calls:
 
 ```bash
+# Natural language
 curl -X POST https://api.mnm.ag/chat -d '{"message": "LP $500 into SOL-USDC"}'
+
+# Direct API
+curl -X POST https://lp-agent-api-production.up.railway.app/lp/execute \
+  -d '{"poolAddress": "BGm1tav...", "amount": 500}'
 ```
 
-### Natural Language Examples
+---
 
-Your agent speaks naturally. We handle the rest.
+## 🔥 Key Features
 
-| What you say | What happens |
-|--------------|--------------|
-| `"LP $500 into SOL-USDC"` | Add liquidity with automatic pool selection |
-| `"Swap all my USDC to SOL"` | Convert tokens via Jupiter aggregator |
-| `"LP 50 SOL into the highest APY pool"` | Finds best yield opportunity automatically |
-| `"Withdraw my SOL-USDC position"` | Close position and return tokens |
-| `"Show my LP positions"` | List all active positions with P&L |
-| `"LP $100 concentrated ±5 bins"` | Custom strategy with tight range |
+### 1. Atomic Swap → LP via Jito Bundles
+Execute swap and LP in a single atomic transaction. Either both succeed or both fail — no partial execution risk.
 
+```bash
+curl -X POST /lp/atomic -d '{
+  "inputToken": "SOL",
+  "poolAddress": "BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y",
+  "amount": 0.5,
+  "strategy": "spot"
+}'
+# Returns: bundleId, positionAddress, txSignatures
 ```
-Agent: "LP $200 into SOL-USDC with wide range"
-   ↓ parsed intent
-API: { action: "lp", amount: 200, pair: "SOL-USDC", strategy: "wide" }
-   ↓ encrypted with Arcium
-TX: Position opened at 326EXN8U...gJor
+
+**Why it matters:**
+- Swap SOL → USDC + Add liquidity happens atomically
+- Jito bundles hide transactions until they land (private mempool)
+- MEV bots can't frontrun your LP position
+- No stuck funds from partial execution
+
+### 2. Universal Pool Support
+Works with ANY Meteora DLMM pool, not just hardcoded pairs:
+
+```bash
+# Find pools by token pair
+curl /pools/scan?tokenA=JUP&tokenB=SOL
+
+# Get pool info
+curl /pool/info?address=YOUR_POOL_ADDRESS
+
+# LP into any pool
+curl -X POST /lp/execute -d '{"poolAddress": "...", "amount": 100}'
+```
+
+### 3. Arcium Privacy Layer
+Strategy parameters are encrypted before execution:
+
+```javascript
+// What gets encrypted:
+{
+  "intent": "atomic_lp",
+  "pool": "BGm1tav58oGcs...",
+  "amount": 50000000,
+  "binRange": [-2537, -2527]
+}
+// → ciphertext that only you can decrypt
+```
+
+**Privacy flow:**
+1. Encrypt strategy params with Arcium (x25519 + AES-256-GCM)
+2. Build unsigned transactions
+3. Sign with Privy MPC wallet
+4. Send via Jito bundle (private mempool)
+5. Bundle lands atomically — MEV bots see nothing until it's done
+
+### 4. MPC Custody via Privy
+Agents transact without ever touching private keys:
+
+```bash
+# Create wallet (agent never sees keys)
+curl -X POST /wallet/create
+# Returns: { walletId, address }
+
+# Sign transactions server-side
+curl -X POST /lp/execute -d '{"amount": 100}'
+# Privy signs, we broadcast
 ```
 
 ---
 
 ## 💎 Value Proposition
 
-| Feature | Benefit |
-|---------|---------|
-| **Natural Language** | Agents speak plainly: "LP $500 into SOL-USDC" |
-| **MPC Custody** | Privy wallets - no private keys exposed to agents |
-| **Privacy Layer** | Arcium encryption prevents MEV and front-running |
-| **One-Call Pipeline** | Swap → LP in a single API call |
-| **Multi-DEX** | Meteora DLMM, Orca, Raydium support |
+| Feature | Traditional | LP Agent Toolkit |
+|---------|-------------|------------------|
+| **Key Management** | Agent holds private keys 😰 | MPC custody, keys never exposed ✅ |
+| **MEV Protection** | Broadcast to public mempool | Jito private bundles ✅ |
+| **Strategy Privacy** | Intent visible before execution | Arcium encrypted ✅ |
+| **Execution** | Multiple txs, partial failure risk | Atomic bundles ✅ |
+| **Pool Support** | Hardcoded pools | Any Meteora DLMM pool ✅ |
 
 ---
 
-## 🔐 Security Framework
+## 🚀 Quick Start
 
-### Privy Embedded Wallets
-- **Server-side signing**: Keys never leave Privy infrastructure
-- **No key exposure**: Agent never sees raw private keys
-- **Per-agent isolation**: Each agent gets dedicated wallet custody
-- **Authorization keys**: Additional signing layer for server wallets
-
-### Arcium Privacy Layer
-- **Algorithm**: x25519 ECDH + AES-256-GCM
-- **Strategy Encryption**: LP parameters encrypted before execution
-- **MEV Protection**: Intent hidden until transaction broadcasts
-- **MXE Integration**: Arcium devnet cluster 456
-
-### Protocol Security
-- **0.1% Protocol Fee**: Transparent fee to treasury
-- **Rate Limiting**: API protection against abuse
-- **Input Validation**: All parameters validated before execution
-
----
-
-## 🚀 Installation
-
-### Prerequisites
-- Node.js 20+
-- pnpm
-
-### Quick Start
+### For AI Agents
 
 ```bash
-# Clone
+# 1. Get the skill file (describes all capabilities)
+curl https://lp-agent-api-production.up.railway.app/skill.md
+
+# 2. Create a wallet
+curl -X POST /wallet/create
+
+# 3. Fund it, then LP
+curl -X POST /lp/atomic -d '{
+  "inputToken": "SOL",
+  "poolAddress": "BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y",
+  "amount": 0.1
+}'
+```
+
+### Self-Hosting
+
+```bash
 git clone https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit.git
 cd solana-lp-mpc-toolkit
-
-# Install
 pnpm install
-
-# Configure
 cp .env.example .env
-# Edit .env with your API keys:
-# - PRIVY_APP_ID
-# - PRIVY_APP_SECRET  
-# - SOLANA_RPC_URL
-
-# Run
+# Configure: PRIVY_APP_ID, PRIVY_APP_SECRET, SOLANA_RPC, JUPITER_API_KEY, JITO_API_KEY
 pnpm start
 ```
 
-## 📡 API Endpoints
+---
+
+## 📡 API Reference
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check |
+| `/skill.md` | GET | Agent skill file |
 | `/wallet/create` | POST | Create Privy wallet |
 | `/wallet/load` | POST | Load existing wallet |
 | `/wallet/transfer` | POST | Transfer SOL or SPL tokens |
-| `/encrypt` | POST | Encrypt strategy with Arcium |
-| `/encrypt/test` | GET | Verify Arcium encryption |
-| `/lp/prepare` | POST | Check balances, prepare LP |
-| `/lp/execute` | POST | Execute LP with Arcium |
+| `/pools/scan` | GET | Find pools by token pair |
+| `/pool/info` | GET | Get pool details (decimals, price, bins) |
+| `/positions` | GET | List all LP positions for a wallet |
+| `/lp/execute` | POST | Add liquidity (regular) |
+| `/lp/atomic` | POST | Swap → LP atomic via Jito |
 | `/lp/withdraw` | POST | Withdraw and close position |
-| `/fees` | GET | Fee structure (1%) |
+| `/encrypt` | POST | Encrypt strategy with Arcium |
+
+### Natural Language Examples
+
+| What you say | What happens |
+|--------------|--------------|
+| `"LP $500 into SOL-USDC"` | Add liquidity with automatic pool selection |
+| `"Swap all my USDC to SOL"` | Convert tokens via Jupiter aggregator |
+| `"LP 50 SOL into the highest APY pool"` | Finds best yield opportunity |
+| `"Withdraw my SOL-USDC position"` | Close position and return tokens |
+| `"Show my LP positions"` | List all positions with P&L |
 
 ---
 
-## ✅ Verified Working (Feb 4, 2026)
+## 🔐 Security
 
-**Full E2E pipeline tested on mainnet:**
+### What's Protected
 
-```bash
-# 1. Load wallet
-curl -X POST https://api.mnm.ag/wallet/load \
-  -H "Content-Type: application/json" \
-  -d '{"walletId":"eouu630z8fl0ddzubzn4tt4b"}'
+| Layer | Protection |
+|-------|------------|
+| **Keys** | Privy MPC — agent never sees private keys |
+| **Strategy** | Arcium encryption — intent hidden until execution |
+| **Mempool** | Jito bundles — transactions invisible until landed |
+| **Execution** | Atomic bundles — no partial failure states |
 
-# 2. Execute LP with Arcium encryption
-curl -X POST https://api.mnm.ag/lp/execute \
-  -H "Content-Type: application/json" \
-  -d '{"tokenA":"SOL","tokenB":"USDC","amount":3}'
+### What's NOT Protected
 
-# Response includes Arcium proof:
-# {
-#   "success": true,
-#   "data": {
-#     "lpTxid": "326EXN8Uig...",
-#     "positionAddress": "2kwmZfNvCD...",
-#     "arcium": { "ciphertext": "...", "mxeCluster": 456 }
-#   }
-# }
+- On-chain transaction data (visible after landing)
+- Position details (standard Meteora accounts)
+- Your wallet balance (public blockchain)
 
-# 3. Withdraw position
-curl -X POST https://api.mnm.ag/lp/withdraw \
-  -H "Content-Type: application/json" \
-  -d '{"positionAddress":"2kwmZfNvCD8znYVX6ipjCbeVrG916dhDKLnsMLBZCLdf"}'
+The privacy is in the **process**, not the final state. This prevents frontrunning and MEV extraction.
+
+---
+
+## ✅ Verified Working (Feb 5, 2026)
+
+**Atomic LP via Jito:**
+```
+Bundle: 865c90c3538bb73b16753bdd8f92c2cab72cbb963bdcac809883e9390e4676b2
+Slot: 398302030
+Position: Dm8VteuFXJcQGCHLz2TFKDUoVxuYqLDEiHpLHGcXAy5o
 ```
 
-**Verified Transactions:**
-- [LP Position](https://solscan.io/tx/326EXN8UigFvGsboyyNfMGjStgXokEyLnWCV64aZQhUyMveW9VNuRxQ6dawnL4H8Cs3YHmcqCoYNhev22LHUgJor)
-- [Withdraw](https://solscan.io/tx/5f77deQ4WageKkcFCoXviRejJ1vLmUNJHhit9TokqTUvVd98NwyxN2k3BvhShuigtrtub1YkGEpinQZnjyqMpUje)
+**Regular LP with Arcium:**
+- [Transaction](https://solscan.io/tx/4bcgk9kkrAiBTDh5DkYTNDjXrsw1KCLjB4xu2W7MSLqigV3MMmvKDovgJqtEzgGVG7nMLi48TbW2Q8F5KnC6LunX)
 
 ---
 
 ## 🔗 Links
 
-- **API**: [api.mnm.ag](https://api.mnm.ag)
-- **GitHub**: [github.com/JoeStrangeQ/solana-lp-mpc-toolkit](https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit)
+- **API**: https://lp-agent-api-production.up.railway.app
+- **Frontend**: https://mnm-web-seven.vercel.app
+- **GitHub**: https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit
+- **Skill File**: https://lp-agent-api-production.up.railway.app/skill.md
 
 ---
 
@@ -164,4 +215,4 @@ MIT
 
 ---
 
-Built with 🦐 by [MnM](https://mnm.ag)
+Built with 🦐 by [MnM](https://mnm.ag) for the Colosseum Agent Hackathon
