@@ -1487,7 +1487,6 @@ app.post('/lp/withdraw/atomic', async (c) => {
       message = `Withdrew ${xStr} + ${yStr}. 1% fee sent to treasury.`;
     } else if (allSwapsSuccess) {
       // Full success
-      const totalReceived = swapResults.reduce((acc, r) => acc + (r.outAmount || 0), 0);
       message = `Withdrew and converted to ${targetToken}! Ready to LP again.`;
     } else if (failedSwaps.length > 0) {
       // Fallback mode - some swaps failed
