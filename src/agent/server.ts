@@ -793,6 +793,62 @@ app.post('/lp/execute', async (c) => {
   }
 });
 
+// Withdraw liquidity and close position
+app.post('/lp/withdraw', async (c) => {
+  const walletClient = getWalletClient();
+  if (!walletClient) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'No wallet loaded. Create or load a wallet first.',
+    }, 400);
+  }
+
+  try {
+    const { positionAddress, poolAddress } = await c.req.json();
+
+    if (!positionAddress) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: 'Missing positionAddress. Get it from /lp/positions',
+      }, 400);
+    }
+
+    // Default to SOL-USDC pool if not specified
+    const pool = poolAddress || 'BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y';
+    
+    // Import Meteora client (needs RPC URL, not Connection)
+    const { MeteoraDirectClient } = await import('../dex/meteora.js');
+    const meteoraClient = new MeteoraDirectClient(config.solana.rpc);
+    
+    // Build withdraw transaction
+    const walletAddress = walletClient.getAddress();
+    const result = await meteoraClient.buildWithdrawTx({
+      poolAddress: pool,
+      positionAddress,
+      userPublicKey: walletAddress,
+    });
+
+    // Sign and send
+    const signedTx = await walletClient.signTransaction(result.transaction);
+    const txBuffer = Buffer.from(signedTx, 'base64');
+    const txid = await connection.sendRawTransaction(txBuffer);
+    await connection.confirmTransaction(txid, 'confirmed');
+
+    return c.json<AgentResponse>({
+      success: true,
+      message: `Withdrew liquidity and closed position ${positionAddress}`,
+      data: { txid, positionAddress },
+      transaction: { unsigned: result.transaction, txid },
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Withdraw failed',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
 // ============ Handlers ============
 
 async function handleLp(intent: LPIntent): Promise<AgentResponse> {

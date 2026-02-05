@@ -139,6 +139,59 @@ export class MeteoraDirectClient {
       liquidityShares: pos.positionData.totalClaimedFeeXAmount?.toString() || '0',
     }));
   }
+
+  /**
+   * Remove all liquidity and close position
+   */
+  async buildWithdrawTx(params: {
+    poolAddress: string;
+    positionAddress: string;
+    userPublicKey: string;
+  }): Promise<{ transaction: string }> {
+    const { poolAddress, positionAddress, userPublicKey } = params;
+    
+    const pool = await DLMM.create(this.connection, new PublicKey(poolAddress));
+    const userPubkey = new PublicKey(userPublicKey);
+    
+    // Get position info
+    const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
+    const position = positions.userPositions.find(
+      p => p.publicKey.toBase58() === positionAddress
+    );
+    
+    if (!position) {
+      throw new Error(`Position ${positionAddress} not found`);
+    }
+
+    // Get bin range from position
+    const lowerBinId = position.positionData.lowerBinId;
+    const upperBinId = position.positionData.upperBinId;
+
+    // Remove all liquidity from the position (100% = 10000 bps)
+    const withdrawTx = await pool.removeLiquidity({
+      position: position.publicKey,
+      user: userPubkey,
+      fromBinId: lowerBinId,
+      toBinId: upperBinId,
+      bps: new BN(10000), // 100%
+      shouldClaimAndClose: true, // Claim fees and close position
+    });
+
+    // removeLiquidity returns Transaction[]
+    const txArray = withdrawTx as Transaction[];
+    if (!txArray.length) {
+      throw new Error('No transactions returned from removeLiquidity');
+    }
+
+    // Serialize first transaction (usually there's just one)
+    const tx = txArray[0];
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+    tx.feePayer = userPubkey;
+    const serialized = tx.serialize({ requireAllSignatures: false }).toString('base64');
+
+    return { transaction: serialized };
+  }
 }
 
 export default MeteoraDirectClient;
