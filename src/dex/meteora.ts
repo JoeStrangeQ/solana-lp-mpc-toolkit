@@ -217,6 +217,67 @@ export class MeteoraDirectClient {
 
     return { transaction: serialized };
   }
+
+  /**
+   * Search for DLMM pools by token pair
+   */
+  async searchPools(tokenA?: string, tokenB?: string): Promise<{
+    address: string;
+    name: string;
+    mintX: string;
+    mintY: string;
+    liquidity: string;
+    currentPrice: number;
+    apy: number;
+    volume24h: number;
+    binStep: number;
+  }[]> {
+    try {
+      const response = await fetch('https://dlmm-api.meteora.ag/pair/all_with_pagination?page=0&limit=100');
+      if (!response.ok) return [];
+      
+      const data = await response.json() as { pairs: Array<{
+        address: string;
+        name: string;
+        mint_x: string;
+        mint_y: string;
+        liquidity: string;
+        current_price: number;
+        apy: number;
+        trade_volume_24h: number;
+        bin_step: number;
+      }> };
+      
+      let pools = data.pairs || [];
+      
+      // Filter by tokens if specified
+      if (tokenA || tokenB) {
+        const tokenSymbols = [tokenA?.toUpperCase(), tokenB?.toUpperCase()].filter(Boolean);
+        pools = pools.filter(p => {
+          const name = p.name.toUpperCase();
+          return tokenSymbols.every(t => name.includes(t!));
+        });
+      }
+      
+      // Sort by liquidity descending
+      pools.sort((a, b) => parseFloat(b.liquidity) - parseFloat(a.liquidity));
+      
+      return pools.slice(0, 10).map(p => ({
+        address: p.address,
+        name: p.name,
+        mintX: p.mint_x,
+        mintY: p.mint_y,
+        liquidity: p.liquidity,
+        currentPrice: p.current_price,
+        apy: p.apy || 0,
+        volume24h: p.trade_volume_24h || 0,
+        binStep: p.bin_step,
+      }));
+    } catch (error) {
+      console.error('[Meteora] Pool search failed:', error);
+      return [];
+    }
+  }
 }
 
 export default MeteoraDirectClient;

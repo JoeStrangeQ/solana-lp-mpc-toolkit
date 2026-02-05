@@ -685,10 +685,36 @@ app.post('/chat', async (c) => {
 app.get('/pools/scan', async (c) => {
   const tokenA = c.req.query('tokenA');
   const tokenB = c.req.query('tokenB');
-  const dex = c.req.query('dex') as 'meteora' | 'orca' | 'raydium' | undefined;
 
-  const result = await handleScan({ action: 'scan', pair: tokenA && tokenB ? `${tokenA}-${tokenB}` : undefined, dex });
-  return c.json(result);
+  try {
+    // Use Meteora direct API for pool discovery
+    const { MeteoraDirectClient } = await import('../dex/meteora.js');
+    const meteoraClient = new MeteoraDirectClient(config.solana.rpc);
+    const pools = await meteoraClient.searchPools(tokenA || undefined, tokenB || undefined);
+    
+    return c.json<AgentResponse>({
+      success: true,
+      message: `Found ${pools.length} Meteora DLMM pools${tokenA || tokenB ? ` for ${tokenA || ''}${tokenA && tokenB ? '-' : ''}${tokenB || ''}` : ''}`,
+      data: { 
+        pools: pools.map(p => ({
+          address: p.address,
+          name: p.name,
+          liquidity: `$${(parseFloat(p.liquidity) / 1e6).toFixed(2)}M`,
+          liquidityRaw: p.liquidity,
+          apy: `${p.apy.toFixed(2)}%`,
+          volume24h: `$${(p.volume24h / 1e6).toFixed(2)}M`,
+          binStep: p.binStep,
+          currentPrice: p.currentPrice,
+        }))
+      },
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to scan pools',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
 });
 
 app.get('/positions', async (c) => {
