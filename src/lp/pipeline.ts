@@ -262,26 +262,25 @@ export class LPPipeline {
       slippageBps: 100, // 1% slippage
     });
 
-    // Sign the transaction with user wallet (via Privy)
-    const userSignedTx = await signTransaction(lpResult.transaction);
-
-    // Now add position keypair signature
+    // Sign with position keypair FIRST (it creates the position account)
     const positionKeypair = Keypair.fromSecretKey(Buffer.from(lpResult.positionKeypair, 'base64'));
-    const txBuffer = Buffer.from(userSignedTx, 'base64');
+    const unsignedTxBuffer = Buffer.from(lpResult.transaction, 'base64');
     
-    // Deserialize, add position signature, and re-serialize
-    let fullySignedTx: string;
+    let positionSignedTx: string;
     try {
       // Try as VersionedTransaction first
-      const vTx = VersionedTransaction.deserialize(txBuffer);
+      const vTx = VersionedTransaction.deserialize(unsignedTxBuffer);
       vTx.sign([positionKeypair]);
-      fullySignedTx = Buffer.from(vTx.serialize()).toString('base64');
+      positionSignedTx = Buffer.from(vTx.serialize()).toString('base64');
     } catch {
       // Fall back to legacy Transaction
-      const tx = Transaction.from(txBuffer);
+      const tx = Transaction.from(unsignedTxBuffer);
       tx.partialSign(positionKeypair);
-      fullySignedTx = tx.serialize().toString('base64');
+      positionSignedTx = tx.serialize({ requireAllSignatures: false }).toString('base64');
     }
+
+    // Now sign with user wallet (via Privy)
+    const fullySignedTx = await signTransaction(positionSignedTx);
 
     // Broadcast
     const txid = await this.broadcastTransaction(fullySignedTx);
