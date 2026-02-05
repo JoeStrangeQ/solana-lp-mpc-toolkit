@@ -87,14 +87,52 @@ pnpm start
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | Health check |
-| `/wallet/create` | POST | Create MPC wallet |
-| `/chat` | POST | Natural language interface |
+| `/wallet/create` | POST | Create Privy wallet |
+| `/wallet/load` | POST | Load existing wallet |
+| `/wallet/transfer` | POST | Transfer SOL or SPL tokens |
 | `/encrypt` | POST | Encrypt strategy with Arcium |
-| `/pools/scan` | GET | Scan LP opportunities |
-| `/swap` | POST | Execute swap via Jupiter |
-| `/lp/execute` | POST | Execute LP pipeline |
-| `/positions` | GET | List LP positions |
-| `/fees` | GET | Fee structure |
+| `/encrypt/test` | GET | Verify Arcium encryption |
+| `/lp/prepare` | POST | Check balances, prepare LP |
+| `/lp/execute` | POST | Execute LP with Arcium |
+| `/lp/withdraw` | POST | Withdraw and close position |
+| `/fees` | GET | Fee structure (1%) |
+
+---
+
+## ✅ Verified Working (Feb 4, 2026)
+
+**Full E2E pipeline tested on mainnet:**
+
+```bash
+# 1. Load wallet
+curl -X POST https://lp-agent-api-production.up.railway.app/wallet/load \
+  -H "Content-Type: application/json" \
+  -d '{"walletId":"eouu630z8fl0ddzubzn4tt4b"}'
+
+# 2. Execute LP with Arcium encryption
+curl -X POST https://lp-agent-api-production.up.railway.app/lp/execute \
+  -H "Content-Type: application/json" \
+  -d '{"tokenA":"SOL","tokenB":"USDC","amount":3}'
+
+# Response includes Arcium proof:
+# {
+#   "success": true,
+#   "data": {
+#     "lpTxid": "326EXN8Uig...",
+#     "positionAddress": "2kwmZfNvCD...",
+#     "arcium": { "ciphertext": "...", "mxeCluster": 456 }
+#   }
+# }
+
+# 3. Withdraw position
+curl -X POST https://lp-agent-api-production.up.railway.app/lp/withdraw \
+  -H "Content-Type: application/json" \
+  -d '{"positionAddress":"2kwmZfNvCD8znYVX6ipjCbeVrG916dhDKLnsMLBZCLdf"}'
+```
+
+**Verified Transactions:**
+- [LP Position](https://solscan.io/tx/326EXN8UigFvGsboyyNfMGjStgXokEyLnWCV64aZQhUyMveW9VNuRxQ6dawnL4H8Cs3YHmcqCoYNhev22LHUgJor)
+- [Withdraw](https://solscan.io/tx/5f77deQ4WageKkcFCoXviRejJ1vLmUNJHhit9TokqTUvVd98NwyxN2k3BvhShuigtrtub1YkGEpinQZnjyqMpUje)
 
 ---
 
