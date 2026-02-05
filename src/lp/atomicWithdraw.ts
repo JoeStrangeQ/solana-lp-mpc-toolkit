@@ -104,17 +104,27 @@ export async function buildAtomicWithdraw(params: AtomicWithdrawParams): Promise
   });
 
   // Build versioned transaction for withdraw
-  const withdrawInstructions = Array.isArray(withdrawTx) ? withdrawTx : [withdrawTx];
+  // Meteora SDK returns Transaction[] - serialize each one
+  const withdrawTxArray = Array.isArray(withdrawTx) ? withdrawTx : [withdrawTx];
   
-  for (const txOrIx of withdrawInstructions) {
-    if ('instructions' in txOrIx) {
+  for (const tx of withdrawTxArray) {
+    if ('recentBlockhash' in tx) {
+      // It's a legacy Transaction - set blockhash and serialize
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = userPubkey;
+      const serialized = tx.serialize({ requireAllSignatures: false });
+      // Convert to VersionedTransaction for consistency
+      const vtx = VersionedTransaction.deserialize(serialized);
+      unsignedTransactions.push(vtx);
+    } else if ('instructions' in tx) {
+      // It's instruction-like, build new transaction
       const msg = new TransactionMessage({
         payerKey: userPubkey,
         recentBlockhash: blockhash,
-        instructions: [
-          ComputeBudgetProgram.setComputeUnitLimit({ units: 600_000 }),
-          ...txOrIx.instructions,
-        ],
+        instructions: tx.instructions.filter((ix: any) => 
+          // Filter out duplicate compute budget instructions
+          !ix.programId.equals(ComputeBudgetProgram.programId)
+        ),
       }).compileToV0Message();
       unsignedTransactions.push(new VersionedTransaction(msg));
     }

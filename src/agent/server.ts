@@ -913,6 +913,55 @@ app.get('/pools/scan', async (c) => {
   }
 });
 
+// Get top 3 pools for a token pair - agent-friendly format
+app.get('/pools/top', async (c) => {
+  const tokenA = c.req.query('tokenA') || 'SOL';
+  const tokenB = c.req.query('tokenB') || 'USDC';
+
+  try {
+    const { MeteoraDirectClient } = await import('../dex/meteora.js');
+    const meteoraClient = new MeteoraDirectClient(config.solana.rpc);
+    const pools = await meteoraClient.searchPools(tokenA, tokenB);
+    
+    // Get top 3 by TVL
+    const top3 = pools.slice(0, 3);
+    
+    if (top3.length === 0) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: `No pools found for ${tokenA}-${tokenB}. Try different tokens.`,
+      });
+    }
+
+    // Format for easy agent consumption
+    const formatted = top3.map((p, i) => ({
+      rank: i + 1,
+      address: p.address,
+      pair: p.name,
+      tvl: `$${(parseFloat(p.liquidity) / 1e6).toFixed(2)}M`,
+      apy: `${p.apy.toFixed(1)}%`,
+      binStep: p.binStep,
+      recommendation: i === 0 ? 'Highest TVL - most liquid' : 
+                      i === 1 ? 'Good alternative' : 'Lower TVL option',
+    }));
+
+    return c.json<AgentResponse>({
+      success: true,
+      message: `Top ${top3.length} ${tokenA}-${tokenB} pools on Meteora DLMM`,
+      data: {
+        pools: formatted,
+        hint: 'Use the pool address with /lp/execute or /lp/atomic to add liquidity',
+      },
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to fetch pools',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
 app.get('/positions', async (c) => {
   const walletAddress = c.req.query('address') || c.req.query('walletAddress');
   const result = await handleGetPositions(walletAddress);
