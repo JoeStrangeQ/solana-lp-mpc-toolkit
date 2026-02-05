@@ -18,7 +18,7 @@ import { config } from '../config/index.js';
 import { arciumPrivacy } from '../privacy/index.js';
 import { buildTipTransaction, TipSpeed } from '../jito/index.js';
 
-const JUPITER_QUOTE_API = 'https://quote-api.jup.ag/v6';
+const JUPITER_API = 'https://api.jup.ag/swap/v1';
 
 export interface AtomicLPParams {
   walletAddress: string;
@@ -50,13 +50,18 @@ async function getSwapQuote(params: {
 }): Promise<any> {
   const { inputMint, outputMint, amount, slippageBps = 100 } = params;
   
-  const url = new URL(`${JUPITER_QUOTE_API}/quote`);
+  const url = new URL(`${JUPITER_API}/quote`);
   url.searchParams.set('inputMint', inputMint);
   url.searchParams.set('outputMint', outputMint);
   url.searchParams.set('amount', amount.toString());
   url.searchParams.set('slippageBps', slippageBps.toString());
 
-  const response = await fetch(url.toString());
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+  if (config.jupiter?.apiKey) {
+    headers['x-api-key'] = config.jupiter.apiKey;
+  }
+  
+  const response = await fetch(url.toString(), { headers });
   if (!response.ok) throw new Error(`Jupiter quote failed: ${await response.text()}`);
   return response.json();
 }
@@ -68,9 +73,14 @@ async function getSwapTransaction(params: {
   quoteResponse: any;
   userPublicKey: string;
 }): Promise<string> {
-  const response = await fetch(`${JUPITER_QUOTE_API}/swap`, {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (config.jupiter?.apiKey) {
+    headers['x-api-key'] = config.jupiter.apiKey;
+  }
+  
+  const response = await fetch(`${JUPITER_API}/swap`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       quoteResponse: params.quoteResponse,
       userPublicKey: params.userPublicKey,
