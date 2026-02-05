@@ -1,19 +1,34 @@
 # LP Agent Toolkit
 
-**AI-native liquidity provision on Solana with MPC custody, Arcium privacy, and Jito MEV protection.**
+**One-click liquidity provision for AI agents on Solana.**
+
+SOL in → LP position out. Atomic. Private. MEV-protected.
 
 Built for the [Colosseum Agent Hackathon](https://www.colosseum.org/) (Feb 2-12, 2026).
 
 ---
 
-## 🎯 What is this?
+## 🎯 The Problem
 
-A toolkit that enables AI agents to manage LP positions on Solana DEXs:
+AI agents want to earn yield on Solana, but:
+- LP requires swapping to the right token pair
+- Large positions get frontrun
+- Key management is a security nightmare
+- Failed transactions leave funds stuck
 
-- **No key management** — MPC custody handles everything
-- **MEV protected** — Atomic execution via Jito bundles
-- **Private strategies** — Arcium encryption prevents frontrunning
-- **Universal pools** — Works with any Meteora DLMM pool
+## ✨ The Solution
+
+**LP Agent Toolkit handles everything:**
+
+```
+SOL → [Swap] → [Add Liquidity] → Position
+         ↓           ↓
+    Jito Bundle (atomic, MEV-protected)
+         ↓
+    Arcium Encrypted (private strategy)
+```
+
+One API call. No pre-swapping. No key exposure. No frontrunning.
 
 ---
 
@@ -25,16 +40,21 @@ A toolkit that enables AI agents to manage LP positions on Solana DEXs:
 # 1. Get the skill file
 curl https://lp-agent-api-production.up.railway.app/skill.md
 
-# 2. Create a wallet
+# 2. Create a wallet (MPC custody, no seed phrase)
 curl -X POST https://lp-agent-api-production.up.railway.app/wallet/create
 
-# 3. Discover pools
+# 3. Fund wallet with SOL, then discover pools
 curl "https://lp-agent-api-production.up.railway.app/pools/top?tokenA=SOL&tokenB=USDC"
 
-# 4. Fund wallet, then LP
+# 4. Add liquidity (SOL → swap → LP, all atomic)
 curl -X POST https://lp-agent-api-production.up.railway.app/lp/atomic \
   -H "Content-Type: application/json" \
-  -d '{"inputToken": "SOL", "poolAddress": "POOL_ADDRESS", "amount": 0.1}'
+  -d '{"poolAddress": "BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y", "amount": 0.5}'
+
+# 5. Withdraw and convert back to SOL
+curl -X POST https://lp-agent-api-production.up.railway.app/lp/withdraw/atomic \
+  -H "Content-Type: application/json" \
+  -d '{"positionAddress": "YOUR_POSITION", "poolAddress": "POOL", "convertToSol": true}'
 ```
 
 ### For Developers
@@ -54,25 +74,33 @@ const wallet = await client.createWallet();
 // Discover pools
 const pools = await client.getTopPools('SOL', 'USDC');
 
-// Execute LP
+// Execute atomic LP (SOL → swap → LP in one bundle)
 const result = await client.atomicLP({
-  inputToken: 'SOL',
   poolAddress: pools[0].address,
   amount: 0.5,
+  strategy: 'concentrated',
+});
+
+// Withdraw and convert to SOL
+const withdraw = await client.atomicWithdraw({
+  positionAddress: result.positionAddress,
+  convertToSol: true,
 });
 ```
 
 ---
 
-## 💎 Features
+## 💎 Key Features
 
 | Feature | Description |
 |---------|-------------|
-| **MPC Custody** | Privy server wallets — agents never see private keys |
-| **Jito Bundles** | Atomic swap→LP execution, private mempool |
+| **Atomic Execution** | SOL → Swap → LP in ONE Jito bundle |
+| **Auto-Retry** | Slippage escalates 3% → 5% → 7.5% → 10% on failure |
+| **MPC Custody** | Privy wallets — agents never see private keys |
 | **Arcium Privacy** | Strategy encrypted before execution |
-| **Universal Pools** | Any Meteora DLMM pool supported |
-| **Pool Discovery** | Top pools by TVL, APY, bin step |
+| **MEV Protection** | Jito bundles prevent frontrunning |
+| **Convert to SOL** | Withdraw + swap back to SOL atomically |
+| **Pool Discovery** | Find top pools by TVL, APY, bin step |
 | **1% Protocol Fee** | On withdrawals, to treasury |
 
 ---
@@ -81,45 +109,57 @@ const result = await client.atomicLP({
 
 **Base URL:** `https://lp-agent-api-production.up.railway.app`
 
+### Core Flow
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/wallet/create` | POST | Create MPC wallet |
+| `/pools/top` | GET | Top pools by TVL |
+| `/lp/atomic` | POST | ⚡ **SOL → Swap → LP** (Jito bundle) |
+| `/lp/withdraw/atomic` | POST | ⚡ **Withdraw → SOL** (Jito bundle) |
+| `/positions` | GET | List open positions |
+
+### Additional
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/skill.md` | GET | Agent skill file |
-| `/wallet/create` | POST | Create MPC wallet |
 | `/wallet/load` | POST | Load existing wallet |
-| `/pools/top` | GET | Top 3 pools by TVL |
-| `/pools/scan` | GET | Search all pools |
-| `/lp/atomic` | POST | ⚡ Swap→LP via Jito |
-| `/lp/execute` | POST | Add liquidity |
-| `/lp/withdraw/atomic` | POST | ⚡ Withdraw via Jito |
-| `/positions` | GET | List LP positions |
+| `/swap` | POST | Direct token swap |
+| `/swap/quote` | GET | Get swap quote |
+| `/health` | GET | Service health |
 
 ---
 
-## 🔐 Security
+## 🔐 Security Model
 
-- **Keys**: Never exposed — MPC custody via Privy
-- **Strategies**: Encrypted with Arcium before execution  
-- **Execution**: Atomic bundles via Jito — no partial failures
-- **Mempool**: Private until landed — no frontrunning
+| Layer | Protection |
+|-------|------------|
+| **Keys** | MPC custody via Privy — never exposed |
+| **Strategies** | Arcium encryption — parameters hidden |
+| **Execution** | Jito bundles — atomic or nothing |
+| **Mempool** | Private until landed — no frontrunning |
 
 ---
 
 ## 📊 Fee Structure
 
-| Fee | Rate | Description |
-|-----|------|-------------|
-| Protocol Fee | 1% | On withdrawals |
-| Jito Tip | Variable | Based on network congestion |
-| Network | ~0.001 SOL | Standard Solana fees |
+| Fee | Rate | When |
+|-----|------|------|
+| Protocol | 1% | On withdrawals |
+| Jito Tip | ~0.0001 SOL | Per bundle |
+| Network | ~0.001 SOL | Standard fees |
+
+Treasury: `fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt`
 
 ---
 
 ## 🔗 Links
 
-- **API**: https://lp-agent-api-production.up.railway.app
-- **SDK**: `npm install @mnm-ag/lp-agent-sdk`
-- **Frontend**: https://api.mnm.ag
-- **Skill File**: https://lp-agent-api-production.up.railway.app/skill.md
+| Resource | URL |
+|----------|-----|
+| **API** | https://lp-agent-api-production.up.railway.app |
+| **Skill File** | https://lp-agent-api-production.up.railway.app/skill.md |
+| **Frontend** | https://api.mnm.ag |
+| **NPM SDK** | `@mnm-ag/lp-agent-sdk` |
 
 ---
 
