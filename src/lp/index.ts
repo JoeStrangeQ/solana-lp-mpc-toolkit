@@ -5,4 +5,4 @@
  */
 
 export { lpPipeline, LPPipeline, METEORA_POOLS } from './pipeline';
-export type { PrepareResult, ExecuteResult, TokenBalance } from './pipeline';
+export type { PrepareResult, ExecuteResult, TokenBalance, ExecuteOptions } from './pipeline';

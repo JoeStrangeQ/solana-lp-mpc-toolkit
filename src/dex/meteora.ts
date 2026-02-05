@@ -15,6 +15,9 @@ export interface AddLiquidityParams {
   amountX: number; // Amount in lamports/base units
   amountY: number;
   slippageBps?: number; // Default 100 = 1%
+  strategy?: 'concentrated' | 'wide' | 'custom'; // Default 'concentrated'
+  minBinId?: number; // For custom strategy
+  maxBinId?: number; // For custom strategy
 }
 
 export interface AddLiquidityResult {
@@ -60,7 +63,16 @@ export class MeteoraDirectClient {
    * Build add liquidity transaction
    */
   async buildAddLiquidityTx(params: AddLiquidityParams): Promise<AddLiquidityResult> {
-    const { poolAddress, userPublicKey, amountX, amountY, slippageBps = 100 } = params;
+    const { 
+      poolAddress, 
+      userPublicKey, 
+      amountX, 
+      amountY, 
+      slippageBps = 100,
+      strategy = 'concentrated',
+      minBinId: customMinBin,
+      maxBinId: customMaxBin,
+    } = params;
     
     const pool = await DLMM.create(this.connection, new PublicKey(poolAddress));
     const activeBin = await pool.getActiveBin();
@@ -68,10 +80,23 @@ export class MeteoraDirectClient {
     // Create position keypair
     const newPosition = Keypair.generate();
     
-    // Calculate bin range (10 bins each side = balanced strategy)
-    const RANGE_INTERVAL = 10;
-    const minBinId = activeBin.binId - RANGE_INTERVAL;
-    const maxBinId = activeBin.binId + RANGE_INTERVAL;
+    // Calculate bin range based on strategy
+    let minBinId: number;
+    let maxBinId: number;
+    
+    if (strategy === 'custom' && customMinBin !== undefined && customMaxBin !== undefined) {
+      // Custom: use provided bin IDs (relative to active bin)
+      minBinId = activeBin.binId + customMinBin;
+      maxBinId = activeBin.binId + customMaxBin;
+    } else if (strategy === 'wide') {
+      // Wide: ±20 bins for broader range
+      minBinId = activeBin.binId - 20;
+      maxBinId = activeBin.binId + 20;
+    } else {
+      // Concentrated (default): ±5 bins for tighter range, more capital efficiency
+      minBinId = activeBin.binId - 5;
+      maxBinId = activeBin.binId + 5;
+    }
     
     // Build transaction to INITIALIZE position AND add liquidity (for new positions)
     // This is the correct method that includes the position keypair as a signer

@@ -69,6 +69,13 @@ export interface ExecuteResult {
   message: string;
 }
 
+export interface ExecuteOptions {
+  poolAddress?: string; // Custom pool address (overrides token pair lookup)
+  strategy?: 'concentrated' | 'wide' | 'custom';
+  minBinId?: number; // For custom strategy (relative to active bin)
+  maxBinId?: number;
+}
+
 export class LPPipeline {
   private connection: Connection;
   private meteoraClient: MeteoraDirectClient;
@@ -253,7 +260,8 @@ export class LPPipeline {
     poolAddress: string,
     amountX: number,
     amountY: number,
-    signTransaction: (tx: string) => Promise<string>
+    signTransaction: (tx: string) => Promise<string>,
+    options?: { strategy?: 'concentrated' | 'wide' | 'custom'; minBinId?: number; maxBinId?: number }
   ): Promise<{ txid: string; positionAddress: string; binRange: { min: number; max: number } }> {
     // Build the add liquidity transaction
     const lpResult = await this.meteoraClient.buildAddLiquidityTx({
@@ -262,6 +270,9 @@ export class LPPipeline {
       amountX,
       amountY,
       slippageBps: 100, // 1% slippage
+      strategy: options?.strategy,
+      minBinId: options?.minBinId,
+      maxBinId: options?.maxBinId,
     });
 
     // Step 1: Send UNSIGNED transaction to Privy for user wallet signature
@@ -304,10 +315,45 @@ export class LPPipeline {
     tokenA: string,
     tokenB: string,
     totalValueUsd: number,
-    signTransaction: (tx: string) => Promise<string>
+    signTransaction: (tx: string) => Promise<string>,
+    options?: ExecuteOptions
   ): Promise<ExecuteResult> {
-    // Step 1: Prepare
-    const prep = await this.prepareLiquidity(walletAddress, tokenA, tokenB, totalValueUsd);
+    // Step 1: Prepare (or use custom pool address)
+    let prep: PrepareResult;
+    
+    if (options?.poolAddress) {
+      // Custom pool address provided - get pool info directly
+      try {
+        const poolInfo = await this.meteoraClient.getPoolInfo(options.poolAddress);
+        prep = {
+          ready: true,
+          needsSwap: false, // Skip swap for custom pool, user manages balance
+          currentBalances: {} as PrepareResult['currentBalances'],
+          targetAmounts: {
+            amountX: Math.floor(totalValueUsd / 2 / poolInfo.currentPrice * 1e9), // Rough SOL estimate
+            amountXUi: totalValueUsd / 2 / poolInfo.currentPrice,
+            amountY: Math.floor(totalValueUsd / 2 * 1e6), // USDC
+            amountYUi: totalValueUsd / 2,
+          },
+          poolInfo: {
+            address: options.poolAddress,
+            currentPrice: poolInfo.currentPrice,
+            activeBinId: poolInfo.activeBinId,
+            binStep: poolInfo.binStep,
+            tokenX: poolInfo.tokenX,
+            tokenY: poolInfo.tokenY,
+          },
+          message: `Using custom pool ${options.poolAddress}`,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          message: `Invalid pool address: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        };
+      }
+    } else {
+      prep = await this.prepareLiquidity(walletAddress, tokenA, tokenB, totalValueUsd);
+    }
     
     if (!prep.ready) {
       return {
@@ -368,7 +414,12 @@ export class LPPipeline {
         prep.poolInfo.address,
         prep.targetAmounts.amountX,
         prep.targetAmounts.amountY,
-        signTransaction
+        signTransaction,
+        {
+          strategy: options?.strategy,
+          minBinId: options?.minBinId,
+          maxBinId: options?.maxBinId,
+        }
       );
 
       return {

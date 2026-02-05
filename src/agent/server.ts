@@ -109,35 +109,68 @@ https://lp-agent-api-production.up.railway.app
 
 ### 1. Create Wallet
 \`\`\`bash
-curl -X POST $BASE_URL/wallet/create -H "Content-Type: application/json"
+curl -X POST $BASE_URL/wallet/create
+\`\`\`
+Returns: { walletId, address } - Store walletId for future calls.
+
+### 2. Load Wallet (if you have walletId)
+\`\`\`bash
+curl -X POST $BASE_URL/wallet/load -d '{"walletId":"YOUR_WALLET_ID"}'
 \`\`\`
 
-### 2. Fund Wallet
+### 3. Fund Wallet
 Send SOL + tokens to the returned wallet address.
 
-### 3. Execute LP
+### 4. Execute LP (any pool, any strategy)
 \`\`\`bash
-curl -X POST $BASE_URL/lp/execute -H "Content-Type: application/json" -d '{"tokenA":"SOL","tokenB":"USDC","amount":10}'
+curl -X POST $BASE_URL/lp/execute -d '{
+  "poolAddress": "BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE",
+  "amount": 50,
+  "strategy": "concentrated"
+}'
 \`\`\`
 
-### 4. Withdraw
+**Strategy Options:**
+- \`concentrated\` - ±5 bins (tight, more capital efficient)
+- \`wide\` - ±20 bins (broader range, less impermanent loss)
+- \`custom\` - use minBinId/maxBinId for exact control
+
+**Custom Bin Range:**
 \`\`\`bash
-curl -X POST $BASE_URL/lp/withdraw -H "Content-Type: application/json" -d '{"positionAddress":"..."}'
+curl -X POST $BASE_URL/lp/execute -d '{
+  "poolAddress": "...",
+  "amount": 100,
+  "strategy": "custom",
+  "minBinId": -15,
+  "maxBinId": 10
+}'
+\`\`\`
+
+### 5. Withdraw
+\`\`\`bash
+curl -X POST $BASE_URL/lp/withdraw -d '{"positionAddress":"...", "poolAddress":"..."}'
+\`\`\`
+
+## Pool Discovery
+\`\`\`bash
+curl "$BASE_URL/pools/scan?tokenA=SOL&tokenB=USDC"
 \`\`\`
 
 ## Endpoints
-- POST /wallet/create - Create Privy wallet
-- POST /wallet/load - Load wallet by ID
+- POST /wallet/create - Create Privy MPC wallet
+- POST /wallet/load - Load wallet by walletId
 - POST /wallet/transfer - Transfer SOL/tokens
-- POST /lp/prepare - Check balances
-- POST /lp/execute - Add liquidity (with Arcium)
+- GET /pools/scan - Discover pools
+- POST /lp/execute - Add liquidity (with Arcium encryption)
 - POST /lp/withdraw - Remove liquidity
+- GET /swap/quote - Jupiter swap quotes
+- POST /swap - Execute swap
 
 ## Privacy
-Strategies encrypted with Arcium (x25519-aes256gcm).
+Strategies encrypted with Arcium (x25519-aes256gcm) before execution.
 
 ## Fees
-1% protocol fee. Treasury: fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt
+0.1% protocol fee. Treasury: fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt
 `;
 
 app.get('/skill.md', (c) => {
@@ -813,12 +846,19 @@ app.post('/lp/execute', async (c) => {
       return c.json<AgentResponse>({ success: false, message: 'LP module not available' }, 503);
     }
 
-    const { tokenA, tokenB, amount } = await c.req.json();
+    const { tokenA, tokenB, amount, poolAddress, strategy, minBinId, maxBinId } = await c.req.json();
 
-    if (!tokenA || !tokenB || !amount) {
+    if ((!tokenA || !tokenB) && !poolAddress) {
       return c.json<AgentResponse>({
         success: false,
-        message: 'Missing tokenA, tokenB, or amount. Example: { "tokenA": "SOL", "tokenB": "USDC", "amount": 500 }',
+        message: 'Provide tokenA+tokenB OR poolAddress. Example: { "poolAddress": "BVRby...", "amount": 50, "strategy": "concentrated" }',
+      }, 400);
+    }
+
+    if (!amount) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: 'Missing amount (in USD). Example: { "amount": 50 }',
       }, 400);
     }
 
@@ -827,7 +867,19 @@ app.post('/lp/execute', async (c) => {
     // This allows us to add the position keypair signature before broadcasting
     const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
 
-    const result = await lp.execute(walletAddress, tokenA, tokenB, amount, signTransaction);
+    const result = await lp.execute(
+      walletAddress, 
+      tokenA || 'SOL', 
+      tokenB || 'USDC', 
+      amount, 
+      signTransaction,
+      {
+        poolAddress,
+        strategy: strategy as 'concentrated' | 'wide' | 'custom' | undefined,
+        minBinId,
+        maxBinId,
+      }
+    );
 
     return c.json<AgentResponse>({
       success: result.success,
