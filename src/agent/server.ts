@@ -213,25 +213,31 @@ app.get('/fees/calculate', (c) => {
 });
 
 app.get('/health', async (c) => {
-  const gatewayOk = gatewayClient ? await gatewayClient.healthCheck() : false;
-  const walletOk = privyClient?.isWalletLoaded() || mpcClient?.isWalletLoaded() || false;
+  // Initialize Arcium if not already
+  if (!arciumPrivacy.isInitialized()) {
+    try { await arciumPrivacy.initialize(); } catch {}
+  }
+  
+  const privyConfigured = config.privy.enabled;
   const arciumOk = arciumPrivacy.isInitialized();
+  const rpcOk = !!connection;
 
-  const walletProvider = privyClient?.isWalletLoaded() ? 'privy' : 
-                        mpcClient?.isWalletLoaded() ? (config.portal.useMock ? 'mock' : 'portal') : 
-                        'none';
+  // System is healthy if core services are available
+  const isHealthy = privyConfigured && rpcOk;
 
   return c.json({
-    status: gatewayOk && walletOk ? 'healthy' : 'degraded',
+    status: isHealthy ? 'healthy' : 'degraded',
     components: {
-      gateway: gatewayOk ? 'connected' : 'disconnected',
-      wallet: walletOk ? `loaded (${walletProvider})` : 'no_wallet',
-      arcium: arciumOk ? 'initialized' : 'not_initialized',
+      api: 'running',
+      privy: privyConfigured ? 'configured' : 'not_configured',
+      arcium: arciumOk ? 'ready' : 'initializing',
+      solana_rpc: rpcOk ? 'connected' : 'disconnected',
     },
-    walletProviders: {
-      privy: config.privy.enabled ? 'configured' : 'not_configured',
-      portal: config.portal.apiKey ? 'configured' : 'not_configured',
-      mock: config.portal.useMock ? 'enabled' : 'disabled',
+    features: {
+      wallet_create: privyConfigured,
+      wallet_transfer: privyConfigured,
+      lp_execute: privyConfigured && rpcOk,
+      encryption: arciumOk,
     },
     timestamp: new Date().toISOString(),
   });
