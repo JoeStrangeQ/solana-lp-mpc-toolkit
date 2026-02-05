@@ -92,7 +92,7 @@ export async function sendBundle(
       jsonrpc: '2.0',
       id: 1,
       method: 'sendBundle',
-      params: [signedTransactions],
+      params: [signedTransactions, { encoding: 'base64' }],
     }),
   });
 
