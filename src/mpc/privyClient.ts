@@ -116,7 +116,8 @@ export class PrivyWalletClient {
         },
       });
 
-      return (result as any).signed_transaction;
+      // Response is { data: { signed_transaction: string } }
+      return (result as any).data?.signed_transaction || (result as any).signed_transaction;
     } catch (error) {
       console.error('[Privy] Failed to sign transaction:', error);
       throw error;
@@ -142,7 +143,8 @@ export class PrivyWalletClient {
         },
       });
 
-      return (result as any).hash || (result as any).transaction_hash;
+      // Response is { data: { hash: string } }
+      return (result as any).data?.hash || (result as any).hash || (result as any).transaction_hash;
     } catch (error) {
       console.error('[Privy] Failed to sign and send transaction:', error);
       throw error;
