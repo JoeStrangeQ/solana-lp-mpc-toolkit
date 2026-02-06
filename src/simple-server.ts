@@ -15,9 +15,9 @@ import { discoverAllPositions, getPositionBinRange, getPoolInfo } from './utils/
 import { buildAtomicLP } from './lp/atomic';
 import { buildAtomicWithdraw } from './lp/atomicWithdraw';
 import { sendBundle, waitForBundle, TipSpeed } from './jito';
-import { 
-  getPositionMonitor, 
-  setWebhookConfig, 
+import {
+  getPositionMonitor,
+  setWebhookConfig,
   getWebhookConfig,
   deliverAlerts,
   testWebhook,
@@ -82,12 +82,12 @@ app.use('*', cors());
 app.use('*', async (c, next) => {
   const path = new URL(c.req.url).pathname;
   const hour = new Date().toISOString().slice(0, 13); // YYYY-MM-DDTHH
-  
+
   stats.requests.total++;
   stats.requests.byEndpoint[path] = (stats.requests.byEndpoint[path] || 0) + 1;
   stats.requests.byHour[hour] = (stats.requests.byHour[hour] || 0) + 1;
   stats.lastRequest = new Date().toISOString();
-  
+
   await next();
 });
 
@@ -108,22 +108,22 @@ const monitor = getPositionMonitor(config.solana?.rpc || 'https://api.mainnet-be
 function initializeMonitoring() {
   try {
     const data = loadData();
-    
+
     // Restore positions to monitor
     for (const position of data.positions) {
       monitor.addPosition(position);
     }
-    
+
     // Restore webhook config
     if (data.webhook) {
       setWebhookConfig(data.webhook);
     }
-    
+
     // Restore last check timestamp
     if (data.lastCheck) {
       monitoringState.lastCheck = data.lastCheck;
     }
-    
+
     console.log(`✅ Monitoring initialized: ${data.positions.length} positions, webhook: ${data.webhook ? 'configured' : 'none'}`);
   } catch (e) {
     console.warn('⚠️ Failed to initialize monitoring:', (e as Error).message);
@@ -134,12 +134,12 @@ function initializeMonitoring() {
 async function runMonitoringCheck(): Promise<AlertResult[]> {
   console.log('[Monitor] Running scheduled check...');
   const now = new Date().toISOString();
-  
+
   try {
     const alerts = await monitor.checkAllPositions();
     monitoringState.lastCheck = now;
     setLastCheck(now);
-    
+
     if (alerts.length > 0) {
       console.log(`[Monitor] Found ${alerts.length} alerts, delivering to webhook...`);
       const results = await deliverAlerts(alerts);
@@ -148,7 +148,7 @@ async function runMonitoringCheck(): Promise<AlertResult[]> {
     } else {
       console.log('[Monitor] No alerts');
     }
-    
+
     return alerts;
   } catch (e) {
     console.error('[Monitor] Check failed:', (e as Error).message);
@@ -174,13 +174,13 @@ async function createPrivyClient() {
   if (!config.privy?.appId || !config.privy?.appSecret) {
     return null;
   }
-  
+
   const Client = await loadPrivy();
   if (!Client) return null;
-  
+
   try {
-    return new Client({ 
-      appId: config.privy.appId, 
+    return new Client({
+      appId: config.privy.appId,
       appSecret: config.privy.appSecret,
       authorizationPrivateKey: config.privy.authorizationPrivateKey || undefined,
     });
@@ -234,9 +234,9 @@ const SAMPLE_POOLS = [
 
 // ============ Routes ============
 
-app.get('/', (c) => c.json({ 
-  name: 'LP Agent Toolkit', 
-  version: '2.2.1-fees',
+app.get('/', (c) => c.json({
+  name: 'LP Agent Toolkit',
+  version: '2.3.0-withdraw-to-sol',
   status: 'running',
   docs: 'https://mnm-web-seven.vercel.app',
   github: 'https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit',
@@ -261,7 +261,9 @@ app.get('/', (c) => c.json({
     'POST /lp/close   { walletId, ... }   → close position',
     'POST /lp/execute { walletId, ... }   → full pipeline',
     'POST /lp/withdraw  { walletAddress, poolAddress, positionAddress } → withdraw with PnL',
-    'POST /lp/withdraw/atomic { ... }     → atomic withdrawal via Jito',
+    'POST /lp/withdraw/atomic { ..., convertToSol } → atomic withdrawal via Jito (optional: convert all to SOL)',
+    'POST /fees/claim { walletAddress, poolAddress, positionAddress } → claim fees only',
+    'POST /fees/compound { ... } → claim + instructions to re-add',
     'POST /lp/rebalance { walletId, poolAddress, positionAddress, ... } → prepare rebalance',
     'POST /lp/rebalance/execute { ... }   → execute atomic rebalance',
     'GET  /positions/:walletId            → list positions (with token names & prices)',
@@ -282,9 +284,9 @@ app.get('/', (c) => c.json({
 app.get('/health', (c) => {
   const positions = monitor.getPositions();
   const webhookConfigured = getWebhookConfig() !== null;
-  
-  return c.json({ 
-    status: 'ok', 
+
+  return c.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     monitoring: {
       enabled: monitoringState.enabled,
@@ -301,7 +303,7 @@ app.get('/stats', (c) => {
   const uptime = Date.now() - new Date(stats.startedAt).getTime();
   const hours = Math.floor(uptime / 3600000);
   const minutes = Math.floor((uptime % 3600000) / 60000);
-  
+
   return c.json({
     status: 'operational',
     uptime: `${hours}h ${minutes}m`,
@@ -354,9 +356,9 @@ app.post('/monitor/add', async (c) => {
   try {
     const body = await c.req.json();
     const { positionAddress, poolAddress, walletAddress, binRange, webhookUrl, alerts } = body;
-    
+
     if (!positionAddress || !poolAddress) {
-      return c.json({ 
+      return c.json({
         error: 'Missing positionAddress or poolAddress',
         example: {
           positionAddress: 'your-position-address',
@@ -367,17 +369,17 @@ app.post('/monitor/add', async (c) => {
         },
       }, 400);
     }
-    
+
     // Auto-discover bin range if not provided
     let actualBinRange = binRange;
     let poolInfo = null;
-    
+
     if (!binRange || (binRange.min === 0 && binRange.max === 0)) {
       if (walletAddress) {
         console.log(`[Monitor] Auto-discovering bin range for position ${positionAddress}...`);
         const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
         const discoveredRange = await getPositionBinRange(conn, poolAddress, positionAddress, walletAddress);
-        
+
         if (discoveredRange) {
           actualBinRange = discoveredRange;
           console.log(`[Monitor] Discovered bin range: ${discoveredRange.min} to ${discoveredRange.max}`);
@@ -385,7 +387,7 @@ app.post('/monitor/add', async (c) => {
           console.warn(`[Monitor] Could not auto-discover bin range, using defaults`);
           actualBinRange = { min: 0, max: 0 };
         }
-        
+
         // Also get pool info for better context
         poolInfo = await getPoolInfo(conn, poolAddress);
       } else {
@@ -393,7 +395,7 @@ app.post('/monitor/add', async (c) => {
         actualBinRange = { min: 0, max: 0 };
       }
     }
-    
+
     const position: MonitoredPosition = {
       positionAddress,
       poolAddress,
@@ -404,13 +406,13 @@ app.post('/monitor/add', async (c) => {
       },
       createdAt: new Date().toISOString(),
     };
-    
+
     // Add to monitor
     monitor.addPosition(position);
-    
+
     // Persist
     persistAddPosition(position);
-    
+
     // If per-position webhook provided, set it (overrides global)
     if (webhookUrl) {
       const webhookConfig: WebhookConfig = {
@@ -422,7 +424,7 @@ app.post('/monitor/add', async (c) => {
       setWebhookConfig(webhookConfig);
       persistSetWebhook(webhookConfig);
     }
-    
+
     return c.json({
       success: true,
       message: `Position ${positionAddress} added to monitoring`,
@@ -444,10 +446,10 @@ app.post('/monitor/add', async (c) => {
 app.delete('/monitor/remove/:positionAddress', (c) => {
   try {
     const positionAddress = c.req.param('positionAddress');
-    
+
     monitor.removePosition(positionAddress);
     persistRemovePosition(positionAddress);
-    
+
     return c.json({
       success: true,
       message: `Position ${positionAddress} removed from monitoring`,
@@ -465,7 +467,7 @@ app.delete('/monitor/remove/:positionAddress', (c) => {
  */
 app.get('/monitor/positions', (c) => {
   const positions = monitor.getPositions();
-  
+
   return c.json({
     success: true,
     count: positions.length,
@@ -484,16 +486,16 @@ app.get('/monitor/positions', (c) => {
 app.get('/monitor/status/:positionAddress', async (c) => {
   try {
     const positionAddress = c.req.param('positionAddress');
-    
+
     const status = await monitor.getPositionStatus(positionAddress);
     const position = monitor.getPositions().find(p => p.positionAddress === positionAddress);
-    
+
     return c.json({
       success: true,
       positionAddress,
       poolAddress: position?.poolAddress,
       ...status,
-      direction: !status.inRange 
+      direction: !status.inRange
         ? (status.activeBin < status.binRange.min ? 'below' : 'above')
         : null,
     });
@@ -511,9 +513,9 @@ app.post('/monitor/webhook', async (c) => {
   try {
     const body = await c.req.json();
     const { url, secret, events } = body;
-    
+
     if (!url) {
-      return c.json({ 
+      return c.json({
         error: 'Missing url',
         example: {
           url: 'https://your-server.com/webhook',
@@ -522,7 +524,7 @@ app.post('/monitor/webhook', async (c) => {
         },
       }, 400);
     }
-    
+
     const webhookConfig: WebhookConfig = {
       url,
       secret: secret || undefined,
@@ -530,13 +532,13 @@ app.post('/monitor/webhook', async (c) => {
       createdAt: new Date().toISOString(),
       deliveryStats: { successful: 0, failed: 0 },
     };
-    
+
     setWebhookConfig(webhookConfig);
     persistSetWebhook(webhookConfig);
-    
+
     // Test the webhook
     const testResult = await testWebhook();
-    
+
     return c.json({
       success: true,
       message: 'Webhook configured',
@@ -560,7 +562,7 @@ app.post('/monitor/webhook', async (c) => {
 app.delete('/monitor/webhook', (c) => {
   setWebhookConfig(null);
   persistSetWebhook(null);
-  
+
   return c.json({
     success: true,
     message: 'Webhook removed',
@@ -574,7 +576,7 @@ app.delete('/monitor/webhook', (c) => {
 app.post('/monitor/check', async (c) => {
   try {
     const alerts = await runMonitoringCheck();
-    
+
     return c.json({
       success: true,
       message: `Checked ${monitor.getPositions().length} positions`,
@@ -594,7 +596,7 @@ app.post('/monitor/check', async (c) => {
  */
 app.get('/monitor/webhook', (c) => {
   const config = getWebhookConfig();
-  
+
   if (!config) {
     return c.json({
       success: true,
@@ -602,7 +604,7 @@ app.get('/monitor/webhook', (c) => {
       webhook: null,
     });
   }
-  
+
   return c.json({
     success: true,
     configured: true,
@@ -647,8 +649,8 @@ app.get('/fees/calculate', (c) => {
 app.get('/pools/scan', (c) => {
   const tokenA = c.req.query('tokenA') || 'SOL';
   const tokenB = c.req.query('tokenB') || 'USDC';
-  const pools = SAMPLE_POOLS.filter(p => 
-    p.tokens.includes(tokenA.toUpperCase()) && 
+  const pools = SAMPLE_POOLS.filter(p =>
+    p.tokens.includes(tokenA.toUpperCase()) &&
     p.tokens.includes(tokenB.toUpperCase())
   );
   return c.json({
@@ -775,21 +777,21 @@ app.post('/lp/open', async (c) => {
   try {
     const body = await c.req.json();
     const { walletId, poolAddress, amountA, amountB, binRange, encrypt = true } = body;
-    
+
     if (!walletId) {
-      return c.json({ 
-        error: 'Missing walletId', 
-        hint: 'First call POST /wallet/create, then pass the returned walletId here' 
+      return c.json({
+        error: 'Missing walletId',
+        hint: 'First call POST /wallet/create, then pass the returned walletId here'
       }, 400);
     }
-    
+
     if (!poolAddress || !amountA) {
       return c.json({ error: 'Missing poolAddress or amountA' }, 400);
     }
-    
+
     // Load wallet fresh for this request (stateless)
     const { client, wallet } = await loadWalletById(walletId);
-    
+
     // Build LP strategy
     const strategy = {
       action: 'ADD_LIQUIDITY',
@@ -799,14 +801,14 @@ app.post('/lp/open', async (c) => {
       binRange: binRange || [127, 133],
       timestamp: Date.now(),
     };
-    
+
     // Encrypt strategy if requested
     let encryptedStrategy = null;
     if (encrypt) {
       await arciumPrivacy.initialize();
       encryptedStrategy = await arciumPrivacy.encryptStrategy(strategy);
     }
-    
+
     // Build transaction
     const walletPubkey = new PublicKey(wallet.address);
     const tx = new Transaction().add(
@@ -816,17 +818,17 @@ app.post('/lp/open', async (c) => {
         lamports: 0,
       })
     );
-    
+
     const { blockhash } = await connection.getLatestBlockhash();
     tx.recentBlockhash = blockhash;
     tx.feePayer = walletPubkey;
-    
+
     // Sign with Privy (stateless - wallet loaded fresh)
     const txBase64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
     const signedTxBase64 = await client.signTransaction(txBase64);
-    
+
     const fee = (amountA * FEE_CONFIG.FEE_BPS) / 10000;
-    
+
     return c.json({
       success: true,
       walletId,
@@ -860,18 +862,18 @@ app.post('/lp/close', async (c) => {
   try {
     const body = await c.req.json();
     const { walletId, positionAddress } = body;
-    
+
     if (!walletId) {
       return c.json({ error: 'Missing walletId' }, 400);
     }
-    
+
     if (!positionAddress) {
       return c.json({ error: 'Missing positionAddress' }, 400);
     }
-    
+
     // Load wallet for signing (stateless)
     const { wallet } = await loadWalletById(walletId);
-    
+
     return c.json({
       success: true,
       walletId,
@@ -893,19 +895,19 @@ app.post('/chat', async (c) => {
     if (!message) {
       return c.json({ error: 'Missing message' }, 400);
     }
-    
+
     // Simple NL parsing
     const lower = message.toLowerCase();
-    let response: any = { 
-      understood: false, 
+    let response: any = {
+      understood: false,
       message: 'I didn\'t understand that. Try: "LP $500 into SOL-USDC"',
       hint: 'Include walletId in request if you have one',
     };
-    
+
     if (lower.includes('lp') || lower.includes('liquidity')) {
       const amountMatch = message.match(/\$?([\d,]+)/);
       const amount = amountMatch ? parseFloat(amountMatch[1].replace(',', '')) : null;
-      
+
       if (amount) {
         const fee = (amount * FEE_CONFIG.FEE_BPS) / 10000;
         response = {
@@ -917,7 +919,7 @@ app.post('/chat', async (c) => {
             fee,
           },
           walletId: walletId || null,
-          nextStep: walletId 
+          nextStep: walletId
             ? `Call POST /lp/open with { walletId: "${walletId}", poolAddress, amountA }`
             : 'First call POST /wallet/create to get a walletId',
           pools: SAMPLE_POOLS,
@@ -928,7 +930,7 @@ app.post('/chat', async (c) => {
         understood: true,
         intent: 'CHECK_BALANCE',
         walletId: walletId || null,
-        nextStep: walletId 
+        nextStep: walletId
           ? `Call GET /wallet/${walletId}/balance`
           : 'First call POST /wallet/create to get a walletId',
       };
@@ -944,12 +946,12 @@ app.post('/chat', async (c) => {
         understood: true,
         intent: 'GET_POSITIONS',
         walletId: walletId || null,
-        nextStep: walletId 
+        nextStep: walletId
           ? `Call GET /positions/${walletId}`
           : 'First call POST /wallet/create to get a walletId',
       };
     }
-    
+
     return c.json(response);
   } catch (error: any) {
     return c.json({ error: 'Chat failed', details: error.message }, 500);
@@ -979,14 +981,14 @@ app.post('/swap', async (c) => {
   try {
     const body = await c.req.json();
     const { inputToken, outputToken, amount } = body;
-    
+
     if (!inputToken || !outputToken || !amount) {
       return c.json({ error: 'Missing inputToken, outputToken, or amount' }, 400);
     }
-    
+
     const inputMint = TOKENS[inputToken.toUpperCase()] || inputToken;
     const outputMint = TOKENS[outputToken.toUpperCase()] || outputToken;
-    
+
     // Demo response - production would use Jupiter API
     return c.json({
       success: true,
@@ -1010,14 +1012,14 @@ app.get('/swap/quote', async (c) => {
   const inputToken = c.req.query('inputToken') || c.req.query('inputMint');
   const outputToken = c.req.query('outputToken') || c.req.query('outputMint');
   const amount = c.req.query('amount');
-  
+
   if (!inputToken || !outputToken || !amount) {
     return c.json({ error: 'Missing inputToken, outputToken, or amount' }, 400);
   }
-  
+
   const inputMint = TOKENS[inputToken.toUpperCase()] || inputToken;
   const outputMint = TOKENS[outputToken.toUpperCase()] || outputToken;
-  
+
   return c.json({
     success: true,
     quote: {
@@ -1042,11 +1044,11 @@ app.get('/positions/:walletId', async (c) => {
   try {
     const { wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
-    
+
     // Universal discovery - finds ALL positions across ALL DLMM pools
     const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
     const positions = await discoverAllPositions(conn, walletAddress);
-    
+
     return c.json({
       success: true,
       message: `Found ${positions.length} positions across all DLMM pools`,
@@ -1066,7 +1068,7 @@ app.get('/positions/:walletId', async (c) => {
 // Query positions by wallet address (no Privy needed)
 app.get('/positions', async (c) => {
   const walletAddress = c.req.query('address') || c.req.query('walletAddress');
-  
+
   if (!walletAddress) {
     return c.json({
       success: false,
@@ -1075,12 +1077,12 @@ app.get('/positions', async (c) => {
       example: 'GET /positions?address=Ab6Cuvz9rZUSb4uVbBGR6vm12LeuVBE5dzKsnYUtAEi4',
     });
   }
-  
+
   try {
     // Universal discovery - finds ALL positions across ALL DLMM pools
     const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
     const positions = await discoverAllPositions(conn, walletAddress);
-    
+
     return c.json({
       success: true,
       message: `Found ${positions.length} positions across all DLMM pools`,
@@ -1109,24 +1111,24 @@ app.get('/lp/pools', (c) => {
 app.post('/lp/execute', async (c) => {
   try {
     const body = await c.req.json();
-    const { 
-      walletId, 
-      poolAddress, 
-      amountSol = 0.1, 
-      minBinId = -10, 
+    const {
+      walletId,
+      poolAddress,
+      amountSol = 0.1,
+      minBinId = -10,
       maxBinId = 10,
       strategy = 'concentrated',
       shape = 'spot',
       tipSpeed = 'fast',
       slippageBps = 300,
     } = body;
-    
+
     if (!walletId) {
-      return c.json({ 
+      return c.json({
         error: 'Missing walletId',
         hint: 'First call POST /wallet/create, store the walletId, then pass it here',
-        example: { 
-          walletId: 'abc123', 
+        example: {
+          walletId: 'abc123',
           poolAddress: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7',
           amountSol: 0.1,
           minBinId: -10,
@@ -1134,29 +1136,29 @@ app.post('/lp/execute', async (c) => {
         }
       }, 400);
     }
-    
+
     if (!poolAddress) {
-      return c.json({ 
+      return c.json({
         error: 'Missing poolAddress',
         hint: 'Use /pools/scan to find available pools',
-        example: { 
-          walletId: 'abc123', 
+        example: {
+          walletId: 'abc123',
           poolAddress: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7',
           amountSol: 0.1,
         }
       }, 400);
     }
-    
+
     // Load wallet (stateless)
     const { client, wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
-    
+
     console.log(`[LP Execute] Opening position: ${amountSol} SOL in pool ${poolAddress}`);
-    
+
     // Convert SOL to lamports
     const lamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
     const solMint = 'So11111111111111111111111111111111111111112';
-    
+
     // Build atomic LP transactions
     const lpResult = await buildAtomicLP({
       walletAddress,
@@ -1170,9 +1172,9 @@ app.post('/lp/execute', async (c) => {
       tipSpeed: tipSpeed as TipSpeed,
       slippageBps,
     });
-    
+
     console.log(`[LP Execute] Built ${lpResult.unsignedTransactions.length} transactions, signing...`);
-    
+
     // Sign all transactions with Privy
     const signedTxs: string[] = [];
     for (const unsignedTx of lpResult.unsignedTransactions) {
@@ -1184,15 +1186,15 @@ app.post('/lp/execute', async (c) => {
         signedTxs.push(unsignedTx);
       }
     }
-    
+
     // Submit to Jito
     console.log(`[LP Execute] Submitting ${signedTxs.length} txs to Jito...`);
     const { bundleId } = await sendBundle(signedTxs);
     console.log(`[LP Execute] Bundle submitted: ${bundleId}`);
-    
+
     // Wait for confirmation
     const status = await waitForBundle(bundleId, { timeoutMs: 60000 });
-    
+
     if (!status.landed) {
       return c.json({
         success: false,
@@ -1201,9 +1203,9 @@ app.post('/lp/execute', async (c) => {
         details: status.error,
       }, 500);
     }
-    
+
     console.log(`[LP Execute] ✅ Position opened at slot ${status.slot}!`);
-    
+
     stats.actions.lpExecuted++;
     return c.json({
       success: true,
@@ -1230,11 +1232,11 @@ app.post('/lp/prepare', async (c) => {
   try {
     const body = await c.req.json();
     const { tokenA, tokenB, amount } = body;
-    
+
     if (!tokenA || !tokenB || !amount) {
       return c.json({ error: 'Missing tokenA, tokenB, or amount' }, 400);
     }
-    
+
     return c.json({
       success: true,
       ready: true,
@@ -1251,38 +1253,38 @@ app.post('/lp/prepare', async (c) => {
 
 /**
  * POST /lp/rebalance
- * 
+ *
  * Rebalance an existing LP position by:
  * 1. Withdrawing from current position (atomic via Jito)
  * 2. Re-entering with new bin range
- * 
+ *
  * All done in atomic bundles for MEV protection.
  */
 app.post('/lp/rebalance', async (c) => {
   try {
     const body = await c.req.json();
-    const { 
-      walletId, 
-      poolAddress, 
-      positionAddress, 
-      newLowerBin, 
-      newUpperBin, 
+    const {
+      walletId,
+      poolAddress,
+      positionAddress,
+      newLowerBin,
+      newUpperBin,
       strategy = 'concentrated',
       shape = 'spot',
       tipSpeed = 'fast',
       slippageBps = 300,
     } = body;
-    
+
     // Validate required params
     if (!walletId) {
-      return c.json({ 
+      return c.json({
         error: 'Missing walletId',
         hint: 'First call POST /wallet/create, store the walletId, then pass it here',
       }, 400);
     }
-    
+
     if (!poolAddress || !positionAddress) {
-      return c.json({ 
+      return c.json({
         error: 'Missing poolAddress or positionAddress',
         hint: 'Get these from GET /positions/:walletId',
         example: {
@@ -1295,56 +1297,56 @@ app.post('/lp/rebalance', async (c) => {
         },
       }, 400);
     }
-    
+
     // Load wallet
     const { client, wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
-    
+
     console.log(`[Rebalance] Starting for position ${positionAddress} in pool ${poolAddress}`);
-    
+
     // Step 1: Get current position info
     const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
     const pool = await DLMM.create(conn, new PublicKey(poolAddress));
     const userPubkey = new PublicKey(walletAddress);
     const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
-    
+
     const position = positions.userPositions.find(
       (p: any) => p.publicKey.toBase58() === positionAddress
     );
-    
+
     if (!position) {
-      return c.json({ 
+      return c.json({
         error: 'Position not found',
         hint: 'Check that positionAddress is correct and belongs to this wallet',
       }, 404);
     }
-    
+
     // Get pool info for response
     const binStep = Number(pool.lbPair.binStep);
     const activeBin = await pool.getActiveBin();
     const tokenXMint = pool.tokenX.publicKey.toBase58();
     const tokenYMint = pool.tokenY.publicKey.toBase58();
-    
+
     // Resolve token metadata
     const tokenMetadata = await resolveTokens([tokenXMint, tokenYMint]);
     const tokenX = tokenMetadata.get(tokenXMint);
     const tokenY = tokenMetadata.get(tokenYMint);
-    
+
     // Current position info
     const currentLower = position.positionData.lowerBinId;
     const currentUpper = position.positionData.upperBinId;
     // Use pricePerToken for human-readable price (accounts for token decimals)
     const currentPrice = Number(activeBin.pricePerToken);
-    
+
     // Calculate human-readable price ranges
     const currentPriceRange = calculateHumanPriceRange(
       currentLower, currentUpper, activeBin.binId, currentPrice, binStep
     );
-    
+
     // New position info (relative to active bin if not absolute)
     let targetLower = newLowerBin !== undefined ? activeBin.binId + newLowerBin : currentLower;
     let targetUpper = newUpperBin !== undefined ? activeBin.binId + newUpperBin : currentUpper;
-    
+
     // Use strategy defaults if no custom bins provided
     if (newLowerBin === undefined && newUpperBin === undefined) {
       if (strategy === 'wide') {
@@ -1356,11 +1358,11 @@ app.post('/lp/rebalance', async (c) => {
         targetUpper = activeBin.binId + 5;
       }
     }
-    
+
     const newPriceRange = calculateHumanPriceRange(
       targetLower, targetUpper, activeBin.binId, currentPrice, binStep
     );
-    
+
     // Step 2: Build withdrawal transactions
     console.log(`[Rebalance] Building withdrawal for position ${positionAddress}...`);
     const withdrawResult = await buildAtomicWithdraw({
@@ -1369,30 +1371,30 @@ app.post('/lp/rebalance', async (c) => {
       positionAddress,
       tipSpeed: tipSpeed as TipSpeed,
     });
-    
+
     // Estimate collateral from position
     const totalXAmount = position.positionData.totalXAmount?.toString() || '0';
     const totalYAmount = position.positionData.totalYAmount?.toString() || '0';
-    
+
     // Step 3: Build re-entry transactions
     // For now, we'll use the estimated withdrawn amounts as collateral for new position
     // In production, you'd want to wait for withdraw to confirm first
     console.log(`[Rebalance] Building new LP position with bins ${targetLower} to ${targetUpper}...`);
-    
+
     // Determine collateral mint (use SOL by default for simplicity)
     const solMint = 'So11111111111111111111111111111111111111112';
     const collateralMint = tokenXMint === solMint ? tokenXMint : tokenYMint;
-    const estimatedCollateral = tokenXMint === solMint 
-      ? parseInt(totalXAmount) + parseInt(totalYAmount) 
+    const estimatedCollateral = tokenXMint === solMint
+      ? parseInt(totalXAmount) + parseInt(totalYAmount)
       : parseInt(totalYAmount) + parseInt(totalXAmount);
-    
+
     // Note: In a full implementation, we'd wait for withdraw to land,
     // then build the new LP tx. For atomic rebalance in same bundle,
     // we need both txs pre-built.
-    
+
     // For now, return the withdraw bundle and instructions for re-entry
     stats.actions.lpWithdrawn++;
-    
+
     return c.json({
       success: true,
       message: 'Rebalance prepared',
@@ -1456,42 +1458,42 @@ app.post('/lp/rebalance', async (c) => {
 
 /**
  * POST /lp/rebalance/execute
- * 
+ *
  * Execute a full atomic rebalance (withdraw + re-enter in Jito bundle)
  * This signs and submits the transactions.
  */
 app.post('/lp/rebalance/execute', async (c) => {
   try {
     const body = await c.req.json();
-    const { 
-      walletId, 
-      poolAddress, 
-      positionAddress, 
-      newLowerBin, 
-      newUpperBin, 
+    const {
+      walletId,
+      poolAddress,
+      positionAddress,
+      newLowerBin,
+      newUpperBin,
       strategy = 'concentrated',
       shape = 'spot',
       tipSpeed = 'fast',
       slippageBps = 300,
     } = body;
-    
+
     if (!walletId || !poolAddress || !positionAddress) {
-      return c.json({ 
+      return c.json({
         error: 'Missing walletId, poolAddress, or positionAddress',
       }, 400);
     }
-    
+
     // Load wallet
     const { client, wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
-    
+
     console.log(`[Rebalance Execute] Starting atomic rebalance...`);
-    
+
     // Get pool info
     const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
     const pool = await DLMM.create(conn, new PublicKey(poolAddress));
     const activeBin = await pool.getActiveBin();
-    
+
     // Build withdrawal bundle
     const withdrawResult = await buildAtomicWithdraw({
       walletAddress,
@@ -1499,7 +1501,7 @@ app.post('/lp/rebalance/execute', async (c) => {
       positionAddress,
       tipSpeed: tipSpeed as TipSpeed,
     });
-    
+
     // Sign withdrawal transactions with Privy
     const signedWithdrawTxs: string[] = [];
     for (const unsignedTx of withdrawResult.unsignedTransactions) {
@@ -1512,15 +1514,15 @@ app.post('/lp/rebalance/execute', async (c) => {
         signedWithdrawTxs.push(unsignedTx);
       }
     }
-    
+
     // Submit withdrawal bundle to Jito
     console.log(`[Rebalance Execute] Submitting ${signedWithdrawTxs.length} withdrawal txs to Jito...`);
     const { bundleId } = await sendBundle(signedWithdrawTxs);
     console.log(`[Rebalance Execute] Withdrawal bundle submitted: ${bundleId}`);
-    
+
     // Wait for withdrawal to land
     const withdrawStatus = await waitForBundle(bundleId, { timeoutMs: 60000 });
-    
+
     if (!withdrawStatus.landed) {
       return c.json({
         success: false,
@@ -1529,28 +1531,28 @@ app.post('/lp/rebalance/execute', async (c) => {
         details: withdrawStatus.error,
       }, 500);
     }
-    
+
     console.log(`[Rebalance Execute] Withdrawal landed at slot ${withdrawStatus.slot}!`);
-    
+
     // Now build and execute re-entry
     // Calculate new bin range
     let targetLower = newLowerBin !== undefined ? activeBin.binId + newLowerBin : activeBin.binId - 5;
     let targetUpper = newUpperBin !== undefined ? activeBin.binId + newUpperBin : activeBin.binId + 5;
-    
+
     if (strategy === 'wide') {
       targetLower = activeBin.binId - 20;
       targetUpper = activeBin.binId + 20;
     }
-    
+
     // Get collateral info from position (estimate)
     const tokenXMint = pool.tokenX.publicKey.toBase58();
     const solMint = 'So11111111111111111111111111111111111111112';
     const collateralMint = tokenXMint === solMint ? tokenXMint : pool.tokenY.publicKey.toBase58();
-    
+
     // Get wallet balance to determine re-entry amount
     const balance = await conn.getBalance(new PublicKey(walletAddress));
     const reentryAmount = Math.floor(balance * 0.9); // Use 90% of balance, keep some for fees
-    
+
     // Build re-entry LP transactions
     const lpResult = await buildAtomicLP({
       walletAddress,
@@ -1564,7 +1566,7 @@ app.post('/lp/rebalance/execute', async (c) => {
       tipSpeed: tipSpeed as TipSpeed,
       slippageBps,
     });
-    
+
     // Sign LP transactions
     const signedLpTxs: string[] = [];
     for (const unsignedTx of lpResult.unsignedTransactions) {
@@ -1576,17 +1578,17 @@ app.post('/lp/rebalance/execute', async (c) => {
         signedLpTxs.push(unsignedTx);
       }
     }
-    
+
     // Submit LP bundle
     console.log(`[Rebalance Execute] Submitting ${signedLpTxs.length} LP txs to Jito...`);
     const lpBundle = await sendBundle(signedLpTxs);
     console.log(`[Rebalance Execute] LP bundle submitted: ${lpBundle.bundleId}`);
-    
+
     // Wait for LP to land
     const lpStatus = await waitForBundle(lpBundle.bundleId, { timeoutMs: 60000 });
-    
+
     stats.actions.lpExecuted++;
-    
+
     return c.json({
       success: lpStatus.landed,
       message: lpStatus.landed ? 'Rebalance completed!' : 'Rebalance partial - LP may have failed',
@@ -1617,7 +1619,7 @@ app.post('/lp/rebalance/execute', async (c) => {
 
 /**
  * POST /lp/withdraw
- * 
+ *
  * Build withdrawal transactions for an LP position.
  * Returns unsigned transactions and PnL summary.
  */
@@ -1625,9 +1627,9 @@ app.post('/lp/withdraw', async (c) => {
   try {
     const body = await c.req.json();
     const { walletAddress, poolAddress, positionAddress, tipSpeed = 'fast' } = body;
-    
+
     if (!walletAddress || !poolAddress || !positionAddress) {
-      return c.json({ 
+      return c.json({
         error: 'Missing walletAddress, poolAddress, or positionAddress',
         example: {
           walletAddress: 'your-wallet-address',
@@ -1637,18 +1639,18 @@ app.post('/lp/withdraw', async (c) => {
         },
       }, 400);
     }
-    
+
     console.log(`[Withdraw] Building withdrawal for position ${positionAddress}...`);
-    
+
     const result = await buildAtomicWithdraw({
       walletAddress,
       poolAddress,
       positionAddress,
       tipSpeed: tipSpeed as TipSpeed,
     });
-    
+
     stats.actions.lpWithdrawn++;
-    
+
     return c.json({
       success: true,
       message: 'Withdrawal transactions prepared',
@@ -1671,41 +1673,51 @@ app.post('/lp/withdraw', async (c) => {
 
 /**
  * POST /lp/withdraw/atomic
- * 
+ *
  * Build and return atomic withdrawal via Jito bundle.
  * Same as /lp/withdraw but explicitly for Jito atomic execution.
  */
 app.post('/lp/withdraw/atomic', async (c) => {
   try {
     const body = await c.req.json();
-    const { walletAddress, poolAddress, positionAddress, tipSpeed = 'fast' } = body;
-    
+    const {
+      walletAddress,
+      poolAddress,
+      positionAddress,
+      tipSpeed = 'fast',
+      convertToSol = false, // NEW: Convert all tokens to SOL
+    } = body;
+
     if (!walletAddress || !poolAddress || !positionAddress) {
-      return c.json({ 
+      return c.json({
         error: 'Missing walletAddress, poolAddress, or positionAddress',
         example: {
           walletAddress: 'your-wallet-address',
           poolAddress: 'pool-address',
           positionAddress: 'position-address-to-withdraw',
           tipSpeed: 'fast',
+          convertToSol: true, // Optional: convert all to SOL
         },
       }, 400);
     }
-    
-    console.log(`[AtomicWithdraw] Building withdrawal for position ${positionAddress}...`);
-    
+
+    console.log(`[AtomicWithdraw] Building withdrawal for position ${positionAddress}${convertToSol ? ' (convert to SOL)' : ''}...`);
+
     const result = await buildAtomicWithdraw({
       walletAddress,
       poolAddress,
       positionAddress,
+      convertToSol,
       tipSpeed: tipSpeed as TipSpeed,
     });
-    
+
     stats.actions.lpWithdrawn++;
-    
+
     return c.json({
       success: true,
-      message: 'Atomic withdrawal prepared via Jito',
+      message: convertToSol
+        ? 'Atomic withdrawal + swap to SOL prepared via Jito'
+        : 'Atomic withdrawal prepared via Jito',
       walletAddress,
       poolAddress,
       positionAddress,
@@ -1715,6 +1727,7 @@ app.post('/lp/withdraw/atomic', async (c) => {
         tipSpeed,
       },
       estimatedWithdraw: result.estimatedWithdraw,
+      swap: result.swap,
       fee: result.fee,
       pnl: result.pnl,
       encryptedStrategy: result.encryptedStrategy,
@@ -1724,6 +1737,173 @@ app.post('/lp/withdraw/atomic', async (c) => {
     console.error('[AtomicWithdraw] Error:', error);
     stats.errors++;
     return c.json({ error: 'Atomic withdrawal failed', details: error.message }, 500);
+  }
+});
+
+// ============ Fee Claim & Compound ============
+
+// Claim fees only (don't withdraw liquidity)
+app.post('/fees/claim', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { walletAddress, poolAddress, positionAddress } = body;
+
+    if (!walletAddress || !poolAddress || !positionAddress) {
+      return c.json({
+        error: 'Missing required parameters',
+        example: {
+          walletAddress: 'your-wallet-address',
+          poolAddress: 'pool-address',
+          positionAddress: 'position-address',
+        },
+      }, 400);
+    }
+
+    const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+    const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+
+    // Get position to find earned fees
+    const userPositions = await pool.getPositionsByUserAndLbPair(new PublicKey(walletAddress));
+    const position = userPositions.userPositions.find(
+      (p: any) => p.publicKey.toBase58() === positionAddress
+    );
+
+    if (!position) {
+      return c.json({ error: 'Position not found' }, 404);
+    }
+
+    const posData = position.positionData;
+    const feeX = posData.feeX?.toString() || '0';
+    const feeY = posData.feeY?.toString() || '0';
+
+    if (feeX === '0' && feeY === '0') {
+      return c.json({
+        success: false,
+        message: 'No fees to claim',
+        fees: { tokenX: '0', tokenY: '0' },
+      });
+    }
+
+    // Build claim fee transaction
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+    const claimTx = await pool.claimSwapFee({
+      owner: new PublicKey(walletAddress),
+      position: position, // Pass full LbPosition object
+    });
+
+    // Serialize transaction
+    const txArray = Array.isArray(claimTx) ? claimTx : [claimTx];
+    const unsignedTransactions: string[] = [];
+
+    for (const tx of txArray) {
+      if ('recentBlockhash' in tx) {
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = new PublicKey(walletAddress);
+        unsignedTransactions.push(tx.serialize({ requireAllSignatures: false }).toString('base64'));
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: 'Fee claim transaction prepared',
+      fees: {
+        tokenX: feeX,
+        tokenY: feeY,
+      },
+      transactions: unsignedTransactions,
+      hint: 'Sign and submit to claim fees without withdrawing liquidity',
+    });
+  } catch (error: any) {
+    console.error('[FeeClaim] Error:', error);
+    return c.json({ error: 'Fee claim failed', details: error.message }, 500);
+  }
+});
+
+// Compound fees back into position
+app.post('/fees/compound', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { walletAddress, poolAddress, positionAddress } = body;
+
+    if (!walletAddress || !poolAddress || !positionAddress) {
+      return c.json({
+        error: 'Missing required parameters',
+        example: {
+          walletAddress: 'your-wallet-address',
+          poolAddress: 'pool-address',
+          positionAddress: 'position-address',
+        },
+      }, 400);
+    }
+
+    const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+    const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+
+    // Get position
+    const userPositions = await pool.getPositionsByUserAndLbPair(new PublicKey(walletAddress));
+    const position = userPositions.userPositions.find(
+      (p: any) => p.publicKey.toBase58() === positionAddress
+    );
+
+    if (!position) {
+      return c.json({ error: 'Position not found' }, 404);
+    }
+
+    const posData = position.positionData;
+    const feeX = posData.feeX?.toString() || '0';
+    const feeY = posData.feeY?.toString() || '0';
+
+    if (feeX === '0' && feeY === '0') {
+      return c.json({
+        success: false,
+        message: 'No fees to compound',
+        fees: { tokenX: '0', tokenY: '0' },
+      });
+    }
+
+    // Meteora DLMM doesn't have a native compound - you'd need to:
+    // 1. Claim fees
+    // 2. Add liquidity with those fees
+    // For now, return the claim tx and instructions for adding liquidity
+
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
+    const claimTx = await pool.claimSwapFee({
+      owner: new PublicKey(walletAddress),
+      position: position, // Pass full LbPosition object
+    });
+    
+    const txArray = Array.isArray(claimTx) ? claimTx : [claimTx];
+    const unsignedTransactions: string[] = [];
+    
+    for (const tx of txArray) {
+      if ('recentBlockhash' in tx) {
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = new PublicKey(walletAddress);
+        unsignedTransactions.push(tx.serialize({ requireAllSignatures: false }).toString('base64'));
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: 'Compound: First claim fees, then call /lp/open to re-add',
+      fees: {
+        tokenX: feeX,
+        tokenY: feeY,
+      },
+      step1: {
+        action: 'Claim fees',
+        transactions: unsignedTransactions,
+      },
+      step2: {
+        action: 'Add liquidity with claimed fees',
+        endpoint: 'POST /lp/open',
+        hint: 'After fees land in wallet, call /lp/open with the fee amounts',
+      },
+      note: 'Meteora DLMM requires separate claim + add steps (no native compound)',
+    });
+  } catch (error: any) {
+    console.error('[FeeCompound] Error:', error);
+    return c.json({ error: 'Compound failed', details: error.message }, 500);
   }
 });
 
