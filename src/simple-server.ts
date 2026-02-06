@@ -1009,6 +1009,8 @@ const KNOWN_POOLS = [
   { address: '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd', name: 'MET-USDC', tokenX: 'MET', tokenY: 'USDC' },
   { address: 'C8Gr6AUuq9hEdSYJzoEpNcdjpojPZwqG5MtQbeouNNwg', name: 'JUP-SOL', tokenX: 'JUP', tokenY: 'SOL' },
   { address: 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', name: 'SOL-USDC (alt)', tokenX: 'SOL', tokenY: 'USDC' },
+  { address: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7', name: 'SOL-USDC-75', tokenX: 'SOL', tokenY: 'USDC' },
+  { address: 'E4BmsCNH7SXa3gcQqkXuw3PhQmmAr2h6jvptmbejKMqx', name: 'MET-SOL', tokenX: 'MET', tokenY: 'SOL' },
 ];
 
 // Get positions by walletId
