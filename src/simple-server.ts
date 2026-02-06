@@ -3326,3 +3326,4 @@ serve({ fetch: app.fetch, port }, (info) => {
   console.log(`✅ Server running on http://0.0.0.0:${info.port}`);
   console.log(`📊 Worker status: ${isWorkerRunning() ? 'RUNNING' : 'STOPPED'}`);
 });
+// Deploy timestamp: 1770410586
