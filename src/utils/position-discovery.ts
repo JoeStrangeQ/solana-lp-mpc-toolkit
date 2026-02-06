@@ -51,6 +51,13 @@ export interface DiscoveredPosition {
     tokenX: string;
     tokenY: string;
   };
+  // LP trading fees earned (claimable)
+  fees: {
+    tokenX: string;       // Raw amount in smallest unit
+    tokenY: string;       // Raw amount in smallest unit
+    tokenXFormatted: string; // Human-readable with symbol
+    tokenYFormatted: string; // Human-readable with symbol
+  };
   solscanUrl: string;
 }
 
@@ -130,6 +137,14 @@ export async function discoverAllPositions(
             tokenX.symbol
           );
           
+          // Extract claimable fees from position data
+          const feeXRaw = posData.feeX?.toString() || '0';
+          const feeYRaw = posData.feeY?.toString() || '0';
+          
+          // Format fees with decimals
+          const feeXNum = Number(feeXRaw) / Math.pow(10, tokenX.decimals);
+          const feeYNum = Number(feeYRaw) / Math.pow(10, tokenY.decimals);
+          
           allPositions.push({
             address: lbPosition.publicKey.toBase58(),
             pool: {
@@ -155,6 +170,12 @@ export async function discoverAllPositions(
             amounts: {
               tokenX: posData.totalXAmount?.toString() || '0',
               tokenY: posData.totalYAmount?.toString() || '0',
+            },
+            fees: {
+              tokenX: feeXRaw,
+              tokenY: feeYRaw,
+              tokenXFormatted: `${feeXNum.toFixed(6)} ${tokenX.symbol}`,
+              tokenYFormatted: `${feeYNum.toFixed(6)} ${tokenY.symbol}`,
             },
             solscanUrl: `https://solscan.io/account/${lbPosition.publicKey.toBase58()}`,
           });
