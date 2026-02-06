@@ -922,25 +922,23 @@ app.get('/positions/:walletId/risk', async (c) => {
       });
     }
     
-    // Assess risk for each position
-    const assessments: PositionRiskAssessment[] = [];
-    
-    for (const pos of positions) {
+    // Assess risk for each position (parallel for speed)
+    const assessmentPromises = positions.map(async (pos) => {
       const tokenX = pos.pool.tokenX.symbol || 'UNKNOWN';
       
-      const assessment = await assessPositionRisk(
+      return assessPositionRisk(
         pos.address,
         pos.pool.address,
         pos.pool.name || 'Unknown Pool',
         pos.activeBinId,
         pos.binRange.lower,
         pos.binRange.upper,
-        pos.inRange ? undefined : new Date().toISOString(), // Simplified
+        pos.inRange ? undefined : new Date().toISOString(),
         tokenX
       );
-      
-      assessments.push(assessment);
-    }
+    });
+    
+    const assessments = await Promise.all(assessmentPromises);
     
     // Sort by health score (worst first)
     assessments.sort((a, b) => a.healthScore - b.healthScore);
@@ -1521,7 +1519,13 @@ app.get('/lp/pools', (c) => {
 });
 
 // Execute LP pipeline - requires walletId (stateless)
-app.post('/lp/execute', async (c) => {
+// Alias: /lp/atomic points to same handler
+app.post('/lp/atomic', async (c) => {
+  // Forward to /lp/execute handler
+  return lpExecuteHandler(c);
+});
+
+async function lpExecuteHandler(c: any) {
   try {
     const body = await c.req.json();
     const {
@@ -1650,6 +1654,11 @@ app.post('/lp/execute', async (c) => {
     stats.errors++;
     return c.json({ error: 'LP execute failed', details: error.message }, 500);
   }
+}
+
+// Main route for /lp/execute
+app.post('/lp/execute', async (c) => {
+  return lpExecuteHandler(c);
 });
 
 app.post('/lp/prepare', async (c) => {
