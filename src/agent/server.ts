@@ -26,6 +26,7 @@ import { PrivyWalletClient } from '../mpc/privyClient.js';
 import { LocalKeypairClient } from '../mpc/localKeypair.js';
 import { arciumPrivacy } from '../privacy/index.js';
 import DLMM from '@meteora-ag/dlmm';
+import { getPositionMonitor, type MonitoredPosition, type AlertResult } from '../monitoring/index.js';
 import { parseIntent, describeIntent } from './intent.js';
 import { createFeeBreakdown, FEE_CONFIG } from '../fees/index.js';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types.js';
@@ -406,6 +407,130 @@ app.get('/fees/calculate', (c) => {
     output: breakdown.total.netAmount,
     message: `${breakdown.protocol.amount} (${breakdown.protocol.bps / 100}%) goes to protocol treasury`,
   });
+});
+
+// ============ Position Monitoring ============
+
+// Add a position to monitor
+app.post('/monitor/track', async (c) => {
+  try {
+    const { positionAddress, poolAddress, binRange, alertOutOfRange, alertValueChange } = await c.req.json();
+
+    if (!positionAddress || !poolAddress || !binRange) {
+      return c.json<AgentResponse>({
+        success: false,
+        message: 'Missing positionAddress, poolAddress, or binRange. Example: { "positionAddress": "4Qn...", "poolAddress": "5hb...", "binRange": { "min": -805, "max": -795 } }',
+      }, 400);
+    }
+
+    const monitor = getPositionMonitor(config.solana.rpc);
+    monitor.addPosition({
+      positionAddress,
+      poolAddress,
+      binRange,
+      alertsEnabled: {
+        outOfRange: alertOutOfRange !== false, // default true
+        valueChange: alertValueChange || 50, // default 50%
+      },
+      createdAt: new Date().toISOString(),
+    });
+
+    return c.json<AgentResponse>({
+      success: true,
+      message: `Now monitoring position ${positionAddress}`,
+      data: {
+        positionAddress,
+        poolAddress,
+        binRange,
+        alerts: {
+          outOfRange: alertOutOfRange !== false,
+          valueChange: alertValueChange || 50,
+        },
+      },
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to track position',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+// List all monitored positions
+app.get('/monitor/list', (c) => {
+  const monitor = getPositionMonitor(config.solana.rpc);
+  const positions = monitor.getPositions();
+
+  return c.json<AgentResponse>({
+    success: true,
+    message: `Monitoring ${positions.length} positions`,
+    data: { positions },
+  });
+});
+
+// Remove a position from monitoring
+app.delete('/monitor/track/:positionAddress', (c) => {
+  const positionAddress = c.req.param('positionAddress');
+  const monitor = getPositionMonitor(config.solana.rpc);
+  monitor.removePosition(positionAddress);
+
+  return c.json<AgentResponse>({
+    success: true,
+    message: `Stopped monitoring position ${positionAddress}`,
+  });
+});
+
+// Check all positions and return alerts
+app.get('/monitor/check', async (c) => {
+  try {
+    const monitor = getPositionMonitor(config.solana.rpc);
+    const alerts = await monitor.checkAllPositions();
+
+    return c.json<AgentResponse>({
+      success: true,
+      message: alerts.length > 0 
+        ? `⚠️ ${alerts.length} alert(s) triggered!` 
+        : 'All positions healthy',
+      data: { 
+        alerts,
+        alertCount: alerts.length,
+        checkedAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to check positions',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
+});
+
+// Get status of a specific position
+app.get('/monitor/status/:positionAddress', async (c) => {
+  try {
+    const positionAddress = c.req.param('positionAddress');
+    const monitor = getPositionMonitor(config.solana.rpc);
+    const status = await monitor.getPositionStatus(positionAddress);
+
+    const statusEmoji = status.inRange ? '✅' : '🚨';
+    const statusText = status.inRange 
+      ? `In range (bin ${status.activeBin})` 
+      : `OUT OF RANGE (bin ${status.activeBin}, ${status.distanceFromRange} bins away)`;
+
+    return c.json<AgentResponse>({
+      success: true,
+      message: `${statusEmoji} ${statusText}`,
+      data: status,
+    });
+  } catch (error) {
+    return c.json<AgentResponse>({
+      success: false,
+      message: 'Failed to get position status',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    }, 500);
+  }
 });
 
 app.get('/health', async (c) => {
