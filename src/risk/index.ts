@@ -168,12 +168,61 @@ export async function getTokenVolatility(symbol: string): Promise<TokenVolatilit
     if (!mint) return null;
     
     const response = await fetch(`https://api.jup.ag/price/v2?ids=${mint}`);
-    if (!response.ok) return null;
+    
+    // If API fails or requires auth, return default volatility for known tokens
+    if (!response.ok) {
+      // Default volatility estimates for major tokens
+      const DEFAULT_VOLATILITY: Record<string, number> = {
+        'SOL': 200,   // ~2% daily
+        'JUP': 300,   // ~3% daily
+        'BONK': 500,  // ~5% daily (meme)
+        'WIF': 600,   // ~6% daily (meme)
+        'RAY': 250,   // ~2.5% daily
+        'mSOL': 180,  // ~1.8% daily (LST)
+        'JTO': 350,   // ~3.5% daily
+      };
+      
+      if (DEFAULT_VOLATILITY[symbol]) {
+        const defaultVol: TokenVolatility = {
+          symbol,
+          mint,
+          volatility24h: DEFAULT_VOLATILITY[symbol],
+          volatility7d: DEFAULT_VOLATILITY[symbol] * 1.5,
+          price: 0,
+          priceChange24h: 0,
+          updatedAt: new Date().toISOString(),
+        };
+        
+        if (client) {
+          await client.set(cacheKey, defaultVol, { ex: 300 });
+        }
+        return defaultVol;
+      }
+      return null;
+    }
     
     const data = await response.json() as any;
     const priceData = data.data?.[mint];
     
-    if (!priceData) return null;
+    if (!priceData) {
+      // Fallback to defaults if no price data
+      const DEFAULT_VOLATILITY: Record<string, number> = {
+        'SOL': 200, 'JUP': 300, 'BONK': 500, 'WIF': 600, 'RAY': 250, 'mSOL': 180, 'JTO': 350,
+      };
+      
+      if (DEFAULT_VOLATILITY[symbol]) {
+        return {
+          symbol,
+          mint,
+          volatility24h: DEFAULT_VOLATILITY[symbol],
+          volatility7d: DEFAULT_VOLATILITY[symbol] * 1.5,
+          price: 0,
+          priceChange24h: 0,
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      return null;
+    }
     
     // Estimate volatility from price change (simplified)
     // In production, use historical OHLCV data
