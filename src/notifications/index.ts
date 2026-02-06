@@ -617,8 +617,9 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
     }
     
     case 'toggle_alerts': {
-      const walletId = param;
-      const recipient = walletId ? await getRecipient(walletId) : null;
+      const walletId = param || '';
+      if (!walletId) return '❌ Wallet ID missing.';
+      const recipient = await getRecipient(walletId);
       if (!recipient) {
         return '❌ Settings not found.';
       }
@@ -631,8 +632,9 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
     }
     
     case 'toggle_rebalance': {
-      const walletId = param;
-      const recipient = walletId ? await getRecipient(walletId) : null;
+      const walletId = param || '';
+      if (!walletId) return '❌ Wallet ID missing.';
+      const recipient = await getRecipient(walletId);
       if (!recipient) {
         return '❌ Settings not found.';
       }
@@ -645,8 +647,9 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
     }
     
     case 'toggle_summary': {
-      const walletId = param;
-      const recipient = walletId ? await getRecipient(walletId) : null;
+      const walletId = param || '';
+      if (!walletId) return '❌ Wallet ID missing.';
+      const recipient = await getRecipient(walletId);
       if (!recipient) {
         return '❌ Settings not found.';
       }
