@@ -83,6 +83,5 @@ export {
   isWorkerRunning,
   getWorkerStatus,
   triggerPositionCheck,
-  triggerAlertProcessing,
 } from './worker.js';
 export type { WorkerState, WorkerLog } from './worker.js';

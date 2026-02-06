@@ -1911,7 +1911,6 @@ import {
   isWorkerRunning,
   getWorkerStatus,
   triggerPositionCheck,
-  triggerAlertProcessing,
   getUserSettings,
   setUserSettings,
   createDefaultSettings,
@@ -1924,7 +1923,6 @@ import {
   parseNaturalRule,
   getAlertStats,
   getFailedAlerts,
-  verifyTelegramBot,
   type UserSettings,
   type TrackedPosition,
 } from './monitoring/index.js';
@@ -1932,12 +1930,15 @@ import {
 // Worker control endpoints
 app.get('/worker/status', async (c) => {
   const status = await getWorkerStatus();
-  const telegramStatus = await verifyTelegramBot();
+  const telegramConfigured = !!process.env.TELEGRAM_BOT_TOKEN;
   
   return c.json({
     worker: status,
-    telegram: telegramStatus,
-    alertQueue: await getAlertStats(),
+    telegram: {
+      configured: telegramConfigured,
+      token: telegramConfigured ? 'set' : 'not set',
+    },
+    alertStats: await getAlertStats(),
   });
 });
 
@@ -1962,11 +1963,6 @@ app.post('/worker/stop', async (c) => {
 app.post('/worker/check', async (c) => {
   await triggerPositionCheck();
   return c.json({ success: true, message: 'Position check triggered' });
-});
-
-app.post('/worker/process-alerts', async (c) => {
-  await triggerAlertProcessing();
-  return c.json({ success: true, message: 'Alert processing triggered' });
 });
 
 // User settings endpoints
@@ -2111,6 +2107,235 @@ app.get('/alerts/stats', async (c) => {
 app.get('/alerts/failed', async (c) => {
   const failed = await getFailedAlerts();
   return c.json({ failed });
+});
+
+// ============ Notification System ============
+
+import {
+  getRecipient,
+  upsertRecipient,
+  consumeLinkCode,
+  sendAlert,
+  handleTelegramStart,
+  handleTelegramCallback,
+  type AlertPayload,
+} from './notifications/index.js';
+
+/**
+ * Register for notifications
+ * Supports: Telegram (via link code) and/or Webhook URL
+ */
+app.post('/notify/register', async (c) => {
+  const body = await c.req.json();
+  const { walletId, telegramCode, webhookUrl, webhookSecret, preferences } = body;
+  
+  if (!walletId) {
+    return c.json({ error: 'walletId is required' }, 400);
+  }
+  
+  const updates: any = { walletId, preferences };
+  
+  // Link Telegram via code
+  if (telegramCode) {
+    const linkCode = await consumeLinkCode(telegramCode);
+    if (!linkCode) {
+      return c.json({ error: 'Invalid or expired link code' }, 400);
+    }
+    updates.telegram = {
+      chatId: linkCode.chatId,
+      linkedAt: new Date().toISOString(),
+    };
+  }
+  
+  // Set webhook URL
+  if (webhookUrl) {
+    updates.webhook = {
+      url: webhookUrl,
+      secret: webhookSecret,
+      linkedAt: new Date().toISOString(),
+    };
+  }
+  
+  const recipient = await upsertRecipient(updates);
+  
+  return c.json({
+    success: true,
+    message: 'Notification preferences saved',
+    recipient: {
+      walletId: recipient.walletId,
+      telegram: recipient.telegram ? { linked: true, chatId: recipient.telegram.chatId } : undefined,
+      webhook: recipient.webhook ? { linked: true, url: recipient.webhook.url } : undefined,
+      preferences: recipient.preferences,
+    },
+  });
+});
+
+/**
+ * Get notification settings
+ */
+app.get('/notify/:walletId', async (c) => {
+  const walletId = c.req.param('walletId');
+  const recipient = await getRecipient(walletId);
+  
+  if (!recipient) {
+    return c.json({ error: 'Not registered for notifications' }, 404);
+  }
+  
+  return c.json({
+    walletId: recipient.walletId,
+    telegram: recipient.telegram ? { linked: true } : undefined,
+    webhook: recipient.webhook ? { linked: true, url: recipient.webhook.url } : undefined,
+    preferences: recipient.preferences,
+  });
+});
+
+/**
+ * Test notification delivery
+ */
+app.post('/notify/:walletId/test', async (c) => {
+  const walletId = c.req.param('walletId');
+  
+  const testPayload: AlertPayload = {
+    event: 'out_of_range',
+    walletId,
+    timestamp: new Date().toISOString(),
+    position: {
+      address: 'test-position',
+      poolName: 'TEST-POOL',
+      poolAddress: 'test-pool-address',
+    },
+    details: {
+      message: '🧪 This is a test notification from LP Agent Toolkit',
+      currentBin: 100,
+      binRange: { lower: 90, upper: 110 },
+      direction: 'above',
+      distance: 5,
+    },
+    action: {
+      suggested: 'rebalance',
+      endpoint: 'POST /lp/rebalance/execute',
+      method: 'POST',
+      params: { walletId, positionAddress: 'test' },
+    },
+  };
+  
+  const results = await sendAlert(walletId, testPayload);
+  
+  return c.json({
+    success: results.telegram?.success || results.webhook?.success || false,
+    results,
+  });
+});
+
+/**
+ * Telegram webhook endpoint (receives updates from Telegram)
+ */
+app.post('/telegram/webhook', async (c) => {
+  const update = await c.req.json();
+  
+  try {
+    // Handle /start command
+    if (update.message?.text?.startsWith('/start')) {
+      const chatId = update.message.chat.id;
+      const username = update.message.from?.username;
+      
+      const response = await handleTelegramStart(chatId, username);
+      
+      // Send response
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (botToken) {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: response,
+            parse_mode: 'Markdown',
+          }),
+        });
+      }
+    }
+    
+    // Handle callback queries (button presses)
+    if (update.callback_query) {
+      const chatId = update.callback_query.message?.chat.id;
+      const data = update.callback_query.data;
+      const callbackId = update.callback_query.id;
+      
+      if (chatId && data) {
+        const response = await handleTelegramCallback(chatId, data);
+        
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (botToken) {
+          // Answer callback query
+          await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              callback_query_id: callbackId,
+              text: 'Processing...',
+            }),
+          });
+          
+          // Send response message
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: response,
+              parse_mode: 'Markdown',
+            }),
+          });
+        }
+      }
+    }
+    
+    return c.json({ ok: true });
+  } catch (error: any) {
+    console.error('[Telegram Webhook] Error:', error);
+    return c.json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * Set up Telegram webhook URL
+ */
+app.post('/telegram/setup', async (c) => {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  
+  if (!botToken) {
+    return c.json({ error: 'TELEGRAM_BOT_TOKEN not configured' }, 400);
+  }
+  
+  // Get the webhook URL from request or auto-detect
+  const body = await c.req.json().catch(() => ({}));
+  const webhookUrl = body.url || `https://lp-agent-api-production.up.railway.app/telegram/webhook`;
+  
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: webhookUrl,
+        allowed_updates: ['message', 'callback_query'],
+      }),
+    });
+    
+    const data = await response.json() as any;
+    
+    if (data.ok) {
+      return c.json({
+        success: true,
+        message: 'Telegram webhook configured',
+        webhookUrl,
+      });
+    } else {
+      return c.json({ success: false, error: data.description }, 400);
+    }
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
 });
 
 // ============ Start ============

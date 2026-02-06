@@ -22,22 +22,12 @@ import {
   type TrackedPosition,
   type UserSettings,
 } from './userRules.js';
+// Alert queue removed - using unified notification system
 import {
-  queueOutOfRangeAlert,
-  queueRebalancePrompt,
-  queueDailySummary,
-  getReadyAlerts,
-  markProcessing,
-  markDelivered,
-  markRetry,
-  type QueuedAlert,
-} from './alertQueue.js';
-import {
-  sendOutOfRangeAlert,
-  sendRebalancePrompt,
-  sendDailySummary,
-  sendAlert,
-} from './telegram.js';
+  sendAlert as sendNotification,
+  getRecipient,
+  type AlertPayload,
+} from '../notifications/index.js';
 import { Redis } from '@upstash/redis';
 
 // Worker state keys
@@ -67,13 +57,11 @@ export interface WorkerLog {
 
 // Worker configuration
 const POSITION_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const ALERT_PROCESS_INTERVAL_MS = 10 * 1000; // 10 seconds
 const MAX_LOG_ENTRIES = 500;
 
 // Runtime state
 let isRunning = false;
 let positionCheckTimer: NodeJS.Timeout | null = null;
-let alertProcessTimer: NodeJS.Timeout | null = null;
 let connection: Connection | null = null;
 
 // Redis client
@@ -238,41 +226,53 @@ async function checkPosition(position: TrackedPosition): Promise<{ alertQueued: 
     });
     
     // Get user settings for delivery
-    const settings = await getUserSettings(position.userId);
+    // Calculate distance from range
+    const direction = currentBin < position.binRange.lower ? 'below' : 'above';
+    const distance = currentBin < position.binRange.lower
+      ? position.binRange.lower - currentBin
+      : currentBin - position.binRange.upper;
     
-    if (settings?.preferences.alertOnOutOfRange) {
-      await queueOutOfRangeAlert({
-        userId: position.userId,
-        positionAddress: position.positionAddress,
-        poolName: position.poolName,
-        currentBin,
-        binRange: position.binRange,
-        telegramChatId: settings.telegram?.chatId,
-      });
-      alertQueued = true;
-      
-      // Check if we should prompt for rebalance
-      if (!settings.preferences.autoRebalance) {
-        // Calculate how far out of range
-        const distance = currentBin < position.binRange.lower
-          ? position.binRange.lower - currentBin
-          : currentBin - position.binRange.upper;
-        const rangeWidth = position.binRange.upper - position.binRange.lower;
-        const percentOut = (distance / rangeWidth) * 100;
-        
-        if (percentOut >= settings.preferences.rebalanceThreshold) {
-          await queueRebalancePrompt({
-            userId: position.userId,
+    // Check if recipient is registered for notifications
+    const recipient = await getRecipient(position.walletId || position.userId);
+    
+    if (recipient) {
+      // Send via unified notification system
+      const alertPayload: AlertPayload = {
+        event: 'out_of_range',
+        walletId: position.walletId || position.userId,
+        timestamp: now,
+        position: {
+          address: position.positionAddress,
+          poolName: position.poolName,
+          poolAddress: position.poolAddress,
+        },
+        details: {
+          message: `Position is ${distance} bins ${direction} your range`,
+          currentBin,
+          binRange: position.binRange,
+          direction,
+          distance,
+        },
+        action: {
+          suggested: 'rebalance',
+          endpoint: 'POST /lp/rebalance/execute',
+          method: 'POST',
+          params: {
+            walletId: position.walletId,
+            poolAddress: position.poolAddress,
             positionAddress: position.positionAddress,
-            poolName: position.poolName,
-            oldRange: position.binRange,
-            suggestedRange: {
-              lower: currentBin - 5,
-              upper: currentBin + 5,
-            },
-            telegramChatId: settings.telegram?.chatId,
-          });
-        }
+          },
+        },
+      };
+      
+      const results = await sendNotification(position.walletId || position.userId, alertPayload);
+      alertQueued = results.telegram?.success || results.webhook?.success || false;
+      
+      if (alertQueued) {
+        await log('info', `Alert sent for ${position.poolName}`, { 
+          telegram: results.telegram?.success, 
+          webhook: results.webhook?.success 
+        });
       }
     }
   } else if (inRange && !wasInRange) {
@@ -281,160 +281,35 @@ async function checkPosition(position: TrackedPosition): Promise<{ alertQueued: 
       pool: position.poolName,
       currentBin,
     });
+    
+    // Send back-in-range notification
+    const recipient = await getRecipient(position.walletId || position.userId);
+    
+    if (recipient?.preferences.alertOnBackInRange) {
+      const alertPayload: AlertPayload = {
+        event: 'back_in_range',
+        walletId: position.walletId || position.userId,
+        timestamp: now,
+        position: {
+          address: position.positionAddress,
+          poolName: position.poolName,
+          poolAddress: position.poolAddress,
+        },
+        details: {
+          message: 'Position is back in range and earning fees!',
+          currentBin,
+          binRange: position.binRange,
+        },
+      };
+      
+      await sendNotification(position.walletId || position.userId, alertPayload);
+    }
   }
   
   return { alertQueued };
 }
 
-// ============ Alert Processing ============
-
-async function processAlertQueue(): Promise<void> {
-  try {
-    const alerts = await getReadyAlerts(10);
-    
-    if (alerts.length === 0) {
-      return;
-    }
-    
-    await log('info', `Processing ${alerts.length} queued alerts`);
-    
-    for (const alert of alerts) {
-      await processAlert(alert);
-    }
-    
-    await updateWorkerState({ lastAlertProcess: new Date().toISOString() });
-    
-  } catch (error: any) {
-    await log('error', 'Alert processing failed', { error: error.message });
-  }
-}
-
-async function processAlert(alert: QueuedAlert): Promise<void> {
-  await markProcessing(alert);
-  
-  let delivered = false;
-  let deliveryChannel = '';
-  let lastError = '';
-  
-  // Try Telegram first
-  if (alert.channels.includes('telegram') && alert.delivery.telegram) {
-    try {
-      const result = await deliverTelegramAlert(alert);
-      if (result.success) {
-        delivered = true;
-        deliveryChannel = 'telegram';
-      } else {
-        lastError = result.error || 'Telegram delivery failed';
-      }
-    } catch (e: any) {
-      lastError = e.message;
-    }
-  }
-  
-  // Try webhook as fallback
-  if (!delivered && alert.channels.includes('webhook') && alert.delivery.webhook) {
-    try {
-      const result = await deliverWebhookAlert(alert);
-      if (result.success) {
-        delivered = true;
-        deliveryChannel = 'webhook';
-      } else {
-        lastError = result.error || 'Webhook delivery failed';
-      }
-    } catch (e: any) {
-      lastError = e.message;
-    }
-  }
-  
-  if (delivered) {
-    await markDelivered(alert, deliveryChannel);
-    const state = await getWorkerState();
-    await updateWorkerState({ alertsDelivered: state.alertsDelivered + 1 });
-  } else {
-    await markRetry(alert, lastError);
-  }
-}
-
-async function deliverTelegramAlert(alert: QueuedAlert): Promise<{ success: boolean; error?: string }> {
-  const chatId = alert.delivery.telegram?.chatId;
-  if (!chatId) {
-    return { success: false, error: 'No chat ID' };
-  }
-  
-  // Map alert type to appropriate Telegram function
-  switch (alert.type) {
-    case 'out_of_range':
-      const oorResult = await sendOutOfRangeAlert({
-        chatId,
-        poolName: alert.payload.data?.poolName || 'Unknown',
-        positionAddress: alert.payload.data?.positionAddress || '',
-        currentBin: alert.payload.data?.currentBin || 0,
-        binRange: alert.payload.data?.binRange || { lower: 0, upper: 0 },
-        direction: alert.payload.data?.direction || 'above',
-        distance: alert.payload.data?.distance || 0,
-      });
-      return { success: oorResult.success, error: oorResult.error };
-    
-    case 'rebalance_prompt':
-      const rpResult = await sendRebalancePrompt({
-        chatId,
-        poolName: alert.payload.data?.poolName || 'Unknown',
-        positionAddress: alert.payload.data?.positionAddress || '',
-        currentRange: `${alert.payload.data?.oldRange?.lower || 0} - ${alert.payload.data?.oldRange?.upper || 0}`,
-        suggestedRange: `${alert.payload.data?.suggestedRange?.lower || 0} - ${alert.payload.data?.suggestedRange?.upper || 0}`,
-      });
-      return { success: rpResult.success, error: rpResult.error };
-    
-    case 'daily_summary':
-      const dsResult = await sendDailySummary({
-        chatId,
-        positions: alert.payload.data?.positions || [],
-        totalValue: alert.payload.data?.totalValue,
-        feesEarned: alert.payload.data?.feesEarned,
-      });
-      return { success: dsResult.success, error: dsResult.error };
-    
-    default:
-      // Generic alert
-      const result = await sendAlert({
-        chatId,
-        title: alert.payload.title,
-        message: alert.payload.message,
-        actions: alert.payload.actions,
-        priority: alert.priority,
-      });
-      return { success: result.success, error: result.error };
-  }
-}
-
-async function deliverWebhookAlert(alert: QueuedAlert): Promise<{ success: boolean; error?: string }> {
-  const webhook = alert.delivery.webhook;
-  if (!webhook?.url) {
-    return { success: false, error: 'No webhook URL' };
-  }
-  
-  try {
-    const response = await fetch(webhook.url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: alert.type,
-        userId: alert.userId,
-        ...alert.payload,
-        timestamp: new Date().toISOString(),
-      }),
-      signal: AbortSignal.timeout(10000),
-    });
-    
-    if (response.ok) {
-      return { success: true };
-    } else {
-      return { success: false, error: `HTTP ${response.status}` };
-    }
-  } catch (e: any) {
-    return { success: false, error: e.message };
-  }
-}
+// Alert processing now handled directly in checkPosition via unified notification system
 
 // ============ Worker Control ============
 
@@ -455,22 +330,15 @@ export async function startWorker(): Promise<void> {
   
   // Initial check
   await checkAllPositions();
-  await processAlertQueue();
   
-  // Start intervals
+  // Start position check interval
   positionCheckTimer = setInterval(async () => {
     if (isRunning) {
       await checkAllPositions();
     }
   }, POSITION_CHECK_INTERVAL_MS);
   
-  alertProcessTimer = setInterval(async () => {
-    if (isRunning) {
-      await processAlertQueue();
-    }
-  }, ALERT_PROCESS_INTERVAL_MS);
-  
-  await log('info', `Worker started. Position check: ${POSITION_CHECK_INTERVAL_MS / 1000}s, Alert process: ${ALERT_PROCESS_INTERVAL_MS / 1000}s`);
+  await log('info', `Worker started. Position check interval: ${POSITION_CHECK_INTERVAL_MS / 1000}s`);
 }
 
 /**
@@ -486,11 +354,6 @@ export async function stopWorker(): Promise<void> {
   if (positionCheckTimer) {
     clearInterval(positionCheckTimer);
     positionCheckTimer = null;
-  }
-  
-  if (alertProcessTimer) {
-    clearInterval(alertProcessTimer);
-    alertProcessTimer = null;
   }
   
   await log('info', '🛑 Worker stopped');
@@ -531,20 +394,3 @@ export async function triggerPositionCheck(): Promise<void> {
   await log('info', 'Manual position check triggered');
   await checkAllPositions();
 }
-
-/**
- * Force immediate alert processing
- */
-export async function triggerAlertProcessing(): Promise<void> {
-  await log('info', 'Manual alert processing triggered');
-  await processAlertQueue();
-}
-
-export default {
-  startWorker,
-  stopWorker,
-  isWorkerRunning,
-  getWorkerStatus,
-  triggerPositionCheck,
-  triggerAlertProcessing,
-};
