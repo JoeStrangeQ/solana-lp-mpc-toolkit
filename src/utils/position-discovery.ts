@@ -99,7 +99,8 @@ export async function discoverAllPositions(
         const pool = await DLMM.create(connection, new PublicKey(poolAddress));
         const binStep = Number(pool.lbPair.binStep);
         const activeBin = await pool.getActiveBin();
-        const currentPrice = Number(activeBin.price);
+        // Use pricePerToken for human-readable price (accounts for token decimals)
+        const currentPrice = Number(activeBin.pricePerToken);
         
         // Get token info
         const tokenXMint = positionInfo.tokenX.publicKey.toBase58();

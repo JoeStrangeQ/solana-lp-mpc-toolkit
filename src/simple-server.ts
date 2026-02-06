@@ -1333,7 +1333,8 @@ app.post('/lp/rebalance', async (c) => {
     // Current position info
     const currentLower = position.positionData.lowerBinId;
     const currentUpper = position.positionData.upperBinId;
-    const currentPrice = Number(activeBin.price); // Human-readable current price
+    // Use pricePerToken for human-readable price (accounts for token decimals)
+    const currentPrice = Number(activeBin.pricePerToken);
     
     // Calculate human-readable price ranges
     const currentPriceRange = calculateHumanPriceRange(
