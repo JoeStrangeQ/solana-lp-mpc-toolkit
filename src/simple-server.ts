@@ -2128,6 +2128,9 @@ import {
   handleBalance,
   handlePositions,
   handleStatus,
+  handleDeposit,
+  handleWithdraw,
+  handleSettings,
   getUserByChat,
   linkWalletToChat,
 } from './onboarding/index.js';
@@ -2460,19 +2463,61 @@ app.post('/telegram/webhook', async (c) => {
         case '/status':
           response = await handleStatus(chatId);
           break;
+        case '/deposit':
+          response = await handleDeposit(chatId);
+          break;
+        case '/withdraw': {
+          const withdrawResult = await handleWithdraw(chatId);
+          if (withdrawResult.buttons) {
+            // Send with buttons
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: withdrawResult.text,
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: withdrawResult.buttons },
+              }),
+            });
+            return c.json({ ok: true });
+          }
+          response = withdrawResult.text;
+          break;
+        }
+        case '/settings': {
+          const settingsResult = await handleSettings(chatId);
+          if (settingsResult.buttons) {
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: settingsResult.text,
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: settingsResult.buttons },
+              }),
+            });
+            return c.json({ ok: true });
+          }
+          response = settingsResult.text;
+          break;
+        }
         case '/help':
           response = [
             `🤖 *MnM LP Toolkit Commands*`,
             ``,
             `/start - Create wallet or show existing`,
-            `/link <id> - Link wallet created by agent`,
             `/balance - Check wallet balance`,
             `/positions - View LP positions`,
             `/status - Portfolio overview`,
+            `/deposit - Get deposit address`,
+            `/withdraw - Withdraw funds`,
+            `/settings - Alert preferences`,
             `/help - This message`,
             ``,
-            `🤝 *For Agents:*`,
-            `\`POST /onboard\` - Create wallet + webhook`,
+            `🔐 All transactions encrypted with *Arcium*`,
+            `⚡ MEV-protected via *Jito bundles*`,
             ``,
             `_Docs: api.mnm.ag_`,
           ].join('\n');

@@ -664,6 +664,142 @@ export async function handleStatus(chatId: number | string): Promise<string> {
   ].filter(Boolean).join('\n');
 }
 
+/**
+ * Handle /deposit - Show deposit address
+ */
+export async function handleDeposit(chatId: number | string): Promise<string> {
+  const user = await getUserByChat(chatId);
+  
+  if (!user) {
+    return `❌ No wallet found. Use /start to create one.`;
+  }
+  
+  return [
+    `💳 *Deposit Address*`,
+    ``,
+    `Send SOL or SPL tokens to:`,
+    ``,
+    `\`${user.walletAddress}\``,
+    ``,
+    `⚠️ *Important:*`,
+    `• Only send Solana assets`,
+    `• Minimum deposit: 0.01 SOL`,
+    `• Deposits are available immediately`,
+    ``,
+    `[View on Solscan](https://solscan.io/account/${user.walletAddress})`,
+  ].join('\n');
+}
+
+/**
+ * Handle /withdraw - Initiate withdrawal
+ */
+export async function handleWithdraw(chatId: number | string, args?: string): Promise<{ text: string; buttons?: any[][] }> {
+  const user = await getUserByChat(chatId);
+  
+  if (!user) {
+    return { text: `❌ No wallet found. Use /start to create one.` };
+  }
+  
+  const balance = await getWalletBalance(user.walletAddress);
+  
+  if (balance.sol < 0.001) {
+    return { 
+      text: [
+        `📤 *Withdraw*`,
+        ``,
+        `Insufficient balance: ${balance.sol.toFixed(4)} SOL`,
+        ``,
+        `Deposit SOL first using /deposit`,
+      ].join('\n')
+    };
+  }
+  
+  // If no args, show withdraw options
+  if (!args) {
+    return {
+      text: [
+        `📤 *Withdraw Funds*`,
+        ``,
+        `💰 Available: ${balance.sol.toFixed(4)} SOL`,
+        ``,
+        `Choose an option:`,
+      ].join('\n'),
+      buttons: [
+        [
+          { text: '📤 Withdraw All', callback_data: `withdraw_all:${user.walletId}` },
+        ],
+        [
+          { text: '📊 Withdraw from LP', callback_data: `withdraw_lp:${user.walletId}` },
+        ],
+        [
+          { text: '❌ Cancel', callback_data: 'dismiss' },
+        ],
+      ],
+    };
+  }
+  
+  return {
+    text: [
+      `📤 *Withdraw*`,
+      ``,
+      `To withdraw, use the buttons below or call:`,
+      `\`POST /lp/withdraw/atomic\``,
+      ``,
+      `Your transactions are:`,
+      `🔐 Encrypted with Arcium`,
+      `⚡ Bundled via Jito (MEV-protected)`,
+    ].join('\n'),
+  };
+}
+
+/**
+ * Handle /settings - Alert preferences
+ */
+export async function handleSettings(chatId: number | string): Promise<{ text: string; buttons?: any[][] }> {
+  const user = await getUserByChat(chatId);
+  
+  if (!user) {
+    return { text: `❌ No wallet found. Use /start to create one.` };
+  }
+  
+  const prefs = user.preferences;
+  
+  return {
+    text: [
+      `⚙️ *Alert Settings*`,
+      ``,
+      `🔔 Out of Range: ${prefs.alertOnOutOfRange ? '✅ On' : '❌ Off'}`,
+      `🔄 Auto-Rebalance: ${prefs.autoRebalance ? '✅ On' : '❌ Off'}`,
+      `📊 Daily Summary: ${prefs.dailySummary ? '✅ On' : '❌ Off'}`,
+      ``,
+      `Tap to toggle:`,
+    ].join('\n'),
+    buttons: [
+      [
+        { 
+          text: prefs.alertOnOutOfRange ? '🔔 Alerts: ON' : '🔕 Alerts: OFF', 
+          callback_data: `toggle_alerts:${user.walletId}` 
+        },
+      ],
+      [
+        { 
+          text: prefs.autoRebalance ? '🔄 Auto-Rebalance: ON' : '⏸️ Auto-Rebalance: OFF', 
+          callback_data: `toggle_rebalance:${user.walletId}` 
+        },
+      ],
+      [
+        { 
+          text: prefs.dailySummary ? '📊 Daily Summary: ON' : '📊 Daily Summary: OFF', 
+          callback_data: `toggle_summary:${user.walletId}` 
+        },
+      ],
+      [
+        { text: '✅ Done', callback_data: 'dismiss' },
+      ],
+    ],
+  };
+}
+
 export default {
   getUserProfile,
   getUserByChat,
@@ -679,4 +815,7 @@ export default {
   handleBalance,
   handlePositions,
   handleStatus,
+  handleDeposit,
+  handleWithdraw,
+  handleSettings,
 };

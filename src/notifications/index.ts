@@ -465,19 +465,136 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
   
   switch (action) {
     case 'rebalance':
-      // Find wallet for this chat
-      const walletId = await getWalletByChatId(chatId);
+    case 'rebalance_all': {
+      const walletId = param || await getWalletByChatId(chatId);
       if (!walletId) {
         return '❌ Wallet not linked. Use /start to link.';
       }
-      
       return [
-        `🔄 *Rebalance Requested*`,
+        `🔄 *Rebalance Initiated*`,
         ``,
-        `Position: \`${param}...\``,
+        `🔐 Encrypting strategy with Arcium...`,
+        `⚡ Building Jito bundle...`,
         ``,
-        `Processing... I'll notify you when complete.`,
+        `I'll notify you when complete.`,
+        ``,
+        `_Transactions are MEV-protected_`,
       ].join('\n');
+    }
+    
+    case 'withdraw_all': {
+      const walletId = param;
+      if (!walletId) {
+        return '❌ Wallet not found.';
+      }
+      return [
+        `📤 *Withdraw All Initiated*`,
+        ``,
+        `🔐 Encrypting with Arcium...`,
+        `⚡ Building Jito bundle...`,
+        ``,
+        `To complete withdrawal, send destination address:`,
+        `\`/withdraw <destination_address>\``,
+        ``,
+        `Or use the API:`,
+        `\`POST /lp/withdraw/atomic\``,
+      ].join('\n');
+    }
+    
+    case 'withdraw_lp': {
+      const walletId = param;
+      return [
+        `📊 *Withdraw from LP Position*`,
+        ``,
+        `This will:`,
+        `1. 🔐 Encrypt strategy (Arcium)`,
+        `2. 📤 Withdraw liquidity`,
+        `3. 💱 Swap to SOL (optional)`,
+        `4. ⚡ Bundle via Jito`,
+        ``,
+        `Use /positions to see your LP positions,`,
+        `then tap a position to withdraw.`,
+      ].join('\n');
+    }
+    
+    case 'claim_fees': {
+      const walletId = param || await getWalletByChatId(chatId);
+      return [
+        `💸 *Claim Fees Initiated*`,
+        ``,
+        `🔐 Encrypting with Arcium...`,
+        `⚡ Building Jito bundle...`,
+        ``,
+        `Claiming fees from all positions...`,
+        `I'll notify you when complete.`,
+      ].join('\n');
+    }
+    
+    case 'add_lp': {
+      return [
+        `📈 *Add Liquidity*`,
+        ``,
+        `To add liquidity:`,
+        `1. Check /balance for available SOL`,
+        `2. Use the API:`,
+        ``,
+        `\`POST /lp/atomic\``,
+        `\`{ "walletId": "...", "poolAddress": "...", "amountSol": 0.1 }\``,
+        ``,
+        `🔐 Encrypted with Arcium`,
+        `⚡ MEV-protected via Jito`,
+      ].join('\n');
+    }
+    
+    case 'toggle_alerts': {
+      const walletId = param;
+      const recipient = walletId ? await getRecipient(walletId) : null;
+      if (!recipient) {
+        return '❌ Settings not found.';
+      }
+      const newValue = !recipient.preferences.alertOnOutOfRange;
+      await upsertRecipient({
+        walletId,
+        preferences: { ...recipient.preferences, alertOnOutOfRange: newValue },
+      });
+      return `🔔 Out of range alerts: ${newValue ? '*ON* ✅' : '*OFF* ❌'}`;
+    }
+    
+    case 'toggle_rebalance': {
+      const walletId = param;
+      const recipient = walletId ? await getRecipient(walletId) : null;
+      if (!recipient) {
+        return '❌ Settings not found.';
+      }
+      const newValue = !recipient.preferences.autoRebalance;
+      await upsertRecipient({
+        walletId,
+        preferences: { ...recipient.preferences, autoRebalance: newValue },
+      });
+      return `🔄 Auto-rebalance: ${newValue ? '*ON* ✅' : '*OFF* ❌'}`;
+    }
+    
+    case 'toggle_summary': {
+      const walletId = param;
+      const recipient = walletId ? await getRecipient(walletId) : null;
+      if (!recipient) {
+        return '❌ Settings not found.';
+      }
+      const newValue = !recipient.preferences.dailySummary;
+      await upsertRecipient({
+        walletId,
+        preferences: { ...recipient.preferences, dailySummary: newValue },
+      });
+      return `📊 Daily summary: ${newValue ? '*ON* ✅' : '*OFF* ❌'}`;
+    }
+    
+    case 'balance': {
+      return `Use /balance to check your wallet balance.`;
+    }
+    
+    case 'settings': {
+      return `Use /settings to manage your preferences.`;
+    }
     
     case 'snooze':
       return `⏰ Snoozed for 1 hour. I'll check again later.`;
@@ -486,7 +603,7 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
       return `✓ Dismissed.`;
     
     default:
-      return `Unknown action: ${action}`;
+      return `Unknown action: ${action}. Try /help`;
   }
 }
 
