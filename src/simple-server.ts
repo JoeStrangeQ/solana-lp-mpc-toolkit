@@ -236,7 +236,7 @@ const SAMPLE_POOLS = [
 
 app.get('/', (c) => c.json({ 
   name: 'LP Agent Toolkit', 
-  version: '2.2.0-monitoring',
+  version: '2.2.1-fees',
   status: 'running',
   docs: 'https://mnm-web-seven.vercel.app',
   github: 'https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit',
