@@ -1903,11 +1903,227 @@ app.post('/fees/compound', async (c) => {
   }
 });
 
+// ============ Background Worker & User Management ============
+
+import {
+  startWorker,
+  stopWorker,
+  isWorkerRunning,
+  getWorkerStatus,
+  triggerPositionCheck,
+  triggerAlertProcessing,
+  getUserSettings,
+  setUserSettings,
+  createDefaultSettings,
+  getUserRules,
+  addUserRule,
+  removeUserRule,
+  trackPosition,
+  untrackPosition,
+  getTrackedPositions,
+  parseNaturalRule,
+  getAlertStats,
+  getFailedAlerts,
+  verifyTelegramBot,
+  type UserSettings,
+  type TrackedPosition,
+} from './monitoring/index.js';
+
+// Worker control endpoints
+app.get('/worker/status', async (c) => {
+  const status = await getWorkerStatus();
+  const telegramStatus = await verifyTelegramBot();
+  
+  return c.json({
+    worker: status,
+    telegram: telegramStatus,
+    alertQueue: await getAlertStats(),
+  });
+});
+
+app.post('/worker/start', async (c) => {
+  if (isWorkerRunning()) {
+    return c.json({ success: false, message: 'Worker already running' });
+  }
+  
+  await startWorker();
+  return c.json({ success: true, message: 'Worker started' });
+});
+
+app.post('/worker/stop', async (c) => {
+  if (!isWorkerRunning()) {
+    return c.json({ success: false, message: 'Worker not running' });
+  }
+  
+  await stopWorker();
+  return c.json({ success: true, message: 'Worker stopped' });
+});
+
+app.post('/worker/check', async (c) => {
+  await triggerPositionCheck();
+  return c.json({ success: true, message: 'Position check triggered' });
+});
+
+app.post('/worker/process-alerts', async (c) => {
+  await triggerAlertProcessing();
+  return c.json({ success: true, message: 'Alert processing triggered' });
+});
+
+// User settings endpoints
+app.get('/user/:userId/settings', async (c) => {
+  const userId = c.req.param('userId');
+  const settings = await getUserSettings(userId);
+  
+  if (!settings) {
+    return c.json({ error: 'User not found' }, 404);
+  }
+  
+  return c.json(settings);
+});
+
+app.post('/user/:userId/settings', async (c) => {
+  const userId = c.req.param('userId');
+  const body = await c.req.json();
+  
+  let settings = await getUserSettings(userId);
+  
+  if (!settings) {
+    // Create new user
+    settings = await createDefaultSettings(userId, body.telegram);
+  }
+  
+  // Merge preferences
+  if (body.preferences) {
+    settings.preferences = { ...settings.preferences, ...body.preferences };
+  }
+  if (body.telegram) {
+    settings.telegram = body.telegram;
+  }
+  if (body.webhook) {
+    settings.webhook = body.webhook;
+  }
+  
+  await setUserSettings(settings);
+  
+  return c.json({ success: true, settings });
+});
+
+// Position tracking endpoints
+app.get('/user/:userId/positions', async (c) => {
+  const userId = c.req.param('userId');
+  const positions = await getTrackedPositions(userId);
+  return c.json({ positions });
+});
+
+app.post('/user/:userId/positions/track', async (c) => {
+  const userId = c.req.param('userId');
+  const body = await c.req.json();
+  
+  const { positionAddress, poolAddress, poolName, binRange, walletId } = body;
+  
+  if (!positionAddress || !poolAddress || !poolName) {
+    return c.json({ error: 'Missing required fields: positionAddress, poolAddress, poolName' }, 400);
+  }
+  
+  const position: TrackedPosition = {
+    positionAddress,
+    poolAddress,
+    poolName,
+    userId,
+    walletId,
+    binRange: binRange || { lower: 0, upper: 0 },
+    createdAt: new Date().toISOString(),
+  };
+  
+  await trackPosition(position);
+  
+  return c.json({ success: true, message: `Now tracking ${poolName}`, position });
+});
+
+app.delete('/user/:userId/positions/:positionAddress', async (c) => {
+  const userId = c.req.param('userId');
+  const positionAddress = c.req.param('positionAddress');
+  
+  await untrackPosition(userId, positionAddress);
+  
+  return c.json({ success: true, message: 'Position untracked' });
+});
+
+// User rules endpoints
+app.get('/user/:userId/rules', async (c) => {
+  const userId = c.req.param('userId');
+  const rules = await getUserRules(userId);
+  return c.json({ rules });
+});
+
+app.post('/user/:userId/rules', async (c) => {
+  const userId = c.req.param('userId');
+  const body = await c.req.json();
+  
+  // Support natural language rule creation
+  if (body.command) {
+    const rule = parseNaturalRule(userId, body.command);
+    if (rule) {
+      await addUserRule(rule);
+      return c.json({ success: true, message: 'Rule created from command', rule });
+    } else {
+      return c.json({ error: 'Could not parse command into rule', command: body.command }, 400);
+    }
+  }
+  
+  // Direct rule creation
+  if (!body.type || !body.condition || !body.action) {
+    return c.json({ error: 'Missing required fields: type, condition, action' }, 400);
+  }
+  
+  const rule = {
+    id: `rule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    userId,
+    type: body.type,
+    condition: body.condition,
+    action: body.action,
+    enabled: body.enabled !== false,
+    triggered: false,
+    createdAt: new Date().toISOString(),
+    rawCommand: body.rawCommand,
+  };
+  
+  await addUserRule(rule);
+  
+  return c.json({ success: true, rule });
+});
+
+app.delete('/user/:userId/rules/:ruleId', async (c) => {
+  const userId = c.req.param('userId');
+  const ruleId = c.req.param('ruleId');
+  
+  await removeUserRule(userId, ruleId);
+  
+  return c.json({ success: true, message: 'Rule removed' });
+});
+
+// Alert queue endpoints
+app.get('/alerts/stats', async (c) => {
+  const stats = await getAlertStats();
+  return c.json(stats);
+});
+
+app.get('/alerts/failed', async (c) => {
+  const failed = await getFailedAlerts();
+  return c.json({ failed });
+});
+
 // ============ Start ============
 
 const port = parseInt(process.env.PORT || '3456');
 console.log(`🚀 LP Agent Toolkit - Starting on port ${port}...`);
 
+// Auto-start worker on boot
+startWorker().catch(err => {
+  console.error('Failed to start worker:', err);
+});
+
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`✅ Server running on http://0.0.0.0:${info.port}`);
+  console.log(`📊 Worker status: ${isWorkerRunning() ? 'RUNNING' : 'STOPPED'}`);
 });
