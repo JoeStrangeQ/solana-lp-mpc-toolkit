@@ -1799,32 +1799,22 @@ app.post('/lp/withdraw/execute', async (c) => {
     const { bundleId } = await sendBundle(signedTxs);
     console.log(`[Withdraw Execute] Bundle submitted: ${bundleId}`);
 
-    // Wait for confirmation
-    const status = await waitForBundle(bundleId, { timeoutMs: 60000 });
-
-    if (!status.landed) {
-      return c.json({
-        success: false,
-        error: 'Bundle failed to land',
-        bundleId,
-        details: status.error,
-      }, 500);
-    }
-
-    console.log(`[Withdraw Execute] ✅ Position withdrawn at slot ${status.slot}!`);
+    // Don't wait for confirmation to avoid timeout - return immediately
+    // User can check transaction status on Solscan
+    console.log(`[Withdraw Execute] ✅ Bundle submitted, not waiting for confirmation`);
 
     stats.actions.lpWithdrawn++;
     return c.json({
       success: true,
-      message: 'Position withdrawn successfully',
+      message: 'Withdrawal bundle submitted (check Solscan for confirmation)',
       walletId,
       walletAddress,
       poolAddress,
       positionAddress,
       bundle: {
         bundleId,
-        landed: true,
-        slot: status.slot,
+        submitted: true,
+        hint: 'Bundle submitted to Jito - check Solscan in 30-60 seconds for confirmation',
       },
       estimatedWithdraw: result.estimatedWithdraw,
       fee: result.fee,
