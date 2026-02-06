@@ -13,6 +13,8 @@ import { config } from '../config/index.js';
 import { arciumPrivacy } from '../privacy/index.js';
 import { buildTipTransaction, TipSpeed } from '../jito/index.js';
 import { FEE_CONFIG, calculateFee } from '../fees/index.js';
+import { getTokenPrices } from '../utils/prices.js';
+import { resolveTokens } from '../utils/token-metadata.js';
 
 export interface AtomicWithdrawParams {
   walletAddress: string;
@@ -20,6 +22,41 @@ export interface AtomicWithdrawParams {
   positionAddress: string;
   outputToken?: 'SOL' | 'USDC' | null; // Convert to single token (null = keep both)
   tipSpeed?: TipSpeed;
+}
+
+export interface TokenPnlDetail {
+  amount: string;
+  symbol: string;
+  usd: number;
+}
+
+export interface PnlSummary {
+  // What you're withdrawing
+  withdrawValue: {
+    tokenX: TokenPnlDetail;
+    tokenY: TokenPnlDetail;
+    totalUsd: number;
+  };
+  // Fees earned (already included in withdrawValue)
+  feesEarned: {
+    tokenX: TokenPnlDetail;
+    tokenY: TokenPnlDetail;
+    totalUsd: number;
+    note: string;
+  };
+  // Protocol fee (1%)
+  protocolFee: {
+    tokenX: { amount: string; usd: number };
+    tokenY: { amount: string; usd: number };
+    totalUsd: number;
+    rate: string;
+  };
+  // Net to user after protocol fee
+  netToUser: {
+    totalUsd: number;
+  };
+  // Summary message
+  summary: string;
 }
 
 export interface BuiltAtomicWithdraw {
@@ -35,6 +72,7 @@ export interface BuiltAtomicWithdraw {
     treasury: string;
   };
   encryptedStrategy?: { ciphertext: string; nonce: string };
+  pnl?: PnlSummary;
 }
 
 /**
@@ -79,6 +117,16 @@ export async function buildAtomicWithdraw(params: AtomicWithdrawParams): Promise
 
   const [tokenXMint, tokenYMint] = [pool.tokenX.publicKey.toBase58(), pool.tokenY.publicKey.toBase58()];
   const [decimalsX, decimalsY] = [pool.tokenX.mint.decimals, pool.tokenY.mint.decimals];
+
+  // Get fees from position (lifetime fees earned)
+  const unclaimedFeeX = new BN(positionData.feeX?.toString() || '0');
+  const unclaimedFeeY = new BN(positionData.feeY?.toString() || '0');
+  const claimedFeeX = new BN(positionData.totalClaimedFeeXAmount?.toString() || '0');
+  const claimedFeeY = new BN(positionData.totalClaimedFeeYAmount?.toString() || '0');
+
+  // Total fees earned over lifetime
+  const totalFeesX = unclaimedFeeX.add(claimedFeeX);
+  const totalFeesY = unclaimedFeeY.add(claimedFeeY);
 
   // Check minimum withdrawal
   const solMint = 'So11111111111111111111111111111111111111112';
@@ -240,6 +288,90 @@ export async function buildAtomicWithdraw(params: AtomicWithdrawParams): Promise
   });
   unsignedTransactions.push(tipTx);
 
+  // 7. Calculate PnL summary with USD values
+  let pnl: PnlSummary | undefined;
+  try {
+    // Get current USD prices
+    const prices = await getTokenPrices([tokenXMint, tokenYMint]);
+    const priceX = prices.get(tokenXMint) || 0;
+    const priceY = prices.get(tokenYMint) || 0;
+
+    // Resolve token symbols
+    const tokenMetadata = await resolveTokens([tokenXMint, tokenYMint]);
+    const symbolX = tokenMetadata.get(tokenXMint)?.symbol || 'Unknown';
+    const symbolY = tokenMetadata.get(tokenYMint)?.symbol || 'Unknown';
+
+    // Calculate amounts in human-readable format
+    const withdrawXHuman = Number(totalXAmount.toString()) / Math.pow(10, decimalsX);
+    const withdrawYHuman = Number(totalYAmount.toString()) / Math.pow(10, decimalsY);
+    const feesXHuman = Number(totalFeesX.toString()) / Math.pow(10, decimalsX);
+    const feesYHuman = Number(totalFeesY.toString()) / Math.pow(10, decimalsY);
+    const protocolFeeXHuman = feeX.feeAmount / Math.pow(10, decimalsX);
+    const protocolFeeYHuman = feeY.feeAmount / Math.pow(10, decimalsY);
+
+    // Calculate USD values
+    const withdrawXUsd = withdrawXHuman * priceX;
+    const withdrawYUsd = withdrawYHuman * priceY;
+    const feesXUsd = feesXHuman * priceX;
+    const feesYUsd = feesYHuman * priceY;
+    const protocolFeeXUsd = protocolFeeXHuman * priceX;
+    const protocolFeeYUsd = protocolFeeYHuman * priceY;
+
+    const totalWithdrawUsd = withdrawXUsd + withdrawYUsd;
+    const totalFeesUsd = feesXUsd + feesYUsd;
+    const totalProtocolFeeUsd = protocolFeeXUsd + protocolFeeYUsd;
+    const netToUserUsd = totalWithdrawUsd - totalProtocolFeeUsd;
+
+    pnl = {
+      withdrawValue: {
+        tokenX: { 
+          amount: withdrawXHuman.toFixed(6).replace(/\.?0+$/, ''), 
+          symbol: symbolX, 
+          usd: Math.round(withdrawXUsd * 100) / 100 
+        },
+        tokenY: { 
+          amount: withdrawYHuman.toFixed(6).replace(/\.?0+$/, ''), 
+          symbol: symbolY, 
+          usd: Math.round(withdrawYUsd * 100) / 100 
+        },
+        totalUsd: Math.round(totalWithdrawUsd * 100) / 100,
+      },
+      feesEarned: {
+        tokenX: { 
+          amount: feesXHuman.toFixed(6).replace(/\.?0+$/, ''), 
+          symbol: symbolX, 
+          usd: Math.round(feesXUsd * 100) / 100 
+        },
+        tokenY: { 
+          amount: feesYHuman.toFixed(6).replace(/\.?0+$/, ''), 
+          symbol: symbolY, 
+          usd: Math.round(feesYUsd * 100) / 100 
+        },
+        totalUsd: Math.round(totalFeesUsd * 100) / 100,
+        note: 'Lifetime fees from trading activity',
+      },
+      protocolFee: {
+        tokenX: { 
+          amount: protocolFeeXHuman.toFixed(6).replace(/\.?0+$/, ''), 
+          usd: Math.round(protocolFeeXUsd * 100) / 100 
+        },
+        tokenY: { 
+          amount: protocolFeeYHuman.toFixed(6).replace(/\.?0+$/, ''), 
+          usd: Math.round(protocolFeeYUsd * 100) / 100 
+        },
+        totalUsd: Math.round(totalProtocolFeeUsd * 100) / 100,
+        rate: '1%',
+      },
+      netToUser: {
+        totalUsd: Math.round(netToUserUsd * 100) / 100,
+      },
+      summary: `💰 Withdrawing $${totalWithdrawUsd.toFixed(2)} | Earned $${totalFeesUsd.toFixed(2)} in fees | Net after 1% fee: $${netToUserUsd.toFixed(2)}`,
+    };
+  } catch (pnlError) {
+    console.warn('[AtomicWithdraw] Failed to calculate PnL:', pnlError);
+    // PnL will be undefined if price fetch fails
+  }
+
   return {
     unsignedTransactions: unsignedTransactions.map(tx => Buffer.from(tx.serialize()).toString('base64')),
     estimatedWithdraw: {
@@ -264,6 +396,7 @@ export async function buildAtomicWithdraw(params: AtomicWithdrawParams): Promise
       ciphertext: encrypted.ciphertext.slice(0, 32) + '...',
       nonce: encrypted.nonce,
     },
+    pnl,
   };
 }
 
