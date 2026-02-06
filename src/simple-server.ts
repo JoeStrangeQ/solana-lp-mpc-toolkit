@@ -2243,6 +2243,135 @@ app.get('/notify/:walletId', async (c) => {
 });
 
 /**
+ * Send positions report with action buttons
+ */
+app.post('/notify/:walletId/positions', async (c) => {
+  const walletId = c.req.param('walletId');
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  
+  if (!botToken) {
+    return c.json({ error: 'TELEGRAM_BOT_TOKEN not configured' }, 400);
+  }
+  
+  // Get recipient
+  const recipient = await getRecipient(walletId);
+  if (!recipient?.telegram?.chatId) {
+    return c.json({ error: 'No Telegram linked for this wallet' }, 400);
+  }
+  
+  // Get wallet address from user profile
+  const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+  
+  // Look up wallet address from walletId via user profile
+  const { getUserProfile } = await import('./onboarding/index.js');
+  const user = await getUserProfile(walletId);
+  
+  if (!user?.walletAddress) {
+    return c.json({ error: 'Wallet not found' }, 404);
+  }
+  
+  // Fetch positions
+  const positions = await fetchAllUserPositions(conn, user.walletAddress);
+  
+  if (positions.length === 0) {
+    const text = [
+      `📊 *No LP Positions Found*`,
+      ``,
+      `Wallet: \`${user.walletAddress.slice(0, 8)}...${user.walletAddress.slice(-6)}\``,
+      ``,
+      `You don't have any Meteora DLMM positions yet.`,
+      ``,
+      `Use /balance to check your SOL balance.`,
+    ].join('\n');
+    
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: recipient.telegram.chatId,
+        text,
+        parse_mode: 'Markdown',
+      }),
+    });
+    
+    return c.json({ success: true, positions: 0 });
+  }
+  
+  // Format positions message
+  const positionLines = positions.map((p, i) => {
+    const status = p.inRange ? '🟢' : '🔴';
+    const priceDisplay = p.priceRange?.currentPrice 
+      ? `$${p.priceRange.currentPrice < 1 ? p.priceRange.currentPrice.toFixed(4) : p.priceRange.currentPrice.toFixed(2)}`
+      : 'N/A';
+    const rangeDisplay = p.priceRange?.display || 'Unknown';
+    
+    const feesX = p.fees?.tokenXFormatted || '0';
+    const feesY = p.fees?.tokenYFormatted || '0';
+    
+    return [
+      `${status} *${p.pool?.name || 'Unknown Pool'}* — ${p.inRange ? 'IN RANGE ✅' : 'OUT OF RANGE ⚠️'}`,
+      `📍 Price: ${priceDisplay} (${rangeDisplay.split(' ')[0]} - ${rangeDisplay.split(' ')[2]})`,
+      `💎 Fees: ${feesX} + ${feesY}`,
+    ].join('\n');
+  }).join('\n\n');
+  
+  const text = [
+    `📊 *Your LP Positions*`,
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    ``,
+    positionLines,
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `⏱ Monitoring: Every 5 min`,
+    `🔔 Alerts: Active`,
+  ].join('\n');
+  
+  // Build inline keyboard with buttons
+  const buttons: Array<Array<{ text: string; url?: string; callback_data?: string }>> = [];
+  
+  // Add Solscan links for each position
+  const solscanRow = positions.slice(0, 2).map(p => ({
+    text: `🔍 ${p.pool?.name || 'View'}`,
+    url: `https://solscan.io/account/${p.address}`,
+  }));
+  if (solscanRow.length > 0) buttons.push(solscanRow);
+  
+  // Action buttons
+  buttons.push([
+    { text: '💸 Claim Fees', callback_data: 'claim_fees' },
+    { text: '🔄 Rebalance', callback_data: 'rebalance' },
+  ]);
+  buttons.push([
+    { text: '📈 Add LP', callback_data: 'add_lp' },
+    { text: '📉 Withdraw', callback_data: 'withdraw' },
+  ]);
+  buttons.push([
+    { text: '💰 Balance', callback_data: 'balance' },
+    { text: '⚙️ Settings', callback_data: 'settings' },
+  ]);
+  
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: recipient.telegram.chatId,
+      text,
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: buttons },
+    }),
+  });
+  
+  const data = await response.json() as any;
+  
+  return c.json({
+    success: data.ok,
+    positions: positions.length,
+    error: data.ok ? undefined : data.description,
+  });
+});
+
+/**
  * Test notification delivery
  */
 app.post('/notify/:walletId/test', async (c) => {
@@ -2406,6 +2535,46 @@ app.post('/telegram/webhook', async (c) => {
   } catch (error: any) {
     console.error('[Telegram Webhook] Error:', error);
     return c.json({ ok: false, error: error.message });
+  }
+});
+
+/**
+ * Set up Telegram bot commands menu
+ */
+app.post('/telegram/commands', async (c) => {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  
+  if (!botToken) {
+    return c.json({ error: 'TELEGRAM_BOT_TOKEN not configured' }, 400);
+  }
+  
+  const commands = [
+    { command: 'start', description: '🚀 Create wallet or show existing' },
+    { command: 'balance', description: '💰 Check wallet balance' },
+    { command: 'positions', description: '📊 View LP positions' },
+    { command: 'status', description: '📈 Portfolio overview' },
+    { command: 'deposit', description: '💳 Get deposit address' },
+    { command: 'withdraw', description: '📤 Withdraw funds' },
+    { command: 'settings', description: '⚙️ Alert preferences' },
+    { command: 'help', description: '❓ Show all commands' },
+  ];
+  
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commands }),
+    });
+    
+    const data = await response.json() as any;
+    
+    if (data.ok) {
+      return c.json({ success: true, message: 'Bot commands menu set', commands });
+    } else {
+      return c.json({ success: false, error: data.description }, 400);
+    }
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
   }
 });
 
