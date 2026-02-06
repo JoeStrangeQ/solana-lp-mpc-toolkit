@@ -34,6 +34,21 @@ import {
   type WebhookConfig,
   type AlertResult,
 } from './monitoring/index.js';
+import { Redis } from '@upstash/redis';
+
+// Redis client for cache invalidation
+let redis: Redis | null = null;
+function getRedis(): Redis | null {
+  if (redis) return redis;
+  
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  
+  if (!url || !token) return null;
+  
+  redis = new Redis({ url, token });
+  return redis;
+}
 
 // Lazy-load Privy to avoid ESM/CJS issues at startup
 let PrivyWalletClient: any = null;
@@ -1270,6 +1285,17 @@ app.post('/lp/execute', async (c) => {
 
     console.log(`[LP Execute] ✅ Position opened at slot ${status.slot}!`);
 
+    // CACHE FIX: Invalidate position cache after new LP position is created
+    try {
+      const redis = getRedis();
+      if (redis) {
+        await redis.del(`positions:${walletId}`);
+        console.log(`[LP Execute] Invalidated position cache for wallet ${walletId}`);
+      }
+    } catch (e) {
+      console.warn('[LP Execute] Failed to invalidate position cache:', (e as Error).message);
+    }
+
     stats.actions.lpExecuted++;
     return c.json({
       success: true,
@@ -1587,6 +1613,17 @@ app.post('/lp/rebalance/execute', async (c) => {
       console.log(`[Rebalance Execute] ⚠️ Partial: Phase1=${result.phase1.status}, Phase2=${result.phase2.status}`);
     }
 
+    // CACHE FIX: Invalidate position cache after rebalance (whether successful or partial)
+    try {
+      const redis = getRedis();
+      if (redis) {
+        await redis.del(`positions:${walletId}`);
+        console.log(`[Rebalance Execute] Invalidated position cache for wallet ${walletId}`);
+      }
+    } catch (e) {
+      console.warn('[Rebalance Execute] Failed to invalidate position cache:', (e as Error).message);
+    }
+
     return c.json({
       success: result.success,
       message: result.success 
@@ -1806,6 +1843,17 @@ app.post('/lp/withdraw/execute', async (c) => {
         const { bundleId } = await sendBundle(signedTxs);
         console.log(`[Withdraw ${jobId}] ✅ Bundle submitted: ${bundleId}`);
 
+        // CACHE FIX: Invalidate position cache after successful submission
+        try {
+          const redis = getRedis();
+          if (redis) {
+            await redis.del(`positions:${walletId}`);
+            console.log(`[Withdraw ${jobId}] Invalidated position cache for wallet ${walletId}`);
+          }
+        } catch (e) {
+          console.warn(`[Withdraw ${jobId}] Failed to invalidate position cache:`, (e as Error).message);
+        }
+
         // Send Telegram notification if chatId provided
         if (chatId && process.env.TELEGRAM_BOT_TOKEN) {
           const msg = `✅ *Withdrawal Submitted*\n\nPool: ${poolAddress.slice(0, 8)}...\nBundle: \`${bundleId.slice(0, 16)}...\`\n\n_Check /positions in 30 seconds_`;
@@ -1905,6 +1953,17 @@ app.post('/lp/withdraw/execute/sync', async (c) => {
     // Don't wait for confirmation to avoid timeout - return immediately
     // User can check transaction status on Solscan
     console.log(`[Withdraw Execute] ✅ Bundle submitted, not waiting for confirmation`);
+
+    // CACHE FIX: Invalidate position cache after bundle submission
+    try {
+      const redis = getRedis();
+      if (redis) {
+        await redis.del(`positions:${walletId}`);
+        console.log(`[Withdraw Execute] Invalidated position cache for wallet ${walletId}`);
+      }
+    } catch (e) {
+      console.warn('Failed to invalidate position cache:', (e as Error).message);
+    }
 
     stats.actions.lpWithdrawn++;
     return c.json({
