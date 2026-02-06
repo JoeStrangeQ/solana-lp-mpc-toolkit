@@ -2445,13 +2445,77 @@ async function handleNaturalLanguage(
       pattern: /pool|top pool|best pool|where.*lp|apy/i,
       handler: async () => handlePools(chatId),
     },
-    // LP intent: "LP 0.5 SOL into SOL-USDC" or "add liquidity"
+    // LP intent: "LP 0.5 SOL into SOL-USDC" or "add liquidity" or "LP into <pool_address>"
     {
-      pattern: /lp\s+(\d+\.?\d*)\s*(sol)?|add.*liquidity|provide.*liquidity/i,
+      pattern: /lp\s+(\d+\.?\d*)\s*(sol)?|add.*liquidity|provide.*liquidity|lp.*into/i,
       handler: async () => {
         const amountMatch = text.match(/(\d+\.?\d*)\s*sol/i);
         const amount = amountMatch ? amountMatch[1] : '0.5';
-        // Default to SOL-USDC pool
+        
+        // Check for pool address (base58: 32-44 chars of alphanumeric)
+        const poolAddressMatch = text.match(/([1-9A-HJ-NP-Za-km-z]{32,44})/);
+        if (poolAddressMatch) {
+          const poolAddress = poolAddressMatch[1];
+          // Fetch pool info to get the name
+          try {
+            const poolResp = await fetch(`https://lp-agent-api-production.up.railway.app/pool/info?poolAddress=${poolAddress}`);
+            if (poolResp.ok) {
+              const poolData = await poolResp.json() as any;
+              const pairName = poolData.pairName || `Pool ${poolAddress.slice(0, 8)}...`;
+              return handleLpAmountPrompt(poolAddress, pairName);
+            }
+          } catch (e) {
+            console.error('Pool lookup failed:', e);
+          }
+          // Fallback: use address as name
+          return handleLpAmountPrompt(poolAddress, `Pool ${poolAddress.slice(0, 8)}...`);
+        }
+        
+        // Check for token pair like "JUP-SOL", "MET-USDC", "SOL-USDC"
+        const pairMatch = text.match(/([A-Z]{2,10})[- ]([A-Z]{2,10})/i);
+        if (pairMatch) {
+          const tokenA = pairMatch[1].toUpperCase();
+          const tokenB = pairMatch[2].toUpperCase();
+          const pairName = `${tokenA}-${tokenB}`;
+          
+          // Known pool addresses for common pairs
+          const knownPools: Record<string, string> = {
+            'SOL-USDC': 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE',
+            'USDC-SOL': 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE',
+            'JUP-SOL': 'Bz8dN5dnr6UG6nPqBLDSiJrgxtNNubnXUMFdWCQTnLC1',
+            'SOL-JUP': 'Bz8dN5dnr6UG6nPqBLDSiJrgxtNNubnXUMFdWCQTnLC1',
+            'MET-USDC': 'FBx2gTb2ZQjnDhNTuJRkKiwnJbWWR51o5GCqTunPUUJq',
+            'USDC-MET': 'FBx2gTb2ZQjnDhNTuJRkKiwnJbWWR51o5GCqTunPUUJq',
+            'BONK-SOL': '5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6',
+            'SOL-BONK': '5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6',
+          };
+          
+          const poolAddress = knownPools[pairName] || knownPools[`${tokenB}-${tokenA}`];
+          if (poolAddress) {
+            return handleLpAmountPrompt(poolAddress, pairName);
+          }
+          
+          // Try to search for the pool
+          try {
+            const searchResp = await fetch(`https://lp-agent-api-production.up.railway.app/pools/scan?tokenA=${tokenA}&tokenB=${tokenB}`);
+            if (searchResp.ok) {
+              const pools = await searchResp.json() as any[];
+              if (pools && pools.length > 0) {
+                const bestPool = pools[0];
+                return handleLpAmountPrompt(bestPool.address, pairName);
+              }
+            }
+          } catch (e) {
+            console.error('Pool search failed:', e);
+          }
+          
+          // Pool not found - tell user
+          return {
+            text: `❌ *Pool Not Found*\n\nCouldn't find a ${pairName} pool.\n\nTry /pools to see available pools, or provide the pool address directly.`,
+          };
+        }
+        
+        // Default to SOL-USDC pool if no pair specified
         return handleLpAmountPrompt('BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', 'SOL-USDC');
       },
     },
