@@ -1,0 +1,287 @@
+/**
+ * Universal Position Discovery
+ * 
+ * Discovers ALL DLMM positions for a wallet across ANY pool.
+ * No hardcoded pools - uses Meteora SDK's universal discovery.
+ */
+
+import { Connection, PublicKey } from '@solana/web3.js';
+import DLMM from '@meteora-ag/dlmm';
+import { 
+  resolveToken, 
+  resolveTokens, 
+  calculateHumanPriceRange, 
+  formatPriceRange,
+  formatPrice,
+} from './token-metadata';
+
+export interface DiscoveredPosition {
+  address: string;
+  pool: {
+    address: string;
+    name: string;
+    tokenX: {
+      mint: string;
+      symbol: string;
+      name: string;
+      decimals: number;
+    };
+    tokenY: {
+      mint: string;
+      symbol: string;
+      name: string;
+      decimals: number;
+    };
+    binStep: number;
+  };
+  binRange: {
+    lower: number;
+    upper: number;
+  };
+  priceRange: {
+    priceLower: number;
+    priceUpper: number;
+    currentPrice: number;
+    display: string;
+    unit: string;
+  };
+  activeBinId: number;
+  inRange: boolean;
+  amounts: {
+    tokenX: string;
+    tokenY: string;
+  };
+  solscanUrl: string;
+}
+
+/**
+ * Discover ALL DLMM positions for a wallet
+ * 
+ * Uses Meteora SDK's getAllLbPairPositionsByUser() which scans
+ * all DLMM pools on-chain. No hardcoded pool list needed.
+ * 
+ * @param connection - Solana RPC connection
+ * @param walletAddress - Wallet to query positions for
+ * @returns Array of discovered positions with human-readable prices
+ */
+export async function discoverAllPositions(
+  connection: Connection,
+  walletAddress: string
+): Promise<DiscoveredPosition[]> {
+  const userPubkey = new PublicKey(walletAddress);
+  const allPositions: DiscoveredPosition[] = [];
+  
+  console.log(`[PositionDiscovery] Scanning ALL DLMM pools for wallet ${walletAddress}...`);
+  
+  try {
+    // This is the magic - gets ALL positions across ALL pools
+    const positionsMap = await DLMM.getAllLbPairPositionsByUser(connection, userPubkey);
+    
+    console.log(`[PositionDiscovery] Found positions in ${positionsMap.size} pools`);
+    
+    // Collect all token mints to resolve in batch
+    const mintsToResolve = new Set<string>();
+    
+    for (const [poolAddress, positionInfo] of positionsMap) {
+      const tokenXMint = positionInfo.tokenX.publicKey.toBase58();
+      const tokenYMint = positionInfo.tokenY.publicKey.toBase58();
+      mintsToResolve.add(tokenXMint);
+      mintsToResolve.add(tokenYMint);
+    }
+    
+    // Resolve all tokens in batch
+    const tokenMetadata = await resolveTokens(Array.from(mintsToResolve));
+    
+    // Process each pool's positions
+    for (const [poolAddress, positionInfo] of positionsMap) {
+      try {
+        // Get pool details
+        const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+        const binStep = Number(pool.lbPair.binStep);
+        const activeBin = await pool.getActiveBin();
+        const currentPrice = Number(activeBin.price);
+        
+        // Get token info
+        const tokenXMint = positionInfo.tokenX.publicKey.toBase58();
+        const tokenYMint = positionInfo.tokenY.publicKey.toBase58();
+        const tokenX = tokenMetadata.get(tokenXMint)!;
+        const tokenY = tokenMetadata.get(tokenYMint)!;
+        
+        // Process each position in this pool
+        for (const lbPosition of positionInfo.lbPairPositionsData) {
+          const posData = lbPosition.positionData;
+          const lowerBinId = posData.lowerBinId;
+          const upperBinId = posData.upperBinId;
+          
+          // Calculate human-readable prices
+          const priceInfo = calculateHumanPriceRange(
+            lowerBinId,
+            upperBinId,
+            activeBin.binId,
+            currentPrice,
+            binStep
+          );
+          
+          const displayPrice = formatPriceRange(
+            priceInfo.priceLower,
+            priceInfo.priceUpper,
+            tokenY.symbol,
+            tokenX.symbol
+          );
+          
+          allPositions.push({
+            address: lbPosition.publicKey.toBase58(),
+            pool: {
+              address: poolAddress,
+              name: `${tokenX.symbol}-${tokenY.symbol}`,
+              tokenX,
+              tokenY,
+              binStep,
+            },
+            binRange: {
+              lower: lowerBinId,
+              upper: upperBinId,
+            },
+            priceRange: {
+              priceLower: priceInfo.priceLower,
+              priceUpper: priceInfo.priceUpper,
+              currentPrice: priceInfo.currentPrice,
+              display: displayPrice,
+              unit: `${tokenY.symbol} per ${tokenX.symbol}`,
+            },
+            activeBinId: activeBin.binId,
+            inRange: priceInfo.inRange,
+            amounts: {
+              tokenX: posData.totalXAmount?.toString() || '0',
+              tokenY: posData.totalYAmount?.toString() || '0',
+            },
+            solscanUrl: `https://solscan.io/account/${lbPosition.publicKey.toBase58()}`,
+          });
+        }
+      } catch (e) {
+        console.warn(`[PositionDiscovery] Failed to process pool ${poolAddress}:`, (e as Error).message);
+        // Continue with other pools
+      }
+    }
+    
+    console.log(`[PositionDiscovery] Discovered ${allPositions.length} total positions`);
+    return allPositions;
+    
+  } catch (e) {
+    console.error('[PositionDiscovery] Universal discovery failed:', (e as Error).message);
+    throw e;
+  }
+}
+
+/**
+ * Get position details for a specific position address
+ * 
+ * @param connection - Solana RPC connection
+ * @param walletAddress - Wallet that owns the position
+ * @param positionAddress - The specific position to look up
+ * @returns Position details or null if not found
+ */
+export async function getPositionDetails(
+  connection: Connection,
+  walletAddress: string,
+  positionAddress: string
+): Promise<DiscoveredPosition | null> {
+  const positions = await discoverAllPositions(connection, walletAddress);
+  return positions.find(p => p.address === positionAddress) || null;
+}
+
+/**
+ * Get position's bin range from chain
+ * Useful for monitoring when binRange wasn't provided
+ * 
+ * @param connection - Solana RPC connection
+ * @param poolAddress - The pool address
+ * @param positionAddress - The position to query
+ * @param walletAddress - The wallet that owns the position
+ * @returns Bin range { min, max } or null
+ */
+export async function getPositionBinRange(
+  connection: Connection,
+  poolAddress: string,
+  positionAddress: string,
+  walletAddress: string
+): Promise<{ min: number; max: number } | null> {
+  try {
+    const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+    const userPubkey = new PublicKey(walletAddress);
+    const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
+    
+    const position = positions.userPositions.find(
+      (p: any) => p.publicKey.toBase58() === positionAddress
+    );
+    
+    if (position) {
+      return {
+        min: position.positionData.lowerBinId,
+        max: position.positionData.upperBinId,
+      };
+    }
+    
+    return null;
+  } catch (e) {
+    console.warn(`[PositionDiscovery] Failed to get bin range:`, (e as Error).message);
+    return null;
+  }
+}
+
+/**
+ * Get pool info including current active bin and price
+ * 
+ * @param connection - Solana RPC connection
+ * @param poolAddress - The pool to query
+ * @returns Pool info with current price
+ */
+export async function getPoolInfo(
+  connection: Connection,
+  poolAddress: string
+): Promise<{
+  address: string;
+  name: string;
+  tokenX: { mint: string; symbol: string };
+  tokenY: { mint: string; symbol: string };
+  binStep: number;
+  activeBinId: number;
+  currentPrice: number;
+  displayPrice: string;
+} | null> {
+  try {
+    const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+    const binStep = Number(pool.lbPair.binStep);
+    const activeBin = await pool.getActiveBin();
+    const currentPrice = Number(activeBin.price);
+    
+    const tokenXMint = pool.tokenX.publicKey.toBase58();
+    const tokenYMint = pool.tokenY.publicKey.toBase58();
+    
+    const [tokenX, tokenY] = await Promise.all([
+      resolveToken(tokenXMint),
+      resolveToken(tokenYMint),
+    ]);
+    
+    return {
+      address: poolAddress,
+      name: `${tokenX.symbol}-${tokenY.symbol}`,
+      tokenX: { mint: tokenXMint, symbol: tokenX.symbol },
+      tokenY: { mint: tokenYMint, symbol: tokenY.symbol },
+      binStep,
+      activeBinId: activeBin.binId,
+      currentPrice,
+      displayPrice: `${formatPrice(currentPrice)} ${tokenY.symbol} per ${tokenX.symbol}`,
+    };
+  } catch (e) {
+    console.warn(`[PositionDiscovery] Failed to get pool info:`, (e as Error).message);
+    return null;
+  }
+}
+
+export default {
+  discoverAllPositions,
+  getPositionDetails,
+  getPositionBinRange,
+  getPoolInfo,
+};

@@ -157,17 +157,38 @@ export function getSymbol(mint: string): string {
 }
 
 /**
- * Convert bin ID to actual price
- * Formula: price = (1 + binStep/10000)^binId
+ * DEPRECATED: Use calculateHumanPriceRange instead.
+ * This gives mathematical prices, not human-readable ones.
  * 
- * @param binId - The bin ID (can be negative)
- * @param binStep - The bin step in basis points (e.g., 25 = 0.25%)
- * @returns The price at that bin
+ * Convert bin ID to mathematical price
+ * Formula: price = (1 + binStep/10000)^binId
  */
 export function binIdToPrice(binId: number, binStep: number): number {
-  // price = (1 + binStep/10000)^binId
   const base = 1 + binStep / 10000;
   return Math.pow(base, binId);
+}
+
+/**
+ * Calculate human-readable price from bin ID using active bin as anchor
+ * 
+ * The formula is:
+ *   targetPrice = currentPrice * (1 + binStep/10000)^(targetBinId - activeBinId)
+ * 
+ * @param targetBinId - The bin ID to get price for
+ * @param activeBinId - The active bin ID (from getActiveBin())
+ * @param currentPrice - The current price (from getActiveBin().price)
+ * @param binStep - The bin step in basis points
+ * @returns Human-readable price
+ */
+export function binIdToHumanPrice(
+  targetBinId: number,
+  activeBinId: number,
+  currentPrice: number,
+  binStep: number
+): number {
+  const relativeBins = targetBinId - activeBinId;
+  const base = 1 + binStep / 10000;
+  return currentPrice * Math.pow(base, relativeBins);
 }
 
 /**
@@ -183,12 +204,8 @@ export function priceToBinId(price: number, binStep: number): number {
 }
 
 /**
- * Calculate price range for a position
- * 
- * @param lowerBinId - Lower bin ID
- * @param upperBinId - Upper bin ID
- * @param binStep - Bin step in basis points
- * @returns Price range
+ * DEPRECATED: Use calculateHumanPriceRange instead.
+ * This gives mathematical prices, not human-readable ones.
  */
 export function calculatePriceRange(
   lowerBinId: number,
@@ -201,12 +218,89 @@ export function calculatePriceRange(
   };
 }
 
+/**
+ * Calculate human-readable price range for a position
+ * Uses the active bin's price as anchor for accurate conversion
+ * 
+ * @param lowerBinId - Lower bin ID of position
+ * @param upperBinId - Upper bin ID of position
+ * @param activeBinId - Active bin ID (from getActiveBin())
+ * @param currentPrice - Current price (from getActiveBin().price as number)
+ * @param binStep - Bin step in basis points
+ * @returns Human-readable price range
+ */
+export function calculateHumanPriceRange(
+  lowerBinId: number,
+  upperBinId: number,
+  activeBinId: number,
+  currentPrice: number,
+  binStep: number
+): {
+  priceLower: number;
+  priceUpper: number;
+  currentPrice: number;
+  inRange: boolean;
+} {
+  const priceLower = binIdToHumanPrice(lowerBinId, activeBinId, currentPrice, binStep);
+  const priceUpper = binIdToHumanPrice(upperBinId, activeBinId, currentPrice, binStep);
+  const inRange = activeBinId >= lowerBinId && activeBinId <= upperBinId;
+  
+  return {
+    priceLower,
+    priceUpper,
+    currentPrice,
+    inRange,
+  };
+}
+
+/**
+ * Format price for human display
+ * 
+ * @param price - The price to format
+ * @param decimals - Number of decimal places (default: 2 for most assets, 6 for micro-prices)
+ */
+export function formatPrice(price: number, decimals?: number): string {
+  // Auto-detect decimals based on price magnitude
+  if (decimals === undefined) {
+    if (price >= 1) {
+      decimals = 2;
+    } else if (price >= 0.0001) {
+      decimals = 6;
+    } else {
+      decimals = 10;
+    }
+  }
+  return price.toFixed(decimals);
+}
+
+/**
+ * Build human-readable price display string
+ * 
+ * @param priceLower - Lower price bound
+ * @param priceUpper - Upper price bound
+ * @param tokenYSymbol - Quote token symbol (e.g., "USDC")
+ * @param tokenXSymbol - Base token symbol (e.g., "SOL")
+ * @returns Human readable string like "195.50 - 205.00 USDC per SOL"
+ */
+export function formatPriceRange(
+  priceLower: number,
+  priceUpper: number,
+  tokenYSymbol: string,
+  tokenXSymbol: string
+): string {
+  return `${formatPrice(priceLower)} - ${formatPrice(priceUpper)} ${tokenYSymbol} per ${tokenXSymbol}`;
+}
+
 export default {
   resolveToken,
   resolveTokens,
   getSymbol,
   binIdToPrice,
+  binIdToHumanPrice,
   priceToBinId,
   calculatePriceRange,
+  calculateHumanPriceRange,
+  formatPrice,
+  formatPriceRange,
   KNOWN_TOKENS,
 };

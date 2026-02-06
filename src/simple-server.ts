@@ -10,7 +10,8 @@ import { arciumPrivacy } from './privacy';
 import { config } from './config';
 import { MeteoraDirectClient } from './dex/meteora';
 import DLMM from '@meteora-ag/dlmm';
-import { resolveTokens, binIdToPrice, calculatePriceRange } from './utils/token-metadata';
+import { resolveTokens, binIdToPrice, calculatePriceRange, calculateHumanPriceRange, formatPriceRange, formatPrice } from './utils/token-metadata';
+import { discoverAllPositions, getPositionBinRange, getPoolInfo } from './utils/position-discovery';
 import { buildAtomicLP } from './lp/atomic';
 import { buildAtomicWithdraw } from './lp/atomicWithdraw';
 import { sendBundle, waitForBundle, TipSpeed } from './jito';
@@ -352,7 +353,7 @@ app.get('/debug/config', (c) => c.json({
 app.post('/monitor/add', async (c) => {
   try {
     const body = await c.req.json();
-    const { positionAddress, poolAddress, binRange, webhookUrl, alerts } = body;
+    const { positionAddress, poolAddress, walletAddress, binRange, webhookUrl, alerts } = body;
     
     if (!positionAddress || !poolAddress) {
       return c.json({ 
@@ -360,16 +361,43 @@ app.post('/monitor/add', async (c) => {
         example: {
           positionAddress: 'your-position-address',
           poolAddress: 'pool-address',
+          walletAddress: 'wallet-address (optional, for auto-discovering binRange)',
           binRange: { min: 100, max: 120 },
           alerts: { outOfRange: true, valueChangePercent: 10 },
         },
       }, 400);
     }
     
+    // Auto-discover bin range if not provided
+    let actualBinRange = binRange;
+    let poolInfo = null;
+    
+    if (!binRange || (binRange.min === 0 && binRange.max === 0)) {
+      if (walletAddress) {
+        console.log(`[Monitor] Auto-discovering bin range for position ${positionAddress}...`);
+        const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+        const discoveredRange = await getPositionBinRange(conn, poolAddress, positionAddress, walletAddress);
+        
+        if (discoveredRange) {
+          actualBinRange = discoveredRange;
+          console.log(`[Monitor] Discovered bin range: ${discoveredRange.min} to ${discoveredRange.max}`);
+        } else {
+          console.warn(`[Monitor] Could not auto-discover bin range, using defaults`);
+          actualBinRange = { min: 0, max: 0 };
+        }
+        
+        // Also get pool info for better context
+        poolInfo = await getPoolInfo(conn, poolAddress);
+      } else {
+        console.warn(`[Monitor] No walletAddress provided, cannot auto-discover bin range`);
+        actualBinRange = { min: 0, max: 0 };
+      }
+    }
+    
     const position: MonitoredPosition = {
       positionAddress,
       poolAddress,
-      binRange: binRange || { min: 0, max: 0 },
+      binRange: actualBinRange,
       alertsEnabled: {
         outOfRange: alerts?.outOfRange ?? true,
         valueChange: alerts?.valueChangePercent ?? 0,
@@ -399,6 +427,8 @@ app.post('/monitor/add', async (c) => {
       success: true,
       message: `Position ${positionAddress} added to monitoring`,
       position,
+      poolInfo,
+      binRangeSource: binRange ? 'provided' : 'auto-discovered',
       totalMonitored: monitor.getPositions().length,
     });
   } catch (error: any) {
@@ -1003,15 +1033,8 @@ app.get('/swap/quote', async (c) => {
 
 // ============ Position Endpoints (Stateless) ============
 
-// Known DLMM pools to check for positions
-const KNOWN_POOLS = [
-  { address: 'BGm1tav58oGcsQJehL9WXBFXF7D27vZsKefj4xJKD5Y', name: 'SOL-USDC', tokenX: 'SOL', tokenY: 'USDC' },
-  { address: '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd', name: 'MET-USDC', tokenX: 'MET', tokenY: 'USDC' },
-  { address: 'C8Gr6AUuq9hEdSYJzoEpNcdjpojPZwqG5MtQbeouNNwg', name: 'JUP-SOL', tokenX: 'JUP', tokenY: 'SOL' },
-  { address: 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', name: 'SOL-USDC (alt)', tokenX: 'SOL', tokenY: 'USDC' },
-  { address: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7', name: 'SOL-USDC-75', tokenX: 'SOL', tokenY: 'USDC' },
-  { address: 'E4BmsCNH7SXa3gcQqkXuw3PhQmmAr2h6jvptmbejKMqx', name: 'MET-SOL', tokenX: 'MET', tokenY: 'SOL' },
-];
+// UNIVERSAL DISCOVERY - No hardcoded pools!
+// Uses Meteora SDK's getAllLbPairPositionsByUser to find ALL positions
 
 // Get positions by walletId
 app.get('/positions/:walletId', async (c) => {
@@ -1020,84 +1043,20 @@ app.get('/positions/:walletId', async (c) => {
     const { wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
     
-    // Query on-chain positions across all known pools
+    // Universal discovery - finds ALL positions across ALL DLMM pools
     const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
-    const userPubkey = new PublicKey(walletAddress);
-    const allPositions: any[] = [];
-    const mintsToResolve = new Set<string>();
-    
-    for (const poolInfo of KNOWN_POOLS) {
-      try {
-        const pool = await DLMM.create(conn, new PublicKey(poolInfo.address));
-        const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
-        const binStep = Number(pool.lbPair.binStep);
-        const tokenXMint = pool.tokenX.publicKey.toBase58();
-        const tokenYMint = pool.tokenY.publicKey.toBase58();
-        
-        mintsToResolve.add(tokenXMint);
-        mintsToResolve.add(tokenYMint);
-        
-        for (const pos of positions.userPositions) {
-          const activeBin = await pool.getActiveBin();
-          const lowerBinId = pos.positionData.lowerBinId;
-          const upperBinId = pos.positionData.upperBinId;
-          
-          // Calculate price bounds
-          const priceRange = calculatePriceRange(lowerBinId, upperBinId, binStep);
-          const currentPrice = binIdToPrice(activeBin.binId, binStep);
-          
-          allPositions.push({
-            address: pos.publicKey.toBase58(),
-            pool: {
-              address: poolInfo.address,
-              name: poolInfo.name,
-              tokenX: poolInfo.tokenX,
-              tokenY: poolInfo.tokenY,
-              tokenXMint,
-              tokenYMint,
-              binStep,
-            },
-            binRange: {
-              lower: lowerBinId,
-              upper: upperBinId,
-            },
-            priceRange: {
-              priceLower: priceRange.priceLower,
-              priceUpper: priceRange.priceUpper,
-              currentPrice,
-              unit: `${poolInfo.tokenY} per ${poolInfo.tokenX}`,
-            },
-            activeBinId: activeBin.binId,
-            inRange: activeBin.binId >= lowerBinId && activeBin.binId <= upperBinId,
-            solscanUrl: `https://solscan.io/account/${pos.publicKey.toBase58()}`,
-          });
-        }
-      } catch (e) {
-        // Pool query failed, skip
-        console.warn(`Failed to query pool ${poolInfo.name}:`, (e as Error).message);
-      }
-    }
-    
-    // Resolve token names
-    const tokenMetadata = await resolveTokens(Array.from(mintsToResolve));
-    
-    // Enrich positions with token symbols
-    for (const pos of allPositions) {
-      const tokenX = tokenMetadata.get(pos.pool.tokenXMint);
-      const tokenY = tokenMetadata.get(pos.pool.tokenYMint);
-      if (tokenX) pos.pool.tokenXSymbol = tokenX.symbol;
-      if (tokenY) pos.pool.tokenYSymbol = tokenY.symbol;
-    }
+    const positions = await discoverAllPositions(conn, walletAddress);
     
     return c.json({
       success: true,
-      message: `Found ${allPositions.length} positions`,
+      message: `Found ${positions.length} positions across all DLMM pools`,
       data: {
         walletId,
         walletAddress,
-        positions: allPositions,
-        totalPositions: allPositions.length,
+        positions,
+        totalPositions: positions.length,
       },
+      note: 'Universal discovery - no hardcoded pool list, finds positions in ANY Meteora DLMM pool',
     });
   } catch (error: any) {
     return c.json({ error: 'Failed to fetch positions', details: error.message }, 500);
@@ -1118,81 +1077,19 @@ app.get('/positions', async (c) => {
   }
   
   try {
+    // Universal discovery - finds ALL positions across ALL DLMM pools
     const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
-    const userPubkey = new PublicKey(walletAddress);
-    const allPositions: any[] = [];
-    const mintsToResolve = new Set<string>();
-    
-    for (const poolInfo of KNOWN_POOLS) {
-      try {
-        const pool = await DLMM.create(conn, new PublicKey(poolInfo.address));
-        const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
-        const binStep = Number(pool.lbPair.binStep);
-        const tokenXMint = pool.tokenX.publicKey.toBase58();
-        const tokenYMint = pool.tokenY.publicKey.toBase58();
-        
-        mintsToResolve.add(tokenXMint);
-        mintsToResolve.add(tokenYMint);
-        
-        for (const pos of positions.userPositions) {
-          const activeBin = await pool.getActiveBin();
-          const lowerBinId = pos.positionData.lowerBinId;
-          const upperBinId = pos.positionData.upperBinId;
-          
-          // Calculate price bounds
-          const priceRange = calculatePriceRange(lowerBinId, upperBinId, binStep);
-          const currentPrice = binIdToPrice(activeBin.binId, binStep);
-          
-          allPositions.push({
-            address: pos.publicKey.toBase58(),
-            pool: {
-              address: poolInfo.address,
-              name: poolInfo.name,
-              tokenX: poolInfo.tokenX,
-              tokenY: poolInfo.tokenY,
-              tokenXMint,
-              tokenYMint,
-              binStep,
-            },
-            binRange: {
-              lower: lowerBinId,
-              upper: upperBinId,
-            },
-            priceRange: {
-              priceLower: priceRange.priceLower,
-              priceUpper: priceRange.priceUpper,
-              currentPrice,
-              unit: `${poolInfo.tokenY} per ${poolInfo.tokenX}`,
-            },
-            activeBinId: activeBin.binId,
-            inRange: activeBin.binId >= lowerBinId && activeBin.binId <= upperBinId,
-            solscanUrl: `https://solscan.io/account/${pos.publicKey.toBase58()}`,
-          });
-        }
-      } catch (e) {
-        console.warn(`Failed to query pool ${poolInfo.name}:`, (e as Error).message);
-      }
-    }
-    
-    // Resolve token names
-    const tokenMetadata = await resolveTokens(Array.from(mintsToResolve));
-    
-    // Enrich positions with token symbols
-    for (const pos of allPositions) {
-      const tokenX = tokenMetadata.get(pos.pool.tokenXMint);
-      const tokenY = tokenMetadata.get(pos.pool.tokenYMint);
-      if (tokenX) pos.pool.tokenXSymbol = tokenX.symbol;
-      if (tokenY) pos.pool.tokenYSymbol = tokenY.symbol;
-    }
+    const positions = await discoverAllPositions(conn, walletAddress);
     
     return c.json({
       success: true,
-      message: `Found ${allPositions.length} positions`,
+      message: `Found ${positions.length} positions across all DLMM pools`,
       data: {
         walletAddress,
-        positions: allPositions,
-        totalPositions: allPositions.length,
+        positions,
+        totalPositions: positions.length,
       },
+      note: 'Universal discovery - no hardcoded pool list, finds positions in ANY Meteora DLMM pool',
     });
   } catch (error: any) {
     return c.json({ error: 'Failed to fetch positions', details: error.message }, 500);
@@ -1436,7 +1333,12 @@ app.post('/lp/rebalance', async (c) => {
     // Current position info
     const currentLower = position.positionData.lowerBinId;
     const currentUpper = position.positionData.upperBinId;
-    const currentPriceRange = calculatePriceRange(currentLower, currentUpper, binStep);
+    const currentPrice = Number(activeBin.price); // Human-readable current price
+    
+    // Calculate human-readable price ranges
+    const currentPriceRange = calculateHumanPriceRange(
+      currentLower, currentUpper, activeBin.binId, currentPrice, binStep
+    );
     
     // New position info (relative to active bin if not absolute)
     let targetLower = newLowerBin !== undefined ? activeBin.binId + newLowerBin : currentLower;
@@ -1454,7 +1356,9 @@ app.post('/lp/rebalance', async (c) => {
       }
     }
     
-    const newPriceRange = calculatePriceRange(targetLower, targetUpper, binStep);
+    const newPriceRange = calculateHumanPriceRange(
+      targetLower, targetUpper, activeBin.binId, currentPrice, binStep
+    );
     
     // Step 2: Build withdrawal transactions
     console.log(`[Rebalance] Building withdrawal for position ${positionAddress}...`);
@@ -1499,13 +1403,16 @@ app.post('/lp/rebalance', async (c) => {
         priceRange: {
           priceLower: currentPriceRange.priceLower,
           priceUpper: currentPriceRange.priceUpper,
+          display: formatPriceRange(currentPriceRange.priceLower, currentPriceRange.priceUpper, tokenY?.symbol || 'Y', tokenX?.symbol || 'X'),
         },
+        inRange: currentPriceRange.inRange,
       },
       newPosition: {
         binRange: { lower: targetLower, upper: targetUpper },
         priceRange: {
           priceLower: newPriceRange.priceLower,
           priceUpper: newPriceRange.priceUpper,
+          display: formatPriceRange(newPriceRange.priceLower, newPriceRange.priceUpper, tokenY?.symbol || 'Y', tokenX?.symbol || 'X'),
         },
         strategy,
         shape,
@@ -1516,7 +1423,8 @@ app.post('/lp/rebalance', async (c) => {
         tokenX: { mint: tokenXMint, symbol: tokenX?.symbol || 'Unknown' },
         tokenY: { mint: tokenYMint, symbol: tokenY?.symbol || 'Unknown' },
         activeBinId: activeBin.binId,
-        currentPrice: binIdToPrice(activeBin.binId, binStep),
+        currentPrice,
+        displayPrice: `${formatPrice(currentPrice)} ${tokenY?.symbol || 'Unknown'} per ${tokenX?.symbol || 'Unknown'}`,
       },
       withdraw: {
         transactions: withdrawResult.unsignedTransactions,
