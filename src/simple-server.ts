@@ -1210,48 +1210,118 @@ app.get('/lp/pools', (c) => {
 app.post('/lp/execute', async (c) => {
   try {
     const body = await c.req.json();
-    const { walletId, tokenA, tokenB, totalValueUsd, amount } = body;
-    const value = totalValueUsd || amount;
+    const { 
+      walletId, 
+      poolAddress, 
+      amountSol = 0.1, 
+      minBinId = -10, 
+      maxBinId = 10,
+      strategy = 'concentrated',
+      shape = 'spot',
+      tipSpeed = 'fast',
+      slippageBps = 300,
+    } = body;
     
     if (!walletId) {
       return c.json({ 
         error: 'Missing walletId',
         hint: 'First call POST /wallet/create, store the walletId, then pass it here',
-        example: { walletId: 'abc123', tokenA: 'SOL', tokenB: 'USDC', totalValueUsd: 500 }
+        example: { 
+          walletId: 'abc123', 
+          poolAddress: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7',
+          amountSol: 0.1,
+          minBinId: -10,
+          maxBinId: 10,
+        }
       }, 400);
     }
     
-    if (!tokenA || !tokenB || !value) {
+    if (!poolAddress) {
       return c.json({ 
-        error: 'Missing tokenA, tokenB, or totalValueUsd/amount',
-        example: { walletId: 'abc123', tokenA: 'SOL', tokenB: 'USDC', totalValueUsd: 500 }
+        error: 'Missing poolAddress',
+        hint: 'Use /pools/scan to find available pools',
+        example: { 
+          walletId: 'abc123', 
+          poolAddress: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7',
+          amountSol: 0.1,
+        }
       }, 400);
     }
     
     // Load wallet (stateless)
-    const { wallet } = await loadWalletById(walletId);
-    const fee = value * FEE_CONFIG.FEE_BPS / 10000;
+    const { client, wallet } = await loadWalletById(walletId);
+    const walletAddress = wallet.address;
+    
+    console.log(`[LP Execute] Opening position: ${amountSol} SOL in pool ${poolAddress}`);
+    
+    // Convert SOL to lamports
+    const lamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
+    const solMint = 'So11111111111111111111111111111111111111112';
+    
+    // Build atomic LP transactions
+    const lpResult = await buildAtomicLP({
+      walletAddress,
+      poolAddress,
+      collateralMint: solMint,
+      collateralAmount: lamports,
+      strategy: strategy as 'concentrated' | 'wide' | 'custom',
+      shape: shape as 'spot' | 'curve' | 'bidask',
+      minBinId,
+      maxBinId,
+      tipSpeed: tipSpeed as TipSpeed,
+      slippageBps,
+    });
+    
+    console.log(`[LP Execute] Built ${lpResult.unsignedTransactions.length} transactions, signing...`);
+    
+    // Sign all transactions with Privy
+    const signedTxs: string[] = [];
+    for (const unsignedTx of lpResult.unsignedTransactions) {
+      try {
+        const signedTx = await client.signTransaction(unsignedTx);
+        signedTxs.push(signedTx);
+      } catch (signErr: any) {
+        // Already partially signed with position keypair
+        signedTxs.push(unsignedTx);
+      }
+    }
+    
+    // Submit to Jito
+    console.log(`[LP Execute] Submitting ${signedTxs.length} txs to Jito...`);
+    const { bundleId } = await sendBundle(signedTxs);
+    console.log(`[LP Execute] Bundle submitted: ${bundleId}`);
+    
+    // Wait for confirmation
+    const status = await waitForBundle(bundleId, { timeoutMs: 60000 });
+    
+    if (!status.landed) {
+      return c.json({
+        success: false,
+        error: 'Bundle failed to land',
+        bundleId,
+        details: status.error,
+      }, 500);
+    }
+    
+    console.log(`[LP Execute] ✅ Position opened at slot ${status.slot}!`);
     
     stats.actions.lpExecuted++;
     return c.json({
       success: true,
+      message: `LP position opened with ${amountSol} SOL`,
       walletId,
-      walletAddress: wallet.address,
-      message: `LP pipeline prepared: $${value} into ${tokenA}-${tokenB}`,
-      data: {
-        pair: `${tokenA}-${tokenB}`,
-        totalValue: value,
-        fee,
-        pool: SAMPLE_POOLS[0],
-        steps: [
-          { step: 1, action: 'Check balances', status: 'pending' },
-          { step: 2, action: 'Swap to 50/50 if needed', status: 'pending' },
-          { step: 3, action: 'Add liquidity to Meteora DLMM', status: 'pending' },
-        ],
+      walletAddress,
+      poolAddress,
+      binRange: lpResult.binRange,
+      bundle: {
+        bundleId,
+        landed: status.landed,
+        slot: status.slot,
       },
-      note: 'Demo mode - production executes full pipeline',
+      encryptedStrategy: lpResult.encryptedStrategy,
     });
   } catch (error: any) {
+    console.error('[LP Execute] Error:', error);
     stats.errors++;
     return c.json({ error: 'LP execute failed', details: error.message }, 500);
   }
