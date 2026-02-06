@@ -38,6 +38,8 @@ const KEYS = {
   CHECK_COUNT: 'lp-toolkit:worker:checkCount',
   WITHDRAWAL_QUEUE: 'lp-toolkit:withdrawal:queue',
   WITHDRAWAL_PROCESSING: 'lp-toolkit:withdrawal:processing',
+  SWAP_QUEUE: 'lp-toolkit:swap:queue',
+  SWAP_PROCESSING: 'lp-toolkit:swap:processing',
 };
 
 // ============ Withdrawal Job Types ============
@@ -51,6 +53,13 @@ export interface WithdrawalJob {
   convertToSol: boolean;
   queuedAt: string;
   poolName?: string;
+}
+
+export interface SwapJob {
+  id: string;
+  walletId: string;
+  chatId: number | string;
+  queuedAt: string;
 }
 
 export interface WorkerState {
@@ -330,6 +339,7 @@ async function checkPosition(position: TrackedPosition): Promise<{ alertQueued: 
 
 const WITHDRAWAL_CHECK_INTERVAL_MS = 5 * 1000; // Check every 5 seconds
 let withdrawalQueueTimer: NodeJS.Timeout | null = null;
+let swapQueueTimer: NodeJS.Timeout | null = null;
 
 /**
  * Queue a withdrawal job for background processing
@@ -479,6 +489,127 @@ export async function getWithdrawalQueueLength(): Promise<number> {
   return await client.llen(KEYS.WITHDRAWAL_QUEUE);
 }
 
+// ============ Swap Queue ============
+
+/**
+ * Queue a swap-all-to-SOL job for background processing
+ */
+export async function queueSwapAll(job: Omit<SwapJob, 'id' | 'queuedAt'>): Promise<string> {
+  const client = getRedis();
+  if (!client) throw new Error('Redis not available');
+  
+  const id = `swap_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const fullJob: SwapJob = {
+    ...job,
+    id,
+    queuedAt: new Date().toISOString(),
+  };
+  
+  await client.lpush(KEYS.SWAP_QUEUE, JSON.stringify(fullJob));
+  await log('info', `Queued swap-all ${id}`, { walletId: job.walletId, chatId: job.chatId });
+  
+  return id;
+}
+
+/**
+ * Process one swap job from the queue
+ */
+async function processSwapQueue(): Promise<void> {
+  const client = getRedis();
+  if (!client) return;
+  
+  // Check if already processing
+  const processing = await client.get(KEYS.SWAP_PROCESSING);
+  if (processing) return;
+  
+  // Get next job
+  const rawJob = await client.rpop(KEYS.SWAP_QUEUE);
+  if (!rawJob) return;
+  
+  const job: SwapJob = typeof rawJob === 'string' ? JSON.parse(rawJob) : rawJob;
+  
+  // Mark as processing (5 min timeout)
+  await client.set(KEYS.SWAP_PROCESSING, job.id, { ex: 300 });
+  
+  await log('info', `Processing swap-all ${job.id}`, { walletId: job.walletId });
+  
+  try {
+    // Call the swap endpoint
+    const apiUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : 'http://localhost:3000';
+    
+    const response = await fetch(`${apiUrl}/wallet/${job.walletId}/swap-all-to-sol`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+    const result = await response.json() as any;
+    
+    // Send result to Telegram
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (botToken && job.chatId) {
+      let message: string;
+      
+      if (result.success) {
+        const swaps = result.swaps || [];
+        const swapLines = swaps.map((s: any) => `  • ${s.from} → ${s.to}: ${s.amount}`).join('\n');
+        
+        message = [
+          `✅ *Swap Complete!*`,
+          ``,
+          `🔄 Swapped ${swaps.length} token(s) to SOL`,
+          swapLines || '  _No tokens needed swapping_',
+          ``,
+          result.bundleId ? `📍 Bundle: \`${result.bundleId.slice(0, 16)}...\`` : '',
+          ``,
+          `_Use /balance to see updated balance_`,
+        ].filter(Boolean).join('\n');
+        
+        await log('info', `Swap ${job.id} successful`, { bundleId: result.bundleId });
+      } else {
+        message = [
+          `❌ *Swap Failed*`,
+          ``,
+          `Error: ${result.error || 'Unknown error'}`,
+          ``,
+          `_Please try again later_`,
+        ].join('\n');
+        
+        await log('error', `Swap ${job.id} failed`, { error: result.error });
+      }
+      
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: job.chatId,
+          text: message,
+          parse_mode: 'Markdown',
+        }),
+      });
+    }
+    
+  } catch (error: any) {
+    await log('error', `Swap ${job.id} threw error`, { error: error.message });
+    
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (botToken && job.chatId) {
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: job.chatId,
+          text: `❌ *Swap Error*\n\nFailed to swap tokens. Please try again.\n\nError: ${error.message}`,
+          parse_mode: 'Markdown',
+        }),
+      });
+    }
+  } finally {
+    await client.del(KEYS.SWAP_PROCESSING);
+  }
+}
+
 // ============ Worker Control ============
 
 /**
@@ -513,7 +644,14 @@ export async function startWorker(): Promise<void> {
     }
   }, WITHDRAWAL_CHECK_INTERVAL_MS);
   
-  await log('info', `Worker started. Position check: ${POSITION_CHECK_INTERVAL_MS / 1000}s, Withdrawal queue: ${WITHDRAWAL_CHECK_INTERVAL_MS / 1000}s`);
+  // Start swap queue processing
+  swapQueueTimer = setInterval(async () => {
+    if (isRunning) {
+      await processSwapQueue();
+    }
+  }, WITHDRAWAL_CHECK_INTERVAL_MS);
+  
+  await log('info', `Worker started. Position check: ${POSITION_CHECK_INTERVAL_MS / 1000}s, Queue processing: ${WITHDRAWAL_CHECK_INTERVAL_MS / 1000}s`);
 }
 
 /**
@@ -534,6 +672,11 @@ export async function stopWorker(): Promise<void> {
   if (withdrawalQueueTimer) {
     clearInterval(withdrawalQueueTimer);
     withdrawalQueueTimer = null;
+  }
+  
+  if (swapQueueTimer) {
+    clearInterval(swapQueueTimer);
+    swapQueueTimer = null;
   }
   
   await log('info', '🛑 Worker stopped');

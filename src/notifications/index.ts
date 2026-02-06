@@ -477,6 +477,48 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
   const param = colonIdx > -1 ? data.slice(colonIdx + 1) : undefined;
   
   switch (action) {
+    case 'refresh_balance': {
+      // Just re-trigger /balance - caller should handle this
+      return 'REFRESH_BALANCE';
+    }
+    
+    case 'swap_all': {
+      const walletId = param;
+      if (!walletId) {
+        return '❌ Wallet not found.';
+      }
+      
+      // Queue swap job for background processing
+      try {
+        const { queueSwapAll } = await import('../monitoring/worker.js');
+        
+        const jobId = await queueSwapAll({
+          walletId,
+          chatId,
+        });
+        
+        return [
+          `🔄 *Swap All to SOL Queued*`,
+          ``,
+          `🔐 Encrypting with Arcium...`,
+          `⚡ Will bundle via Jito for MEV protection`,
+          ``,
+          `Processing in background...`,
+          `I'll send you a message when complete!`,
+          `_(Usually 30-60 seconds)_`,
+        ].join('\n');
+        
+      } catch (error: any) {
+        return [
+          `❌ *Failed to Queue Swap*`,
+          ``,
+          `Error: ${error.message || 'Unknown error'}`,
+          ``,
+          `_Please try again later._`,
+        ].join('\n');
+      }
+    }
+    
     case 'rebalance':
     case 'rebalance_all': {
       const walletId = param || await getWalletByChatId(chatId);
