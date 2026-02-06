@@ -581,23 +581,68 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
         return '❌ Invalid LP parameters.';
       }
       
-      return [
-        `🚀 *LP Position Creating...*`,
-        ``,
-        `📊 Pool: ${poolAddress.slice(0, 8)}...`,
-        `💰 Amount: ${amount} SOL`,
-        `📐 Strategy: ${strategy}`,
-        ``,
-        `🔐 Encrypting strategy with Arcium...`,
-        `⚡ Building Jito bundle...`,
-        ``,
-        `_This may take 10-30 seconds._`,
-        `I'll notify you when complete!`,
-        ``,
-        `To execute via API:`,
-        `\`POST /lp/atomic\``,
-        `\`{ "walletId": "${walletId}", "poolAddress": "${poolAddress}", "amountSol": ${amount} }\``,
-      ].join('\n');
+      // Actually execute the LP - call internal API
+      try {
+        const apiUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
+          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+          : 'http://localhost:3000';
+        
+        const response = await fetch(`${apiUrl}/lp/execute`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletId,
+            poolAddress,
+            amountSol: parseFloat(amount),
+            strategy,
+          }),
+        });
+        
+        const result = await response.json() as any;
+        
+        if (result.success) {
+          // Get pool name from Meteora
+          let poolName = poolAddress.slice(0, 8) + '...';
+          try {
+            const poolResp = await fetch(`https://dlmm-api.meteora.ag/pair/${poolAddress}`);
+            if (poolResp.ok) {
+              const poolData = await poolResp.json() as any;
+              poolName = poolData.name || poolName;
+            }
+          } catch (e) { /* ignore */ }
+          
+          return [
+            `✅ *LP Position Opened!*`,
+            ``,
+            `📊 Pool: ${poolName}`,
+            `💰 Amount: ${amount} SOL`,
+            `📐 Strategy: ${strategy}`,
+            ``,
+            `🔐 Encrypted with Arcium`,
+            `⚡ Bundled via Jito`,
+            `📍 Bundle: \`${result.bundle?.bundleId?.slice(0, 16)}...\``,
+            ``,
+            `_Use /positions to view your LP_`,
+          ].join('\n');
+        } else {
+          return [
+            `❌ *LP Failed*`,
+            ``,
+            `Error: ${result.error || 'Unknown error'}`,
+            result.details ? `Details: ${result.details}` : '',
+            ``,
+            `_Try again or contact support._`,
+          ].filter(Boolean).join('\n');
+        }
+      } catch (error: any) {
+        return [
+          `❌ *LP Failed*`,
+          ``,
+          `Error: ${error.message || 'Request failed'}`,
+          ``,
+          `_Please try again later._`,
+        ].join('\n');
+      }
     }
     
     case 'add_lp': {
