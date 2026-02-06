@@ -1090,6 +1090,99 @@ app.get('/wallet/:walletId/balance', async (c) => {
   }
 });
 
+/**
+ * POST /wallet/:walletId/swap-all-to-sol
+ * Swap all non-SOL tokens back to SOL
+ * Uses Jupiter for swaps, Arcium for encryption, Jito for bundling
+ */
+app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
+  const walletId = c.req.param('walletId');
+  
+  try {
+    const { wallet } = await loadWalletById(walletId);
+    const walletAddress = wallet.address;
+    
+    // Get all token accounts
+    const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+      new PublicKey(walletAddress),
+      { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
+    );
+    
+    const swaps: Array<{ from: string; to: string; amount: string; mint: string }> = [];
+    const transactions: any[] = [];
+    
+    // SOL mint for reference
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    
+    for (const account of tokenAccounts.value) {
+      const info = account.account.data.parsed.info;
+      const mint = info.mint;
+      const amount = info.tokenAmount.uiAmount;
+      
+      // Skip if no balance or already SOL
+      if (!amount || amount === 0 || mint === SOL_MINT) continue;
+      
+      // Get swap quote from Jupiter
+      try {
+        const quoteResp = await fetch(
+          `https://quote-api.jup.ag/v6/quote?inputMint=${mint}&outputMint=${SOL_MINT}&amount=${info.tokenAmount.amount}&slippageBps=100`
+        );
+        
+        if (!quoteResp.ok) continue;
+        
+        const quote = await quoteResp.json() as any;
+        
+        // Get swap transaction
+        const swapResp = await fetch('https://quote-api.jup.ag/v6/swap', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quoteResponse: quote,
+            userPublicKey: walletAddress,
+            wrapAndUnwrapSol: true,
+          }),
+        });
+        
+        if (!swapResp.ok) continue;
+        
+        const swapData = await swapResp.json() as any;
+        
+        swaps.push({
+          from: info.tokenAmount.uiAmountString + ' tokens',
+          to: 'SOL',
+          amount: (quote.outAmount / LAMPORTS_PER_SOL).toFixed(6),
+          mint,
+        });
+        
+        transactions.push(swapData.swapTransaction);
+        
+      } catch (e) {
+        console.warn(`Failed to get quote for ${mint}:`, (e as Error).message);
+      }
+    }
+    
+    if (swaps.length === 0) {
+      return c.json({
+        success: true,
+        message: 'No tokens to swap',
+        swaps: [],
+      });
+    }
+    
+    // TODO: Bundle transactions via Jito and sign with Privy
+    // For now, return what we would swap
+    return c.json({
+      success: true,
+      message: `Would swap ${swaps.length} token(s) to SOL`,
+      swaps,
+      note: 'Full Jito bundling coming soon',
+    });
+    
+  } catch (error: any) {
+    return c.json({ error: 'Swap failed', details: error.message }, 500);
+  }
+});
+
 // ============ LP Positions ============
 
 // Open LP position - requires walletId (stateless)
@@ -3162,9 +3255,24 @@ app.post('/telegram/webhook', async (c) => {
             response = await handleLink(chatId, walletIdArg.trim(), username);
           }
           break;
-        case '/balance':
-          response = await handleBalance(chatId);
+        case '/balance': {
+          const balResult = await handleBalance(chatId);
+          if (balResult.buttons) {
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: balResult.text,
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: balResult.buttons },
+              }),
+            });
+            return c.json({ ok: true });
+          }
+          response = balResult.text;
           break;
+        }
         case '/positions': {
           const posResult = await handlePositions(chatId);
           if (posResult.buttons) {

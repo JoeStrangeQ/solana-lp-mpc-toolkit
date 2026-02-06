@@ -647,13 +647,13 @@ export async function handleLink(chatId: number | string, walletId: string, user
 }
 
 /**
- * Handle /balance
+ * Handle /balance - returns rich text with optional buttons
  */
-export async function handleBalance(chatId: number | string): Promise<string> {
+export async function handleBalance(chatId: number | string): Promise<{ text: string; buttons?: any[][] }> {
   const user = await getUserByChat(chatId);
   
   if (!user) {
-    return `❌ No wallet found. Use /start to create one.`;
+    return { text: `❌ No wallet found. Use /start to create one.` };
   }
   
   const balance = await getWalletBalance(user.walletAddress);
@@ -665,7 +665,7 @@ export async function handleBalance(chatId: number | string): Promise<string> {
       }).join('\n')
     : '  _No tokens_';
   
-  return [
+  const text = [
     `💰 *Wallet Balance*`,
     ``,
     `💵 *Total:* ~$${balance.totalUsd.toFixed(2)}`,
@@ -679,6 +679,23 @@ export async function handleBalance(chatId: number | string): Promise<string> {
     ``,
     `[View on Solscan](https://solscan.io/account/${user.walletAddress})`,
   ].join('\n');
+  
+  // Add "Swap All to SOL" button if there are non-SOL tokens
+  const buttons: any[][] = [];
+  
+  if (balance.tokens.length > 0) {
+    // Format: swap_all:walletId
+    buttons.push([
+      { text: '🔄 Swap All to SOL', callback_data: `swap_all:${user.walletId}` }
+    ]);
+  }
+  
+  // Always show refresh button
+  buttons.push([
+    { text: '🔄 Refresh', callback_data: `refresh_balance` }
+  ]);
+  
+  return { text, buttons: buttons.length > 0 ? buttons : undefined };
 }
 
 /**
