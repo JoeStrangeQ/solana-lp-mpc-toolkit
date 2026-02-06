@@ -3239,6 +3239,26 @@ app.post('/telegram/webhook', async (c) => {
     const text = update.message?.text || '';
     const username = update.message?.from?.username;
     
+    // Check for non-text messages (photos, stickers, etc.)
+    const hasPhoto = update.message?.photo;
+    const hasDocument = update.message?.document;
+    const hasSticker = update.message?.sticker;
+    const hasVoice = update.message?.voice;
+    
+    if (hasPhoto || hasDocument || hasSticker || hasVoice) {
+      const mediaType = hasPhoto ? 'images' : hasDocument ? 'documents' : hasSticker ? 'stickers' : 'voice messages';
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `👋 I can't process ${mediaType} yet. Try sending a text command like /balance or /pools instead!`,
+          parse_mode: 'Markdown',
+        }),
+      });
+      return c.json({ ok: true });
+    }
+    
     let response = '';
     
     // Handle text commands
