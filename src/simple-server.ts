@@ -14,7 +14,7 @@ import { resolveTokens, binIdToPrice, calculatePriceRange, calculateHumanPriceRa
 import { discoverAllPositions, getPositionBinRange, getPoolInfo } from './utils/position-discovery';
 import { buildAtomicLP } from './lp/atomic';
 import { buildAtomicWithdraw } from './lp/atomicWithdraw';
-import { buildAtomicRebalance } from './lp/atomicRebalance';
+import { executeRebalance } from './lp/atomicRebalance';
 import { sendBundle, waitForBundle, TipSpeed } from './jito';
 import {
   getPositionMonitor,
@@ -1523,8 +1523,12 @@ app.post('/lp/rebalance', async (c) => {
 /**
  * POST /lp/rebalance/execute
  *
- * Execute a TRULY atomic rebalance (withdraw + re-enter in ONE Jito bundle)
- * All-or-nothing: either everything succeeds or nothing does.
+ * Execute resilient rebalance (two-phase with recovery)
+ * Phase 1: Withdraw position
+ * Phase 2: Re-enter with new range
+ * 
+ * If Phase 1 succeeds but Phase 2 fails, tokens are safe in wallet
+ * and can be manually re-entered via POST /lp/execute
  */
 app.post('/lp/rebalance/execute', async (c) => {
   try {
@@ -1551,11 +1555,12 @@ app.post('/lp/rebalance/execute', async (c) => {
     const { client, wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
 
-    console.log(`[Rebalance Execute] Building atomic rebalance bundle...`);
+    console.log(`[Rebalance Execute] Starting resilient two-phase rebalance...`);
 
-    // Build ALL transactions for a single atomic bundle
-    const rebalanceResult = await buildAtomicRebalance({
+    // Execute the resilient rebalance with Privy signing
+    const result = await executeRebalance({
       walletAddress,
+      walletId,
       poolAddress,
       positionAddress,
       newMinBinOffset,
@@ -1564,59 +1569,37 @@ app.post('/lp/rebalance/execute', async (c) => {
       shape: shape as 'spot' | 'curve' | 'bidask',
       tipSpeed: tipSpeed as TipSpeed,
       slippageBps,
+      signTransaction: async (tx: string) => {
+        try {
+          return await client.signTransaction(tx);
+        } catch (e) {
+          // May already be signed with position keypair
+          return tx;
+        }
+      },
     });
-
-    console.log(`[Rebalance Execute] Built ${rebalanceResult.unsignedTransactions.length} txs for atomic bundle`);
-
-    // Sign all transactions with Privy (the new position keypair is already applied)
-    const signedTxs: string[] = [];
-    for (const unsignedTx of rebalanceResult.unsignedTransactions) {
-      try {
-        const signedTx = await client.signTransaction(unsignedTx);
-        signedTxs.push(signedTx);
-      } catch (signErr: any) {
-        console.error('[Rebalance] Sign error (may be pre-signed):', signErr.message);
-        // If signing fails, transaction may already be partially signed
-        signedTxs.push(unsignedTx);
-      }
-    }
-
-    // Submit as ONE atomic bundle to Jito
-    console.log(`[Rebalance Execute] Submitting ${signedTxs.length} txs as ONE Jito bundle...`);
-    const { bundleId } = await sendBundle(signedTxs);
-    console.log(`[Rebalance Execute] Bundle submitted: ${bundleId}`);
-
-    // Wait for bundle to land (all-or-nothing)
-    const bundleStatus = await waitForBundle(bundleId, { timeoutMs: 90000 });
 
     stats.actions.lpExecuted++;
 
-    if (!bundleStatus.landed) {
-      return c.json({
-        success: false,
-        error: 'Atomic rebalance bundle failed to land',
-        bundleId,
-        details: bundleStatus.error,
-        note: 'All-or-nothing: your original position is unchanged',
-      }, 500);
+    if (result.success) {
+      console.log(`[Rebalance Execute] ✅ Rebalance complete!`);
+    } else {
+      console.log(`[Rebalance Execute] ⚠️ Partial: Phase1=${result.phase1.status}, Phase2=${result.phase2.status}`);
     }
 
-    console.log(`[Rebalance Execute] ✅ Atomic rebalance landed at slot ${bundleStatus.slot}!`);
-
     return c.json({
-      success: true,
-      message: 'Atomic rebalance completed!',
+      success: result.success,
+      message: result.success 
+        ? 'Rebalance completed successfully!' 
+        : `Rebalance ${result.phase1.status === 'success' ? 'partial' : 'failed'}: ${result.recoveryHint}`,
       walletId,
       walletAddress,
-      bundleId,
-      slot: bundleStatus.slot,
-      oldPosition: rebalanceResult.oldPosition,
-      newPosition: rebalanceResult.newPosition,
-      fee: rebalanceResult.fee,
-      encryptedStrategy: rebalanceResult.encryptedStrategy?.ciphertext 
-        ? { ciphertext: rebalanceResult.encryptedStrategy.ciphertext.slice(0, 40) + '...' }
-        : undefined,
-      note: 'Atomic bundle: withdraw + re-enter executed as single all-or-nothing operation',
+      phase1: result.phase1,
+      phase2: result.phase2,
+      oldPosition: result.oldPosition,
+      newPosition: result.newPosition,
+      tokensInWallet: result.tokensInWallet,
+      recoveryHint: result.recoveryHint,
     });
   } catch (error: any) {
     console.error('[Rebalance Execute] Error:', error);
@@ -1624,7 +1607,6 @@ app.post('/lp/rebalance/execute', async (c) => {
     return c.json({ 
       error: 'Rebalance execution failed', 
       details: error.message,
-      note: 'No changes made - atomic bundle failed before submission',
     }, 500);
   }
 });
