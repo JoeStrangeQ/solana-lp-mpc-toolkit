@@ -2483,16 +2483,14 @@ async function handleNaturalLanguage(
           const tokenB = pairMatch[2].toUpperCase();
           const pairName = `${tokenA}-${tokenB}`;
           
-          // Known pool addresses for common pairs
+          // Known pool addresses for common pairs (verified on Meteora Feb 2026)
           const knownPools: Record<string, string> = {
-            'SOL-USDC': 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE',
-            'USDC-SOL': 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE',
-            'JUP-SOL': 'Bz8dN5dnr6UG6nPqBLDSiJrgxtNNubnXUMFdWCQTnLC1',
-            'SOL-JUP': 'Bz8dN5dnr6UG6nPqBLDSiJrgxtNNubnXUMFdWCQTnLC1',
-            'MET-USDC': 'FBx2gTb2ZQjnDhNTuJRkKiwnJbWWR51o5GCqTunPUUJq',
-            'USDC-MET': 'FBx2gTb2ZQjnDhNTuJRkKiwnJbWWR51o5GCqTunPUUJq',
-            'BONK-SOL': '5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6',
-            'SOL-BONK': '5rCf1DM8LjKTw4YqhnoLcngyZYeNnQqztScTogYHAS6',
+            'SOL-USDC': '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7',  // $183K TVL
+            'USDC-SOL': '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7',
+            'MET-USDC': '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd',  // Verified
+            'USDC-MET': '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd',
+            'BFS-SOL': 'E6sr5aGsJwkmvxQxLWrLzo78wMFQm7JUn6aCTGpF4zmH',   // ~50% APR, $175K TVL
+            'SOL-BFS': 'E6sr5aGsJwkmvxQxLWrLzo78wMFQm7JUn6aCTGpF4zmH',
           };
           
           const poolAddress = knownPools[pairName] || knownPools[`${tokenB}-${tokenA}`];
