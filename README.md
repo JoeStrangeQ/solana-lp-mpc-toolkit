@@ -144,8 +144,10 @@ Configure via `/settings` or webhook for your agent.
 | `/wallet/:id/balance` | GET | Check balance |
 | `/pools/top` | GET | Top pools by TVL |
 | `/positions/:walletId` | GET | List LP positions |
-| `/lp/atomic` | POST | ⚡ SOL → Swap → LP (Jito) |
-| `/lp/withdraw/atomic` | POST | ⚡ Withdraw → SOL (Jito) |
+| `/lp/execute` | POST | ⚡ Full LP: build + sign + submit (Jito) |
+| `/lp/withdraw/execute` | POST | ⚡ Full withdraw: build + sign + submit (Jito) |
+| `/lp/atomic` | POST | Build LP bundle (unsigned) |
+| `/lp/withdraw/atomic` | POST | Build withdraw bundle (unsigned) |
 | `/fees/claim` | POST | Claim LP fees |
 | `/lp/rebalance/execute` | POST | Atomic rebalance |
 
