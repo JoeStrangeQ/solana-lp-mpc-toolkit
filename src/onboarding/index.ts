@@ -938,15 +938,43 @@ export async function handleSettings(chatId: number | string): Promise<{ text: s
 export async function handlePools(chatId: number | string): Promise<{ text: string; buttons?: any[][] }> {
   const user = await getUserByChat(chatId);
   
-  // Top pools (could be fetched dynamically)
-  const topPools = [
-    { name: 'SOL-USDC', address: 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', apy: '42.5%', tvl: '$4.8M', binStep: 4 },
-    { name: 'SOL-USDC', address: 'ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq', apy: '38.2%', tvl: '$2.1M', binStep: 2 },
-    { name: 'MET-USDC', address: '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd', apy: '65.0%', tvl: '$890K', binStep: 20 },
-  ];
+  // Fetch top pools from Meteora API - TVL > $100K, sorted by APR
+  let topPools: Array<{ name: string; address: string; apr: string; tvl: string; binStep: number }> = [];
+  
+  try {
+    const meteoraResp = await fetch('https://dlmm-api.meteora.ag/pair/all');
+    if (meteoraResp.ok) {
+      const allPools = await meteoraResp.json() as any[];
+      
+      // Filter for pools with TVL > $100K and sort by APR descending
+      const filteredPools = allPools
+        .filter(p => p.liquidity && parseFloat(p.liquidity) > 100000)
+        .sort((a, b) => (b.apr || 0) - (a.apr || 0))
+        .slice(0, 6);  // Top 6 pools
+      
+      topPools = filteredPools.map(p => ({
+        name: p.name || `${p.mint_x_symbol}-${p.mint_y_symbol}`,
+        address: p.address,
+        apr: p.apr > 0 ? `${p.apr.toFixed(1)}%` : '0%',
+        tvl: formatTvl(parseFloat(p.liquidity)),
+        binStep: p.bin_step || 0,
+      }));
+    }
+  } catch (e) {
+    console.error('Failed to fetch Meteora pools:', e);
+  }
+  
+  // Fallback to known pools if API fails
+  if (topPools.length === 0) {
+    topPools = [
+      { name: 'SOL-USDC', address: 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', apr: '~40%', tvl: '$4.8M', binStep: 4 },
+      { name: 'BFS-SOL', address: 'E6sr5aGsJwkmvxQxLWrLzo78wMFQm7JUn6aCTGpF4zmH', apr: '~50%', tvl: '$175K', binStep: 20 },
+      { name: 'BigTrout-SOL', address: '2fBRjFUvskQDjaNNFfWRyEZmsUj5Z2Yn7gfj8vn5ciAj', apr: '~15%', tvl: '$140K', binStep: 20 },
+    ];
+  }
   
   const poolLines = topPools.map((p, i) => 
-    `${i + 1}. *${p.name}* (binStep: ${p.binStep})\n   📈 APY: ${p.apy} | 💰 TVL: ${p.tvl}`
+    `${i + 1}. *${p.name}* (bin: ${p.binStep})\n   📈 APR: ${p.apr} | 💰 TVL: ${p.tvl}`
   ).join('\n\n');
   
   const buttons: any[][] = topPools.map(p => ([
@@ -962,7 +990,8 @@ export async function handlePools(chatId: number | string): Promise<{ text: stri
   
   return {
     text: [
-      `🏊 *Top LP Pools*`,
+      `🏊 *Top LP Pools by APR*`,
+      `_(TVL > $100K, sorted by APR)_`,
       ``,
       poolLines,
       walletNote,
@@ -971,6 +1000,16 @@ export async function handlePools(chatId: number | string): Promise<{ text: stri
     ].join('\n'),
     buttons,
   };
+}
+
+// Helper to format TVL nicely
+function formatTvl(tvl: number): string {
+  if (tvl >= 1000000) {
+    return `$${(tvl / 1000000).toFixed(1)}M`;
+  } else if (tvl >= 1000) {
+    return `$${(tvl / 1000).toFixed(0)}K`;
+  }
+  return `$${tvl.toFixed(0)}`;
 }
 
 /**
