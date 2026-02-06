@@ -15,12 +15,14 @@ import { buildTipTransaction, TipSpeed } from '../jito/index.js';
 import { FEE_CONFIG, calculateFee } from '../fees/index.js';
 import { getTokenPrices } from '../utils/prices.js';
 import { resolveTokens } from '../utils/token-metadata.js';
+import { jupiterClient, TOKENS } from '../swap/jupiter.js';
 
 export interface AtomicWithdrawParams {
   walletAddress: string;
   poolAddress: string;
   positionAddress: string;
   outputToken?: 'SOL' | 'USDC' | null; // Convert to single token (null = keep both)
+  convertToSol?: boolean; // Convert ALL withdrawn tokens to SOL
   tipSpeed?: TipSpeed;
 }
 
@@ -70,6 +72,13 @@ export interface BuiltAtomicWithdraw {
     estimatedSol: number;
     estimatedUsdc: number;
     treasury: string;
+  };
+  swap?: {
+    enabled: boolean;
+    inputAmount?: string;
+    outputAmount?: string;
+    route?: string;
+    note?: string;
   };
   encryptedStrategy?: { ciphertext: string; nonce: string };
   pnl?: PnlSummary;
@@ -280,7 +289,69 @@ export async function buildAtomicWithdraw(params: AtomicWithdrawParams): Promise
     unsignedTransactions.push(new VersionedTransaction(feeMsg));
   }
 
-  // 6. Build Jito tip transaction
+  // 6. If convertToSol requested, add Jupiter swap transactions
+  let swapDetails: { inputAmount: string; outputAmount: string; route: string } | undefined;
+  if (params.convertToSol && tokenYMint !== solMint) {
+    // Calculate amount to swap (total Y minus fee)
+    const amountToSwap = totalYAmount.toNumber() - feeY.feeAmount;
+    
+    if (amountToSwap > 0) {
+      try {
+        console.log(`[AtomicWithdraw] Getting Jupiter quote to swap ${amountToSwap} ${tokenYMint} → SOL`);
+        
+        const { quote, swap } = await jupiterClient.getSwapTransaction(
+          tokenYMint,
+          solMint,
+          amountToSwap,
+          walletAddress,
+          100 // 1% slippage for atomic bundle
+        );
+        
+        // Add swap transaction to bundle
+        const swapTx = VersionedTransaction.deserialize(Buffer.from(swap.swapTransaction, 'base64'));
+        unsignedTransactions.push(swapTx);
+        
+        swapDetails = {
+          inputAmount: quote.inAmount,
+          outputAmount: quote.outAmount,
+          route: quote.routePlan.map(r => r.swapInfo.label).join(' → '),
+        };
+        
+        console.log(`[AtomicWithdraw] Added swap: ${quote.inAmount} → ${quote.outAmount} SOL via ${swapDetails.route}`);
+      } catch (swapError: any) {
+        console.warn(`[AtomicWithdraw] Jupiter swap failed, will return tokens as-is:`, swapError.message);
+        // Don't fail the whole withdrawal - just skip the swap
+      }
+    }
+  }
+  
+  // Also swap token X if it's not SOL (e.g., MET in MET-SOL pool)
+  if (params.convertToSol && tokenXMint !== solMint) {
+    const amountToSwapX = totalXAmount.toNumber() - feeX.feeAmount;
+    
+    if (amountToSwapX > 0) {
+      try {
+        console.log(`[AtomicWithdraw] Getting Jupiter quote to swap ${amountToSwapX} ${tokenXMint} → SOL`);
+        
+        const { quote, swap } = await jupiterClient.getSwapTransaction(
+          tokenXMint,
+          solMint,
+          amountToSwapX,
+          walletAddress,
+          100 // 1% slippage
+        );
+        
+        const swapTx = VersionedTransaction.deserialize(Buffer.from(swap.swapTransaction, 'base64'));
+        unsignedTransactions.push(swapTx);
+        
+        console.log(`[AtomicWithdraw] Added X swap: ${quote.inAmount} → ${quote.outAmount} SOL`);
+      } catch (swapError: any) {
+        console.warn(`[AtomicWithdraw] Jupiter X swap failed:`, swapError.message);
+      }
+    }
+  }
+
+  // 7. Build Jito tip transaction
   const { transaction: tipTx } = buildTipTransaction({
     payerAddress: walletAddress,
     recentBlockhash: blockhash,
@@ -392,6 +463,13 @@ export async function buildAtomicWithdraw(params: AtomicWithdrawParams): Promise
       estimatedUsdc: tokenYMint === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' ? feeY.feeAmount / 1e6 : 0,
       treasury: FEE_CONFIG.TREASURY_ADDRESS.toBase58(),
     },
+    swap: params.convertToSol ? {
+      enabled: true,
+      inputAmount: swapDetails?.inputAmount,
+      outputAmount: swapDetails?.outputAmount,
+      route: swapDetails?.route,
+      note: swapDetails ? 'All tokens will be converted to SOL' : 'Swap failed - tokens returned as-is',
+    } : undefined,
     encryptedStrategy: {
       ciphertext: encrypted.ciphertext.slice(0, 32) + '...',
       nonce: encrypted.nonce,
