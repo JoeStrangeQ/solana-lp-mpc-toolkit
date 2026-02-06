@@ -11,12 +11,5 @@ export * from './privacy';
 export * from './agent';
 export * from './config';
 
-// CLI entry point
-import { startServer } from './agent/server';
-
-if (require.main === module) {
-  startServer().catch(err => {
-    console.error('💥 Server startup failed:', err);
-    process.exit(1);
-  });
-}
+// CLI entry point - use simple-server with all features
+import './simple-server';
