@@ -2262,22 +2262,23 @@ app.post('/notify/:walletId/positions', async (c) => {
   // Get wallet address from user profile
   const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
   
-  // Look up wallet address from walletId via user profile
-  const { getUserProfile } = await import('./onboarding/index.js');
-  const user = await getUserProfile(walletId);
-  
-  if (!user?.walletAddress) {
-    return c.json({ error: 'Wallet not found' }, 404);
+  // Look up wallet address from Privy
+  let walletAddress: string;
+  try {
+    const { wallet } = await loadWalletById(walletId);
+    walletAddress = wallet.address;
+  } catch (e: any) {
+    return c.json({ error: 'Wallet not found', details: e.message }, 404);
   }
   
   // Fetch positions using universal discovery
-  const positions = await discoverAllPositions(conn, user.walletAddress);
+  const positions = await discoverAllPositions(conn, walletAddress);
   
   if (positions.length === 0) {
     const text = [
       `📊 *No LP Positions Found*`,
       ``,
-      `Wallet: \`${user.walletAddress.slice(0, 8)}...${user.walletAddress.slice(-6)}\``,
+      `Wallet: \`${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}\``,
       ``,
       `You don't have any Meteora DLMM positions yet.`,
       ``,
