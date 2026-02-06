@@ -27,6 +27,8 @@ import {
   setWebhook as persistSetWebhook,
   setLastCheck,
   getLastCheck,
+  getStorageInfo,
+  isRedisAvailable,
   type MonitoredPosition,
   type WebhookConfig,
   type AlertResult,
@@ -105,9 +107,12 @@ try {
 const monitor = getPositionMonitor(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
 
 // Load persisted data on startup
-function initializeMonitoring() {
+async function initializeMonitoring() {
   try {
-    const data = loadData();
+    const storageInfo = getStorageInfo();
+    console.log(`[Persistence] Storage type: ${storageInfo.type} (available: ${storageInfo.available})`);
+    
+    const data = await loadData();
 
     // Restore positions to monitor
     for (const position of data.positions) {
@@ -138,7 +143,7 @@ async function runMonitoringCheck(): Promise<AlertResult[]> {
   try {
     const alerts = await monitor.checkAllPositions();
     monitoringState.lastCheck = now;
-    setLastCheck(now);
+    await setLastCheck(now);
 
     if (alerts.length > 0) {
       console.log(`[Monitor] Found ${alerts.length} alerts, delivering to webhook...`);
@@ -236,11 +241,11 @@ const SAMPLE_POOLS = [
 
 app.get('/', (c) => c.json({
   name: 'LP Agent Toolkit',
-  version: '2.3.0-withdraw-to-sol',
+  version: '2.4.0-redis-persistence',
   status: 'running',
   docs: 'https://mnm-web-seven.vercel.app',
   github: 'https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit',
-  features: ['MPC Custody', 'Arcium Privacy', 'Stateless API', 'Multi-DEX LP', 'Position Monitoring', 'Webhook Alerts'],
+  features: ['MPC Custody', 'Arcium Privacy', 'Stateless API', 'Multi-DEX LP', 'Position Monitoring', 'Webhook Alerts', 'Redis Persistence'],
   design: 'STATELESS - pass walletId on every request',
   flow: [
     '1. POST /wallet/create → get walletId',
@@ -248,7 +253,7 @@ app.get('/', (c) => c.json({
     '3. All subsequent calls pass walletId',
   ],
   endpoints: [
-    'GET  /health                         → status + monitoring info',
+    'GET  /health                         → status + monitoring info + storage type',
     'GET  /fees',
     'GET  /fees/calculate?amount=1000',
     'GET  /pools/scan?tokenA=SOL&tokenB=USDC',
@@ -276,6 +281,7 @@ app.get('/', (c) => c.json({
     'GET  /monitor/status/:address        → get current status of position',
     'POST /monitor/webhook                → configure webhook for alerts',
     'GET  /monitor/webhook                → get webhook config',
+    'POST /monitor/webhook/test           → send test alert to webhook',
     'DELETE /monitor/webhook              → remove webhook',
     'POST /monitor/check                  → manually trigger check',
   ],
@@ -284,6 +290,7 @@ app.get('/', (c) => c.json({
 app.get('/health', (c) => {
   const positions = monitor.getPositions();
   const webhookConfigured = getWebhookConfig() !== null;
+  const storageInfo = getStorageInfo();
 
   return c.json({
     status: 'ok',
@@ -294,6 +301,10 @@ app.get('/health', (c) => {
       webhookConfigured,
       lastCheck: monitoringState.lastCheck,
       intervalMs: parseInt(process.env.MONITOR_INTERVAL_MS || '300000'),
+    },
+    storage: {
+      type: storageInfo.type,
+      redisAvailable: storageInfo.available,
     },
   });
 });
@@ -616,6 +627,58 @@ app.get('/monitor/webhook', (c) => {
       stats: config.deliveryStats,
     },
   });
+});
+
+/**
+ * POST /monitor/webhook/test
+ * Send a test alert to the configured webhook
+ */
+app.post('/monitor/webhook/test', async (c) => {
+  try {
+    const webhookConfig = getWebhookConfig();
+    
+    if (!webhookConfig) {
+      return c.json({
+        success: false,
+        error: 'No webhook configured',
+        hint: 'First configure a webhook with POST /monitor/webhook',
+      }, 400);
+    }
+    
+    const result = await testWebhook();
+    
+    return c.json({
+      success: result.success,
+      message: result.success 
+        ? '✅ Test alert delivered successfully!' 
+        : '❌ Test alert delivery failed',
+      webhook: {
+        url: webhookConfig.url,
+        hasSecret: !!webhookConfig.secret,
+      },
+      delivery: {
+        success: result.success,
+        statusCode: result.statusCode,
+        error: result.error,
+        attempts: result.attempts,
+        durationMs: result.duration,
+      },
+      payload: {
+        event: 'out_of_range',
+        position: 'test-position-address',
+        message: '🧪 This is a test alert from LP Toolkit',
+        data: { test: true },
+      },
+      verification: webhookConfig.secret ? {
+        header: 'X-Signature',
+        format: 'sha256=<hmac-hex>',
+        example: 'Verify with: crypto.createHmac("sha256", secret).update(body).digest("hex")',
+      } : null,
+    });
+  } catch (error: any) {
+    stats.errors++;
+    return c.json({ error: 'Webhook test failed', details: error.message }, 500);
+  }
 });
 
 // ============ Fees ============

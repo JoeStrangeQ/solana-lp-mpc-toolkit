@@ -12,9 +12,10 @@ export {
 } from './webhookDelivery.js';
 export type { WebhookConfig, WebhookPayload, DeliveryResult } from './webhookDelivery.js';
 
-// Persistence
+// Persistence (Redis with in-memory fallback)
 export {
   loadData,
+  loadDataSync,
   saveData,
   addPosition,
   removePosition,
@@ -23,7 +24,8 @@ export {
   getWebhook,
   setLastCheck,
   getLastCheck,
-  getDataFilePath,
+  getStorageInfo,
   clearAll,
-} from './persistence.js';
-export type { PersistedData } from './persistence.js';
+  isRedisAvailable,
+} from './redis-persistence.js';
+export type { PersistedData } from './redis-persistence.js';

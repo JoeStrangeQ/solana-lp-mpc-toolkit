@@ -264,7 +264,44 @@ If a secret is configured, webhooks include HMAC signature:
 ```
 X-Signature: sha256=abc123...
 ```
-Verify by computing `HMAC-SHA256(payload, secret)`.
+
+**HMAC Verification Example (Node.js):**
+```javascript
+const crypto = require('crypto');
+
+function verifyWebhook(body, signature, secret) {
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', secret)
+    .update(body)
+    .digest('hex');
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected)
+  );
+}
+
+// Express middleware example
+app.post('/webhook', (req, res) => {
+  const signature = req.headers['x-signature'];
+  const body = JSON.stringify(req.body);
+  
+  if (!verifyWebhook(body, signature, process.env.WEBHOOK_SECRET)) {
+    return res.status(401).json({ error: 'Invalid signature' });
+  }
+  
+  // Process alert
+  console.log('Alert:', req.body.event, req.body.message);
+  res.json({ received: true });
+});
+```
+
+### Test Webhook
+```bash
+# Send a test alert to verify your webhook is receiving correctly
+curl -X POST /monitor/webhook/test
+
+# Response includes the test payload sent and delivery result
+```
 
 ### Monitoring Endpoints
 
@@ -276,11 +313,21 @@ Verify by computing `HMAC-SHA256(payload, secret)`.
 | `/monitor/status/:address` | GET | Get position status |
 | `/monitor/webhook` | POST | Configure webhook |
 | `/monitor/webhook` | GET | Get webhook config |
+| `/monitor/webhook/test` | POST | Send test alert to webhook |
 | `/monitor/webhook` | DELETE | Remove webhook |
 | `/monitor/check` | POST | Manually trigger check |
 
 ### Environment Variables
 - `MONITOR_INTERVAL_MS`: Check interval in ms (default: 300000 = 5 min, set to 0 to disable)
+- `UPSTASH_REDIS_REST_URL`: Upstash Redis REST URL (for persistent storage)
+- `UPSTASH_REDIS_REST_TOKEN`: Upstash Redis REST token
+
+### Persistence
+Monitoring data (positions, webhook config, last check timestamp) is stored in:
+- **Redis** (Upstash) if `UPSTASH_REDIS_*` environment variables are set
+- **In-memory** fallback if Redis is not configured (data lost on restart)
+
+Check `/health` endpoint to see current storage type.
 
 ---
 
