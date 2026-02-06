@@ -967,9 +967,25 @@ export async function handlePools(chatId: number | string): Promise<{ text: stri
       const sortedPopular = popularPools.sort((a, b) => (b.apr || 0) - (a.apr || 0)).slice(0, 4);
       const sortedAll = highTvlPools.sort((a, b) => (b.apr || 0) - (a.apr || 0)).slice(0, 4);
       
-      // Combine: prioritize popular pools, then fill with highest APR
+      // Always include SOL-USDC as the first option (highest TVL)
+      const solUsdcPools = highTvlPools
+        .filter(p => p.name === 'SOL-USDC')
+        .sort((a, b) => parseFloat(b.liquidity) - parseFloat(a.liquidity));
+      
+      // Combine: SOL-USDC first, then popular pools by APR, then others
       const combined = new Map<string, any>();
-      for (const p of sortedPopular) combined.set(p.address, p);
+      
+      // Add best SOL-USDC pool first
+      if (solUsdcPools.length > 0) {
+        combined.set(solUsdcPools[0].address, solUsdcPools[0]);
+      }
+      
+      // Add popular pools
+      for (const p of sortedPopular) {
+        if (combined.size < 6) combined.set(p.address, p);
+      }
+      
+      // Fill with highest APR pools
       for (const p of sortedAll) {
         if (combined.size < 6) combined.set(p.address, p);
       }
