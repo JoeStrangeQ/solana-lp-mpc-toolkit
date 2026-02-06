@@ -730,13 +730,31 @@ export async function handlePositions(chatId: number | string): Promise<{ text: 
   // Build buttons for each position (all positions, up to 8)
   const buttons: any[][] = [];
   
+  // Store position data in Redis for callback lookup (to avoid 64-byte Telegram limit)
+  // For now, use shortened format with position index
+  const positionMap: Record<string, { poolAddress: string; positionAddress: string }> = {};
+  
   // Per-position action buttons
-  for (const p of positions.slice(0, 8)) {
+  for (let i = 0; i < Math.min(positions.length, 8); i++) {
+    const p = positions[i];
     const rangeIcon = p.inRange ? '🟢' : '🔴';
+    const posKey = `p${i}`; // Short key: p0, p1, p2, etc.
+    
+    // Store mapping for lookup
+    positionMap[posKey] = { poolAddress: p.poolAddress, positionAddress: p.address };
+    
     buttons.push([
-      { text: `${rangeIcon} ${p.pool}`, callback_data: `position_detail:${p.poolAddress}:${p.address}` },
-      { text: `📤 Withdraw`, callback_data: `withdraw_pos:${p.poolAddress}:${p.address}` },
+      { text: `${rangeIcon} ${p.pool}`, callback_data: `pd:${posKey}` },
+      { text: `📤 Withdraw`, callback_data: `wd:${posKey}` },
     ]);
+  }
+  
+  // Store position map in user session (Redis) for callback lookup
+  try {
+    const client = getRedis();
+    await client.set(`positions:${user.walletId}`, positionMap, { ex: 3600 }); // 1 hour TTL
+  } catch (e) {
+    console.error('Failed to cache position map:', e);
   }
   
   // General action buttons

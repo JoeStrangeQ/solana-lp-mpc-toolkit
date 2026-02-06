@@ -530,19 +530,38 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
       ].join('\n');
     }
     
+    case 'wd':  // Short format: wd:p0, wd:p1, etc.
     case 'withdraw_pos': {
-      // param format: poolAddress:positionAddress
-      const colonIdx = param?.indexOf(':') ?? -1;
-      const poolAddress = colonIdx > -1 ? param!.slice(0, colonIdx) : param;
-      const positionAddress = colonIdx > -1 ? param!.slice(colonIdx + 1) : undefined;
-      
       const walletId = await getWalletByChatId(chatId);
       if (!walletId) {
         return '❌ Wallet not linked. Use /start first.';
       }
       
+      let poolAddress: string | undefined;
+      let positionAddress: string | undefined;
+      
+      // Check if using new short format (wd:p0) or old format (withdraw_pos:addr:addr)
+      if (action === 'wd' && param?.startsWith('p')) {
+        // Look up position from Redis cache
+        try {
+          const client = getRedis();
+          const positionMap = await client.get<Record<string, { poolAddress: string; positionAddress: string }>>(`positions:${walletId}`);
+          if (positionMap && positionMap[param]) {
+            poolAddress = positionMap[param].poolAddress;
+            positionAddress = positionMap[param].positionAddress;
+          }
+        } catch (e) {
+          console.error('Failed to lookup position:', e);
+        }
+      } else {
+        // Old format: poolAddress:positionAddress
+        const colonIdx = param?.indexOf(':') ?? -1;
+        poolAddress = colonIdx > -1 ? param!.slice(0, colonIdx) : param;
+        positionAddress = colonIdx > -1 ? param!.slice(colonIdx + 1) : undefined;
+      }
+      
       if (!poolAddress || !positionAddress) {
-        return '❌ Invalid position. Please try again.';
+        return '❌ Position not found. Try /positions again to refresh.';
       }
       
       // Execute withdrawal via new execute endpoint (builds, signs, submits)
