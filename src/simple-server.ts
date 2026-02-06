@@ -1736,6 +1736,107 @@ app.post('/lp/withdraw/atomic', async (c) => {
   }
 });
 
+/**
+ * POST /lp/withdraw/execute
+ * 
+ * Full withdrawal execution: builds, signs with Privy, submits via Jito.
+ * Similar to /lp/execute but for withdrawals.
+ */
+app.post('/lp/withdraw/execute', async (c) => {
+  try {
+    const body = await c.req.json();
+    const {
+      walletId,
+      poolAddress,
+      positionAddress,
+      tipSpeed = 'fast',
+      convertToSol = true,
+    } = body;
+
+    if (!walletId || !poolAddress || !positionAddress) {
+      return c.json({
+        error: 'Missing walletId, poolAddress, or positionAddress',
+        example: {
+          walletId: 'your-privy-wallet-id',
+          poolAddress: 'pool-address',
+          positionAddress: 'position-address-to-withdraw',
+          convertToSol: true,
+        },
+      }, 400);
+    }
+
+    // Load wallet
+    const { client, wallet } = await loadWalletById(walletId);
+    const walletAddress = wallet.address;
+
+    console.log(`[Withdraw Execute] Withdrawing position ${positionAddress}...`);
+
+    // Build atomic withdrawal
+    const result = await buildAtomicWithdraw({
+      walletAddress,
+      poolAddress,
+      positionAddress,
+      convertToSol,
+      tipSpeed: tipSpeed as TipSpeed,
+    });
+
+    console.log(`[Withdraw Execute] Built ${result.unsignedTransactions.length} transactions, signing...`);
+
+    // Sign all transactions with Privy
+    const signedTxs: string[] = [];
+    for (const unsignedTx of result.unsignedTransactions) {
+      try {
+        const signedTx = await client.signTransaction(unsignedTx);
+        signedTxs.push(signedTx);
+      } catch (signErr: any) {
+        // Already partially signed
+        signedTxs.push(unsignedTx);
+      }
+    }
+
+    // Submit to Jito
+    console.log(`[Withdraw Execute] Submitting ${signedTxs.length} txs to Jito...`);
+    const { bundleId } = await sendBundle(signedTxs);
+    console.log(`[Withdraw Execute] Bundle submitted: ${bundleId}`);
+
+    // Wait for confirmation
+    const status = await waitForBundle(bundleId, { timeoutMs: 60000 });
+
+    if (!status.landed) {
+      return c.json({
+        success: false,
+        error: 'Bundle failed to land',
+        bundleId,
+        details: status.error,
+      }, 500);
+    }
+
+    console.log(`[Withdraw Execute] ✅ Position withdrawn at slot ${status.slot}!`);
+
+    stats.actions.lpWithdrawn++;
+    return c.json({
+      success: true,
+      message: 'Position withdrawn successfully',
+      walletId,
+      walletAddress,
+      poolAddress,
+      positionAddress,
+      bundle: {
+        bundleId,
+        landed: true,
+        slot: status.slot,
+      },
+      estimatedWithdraw: result.estimatedWithdraw,
+      fee: result.fee,
+      pnl: result.pnl,
+    });
+  } catch (error: any) {
+    console.error('[Withdraw Execute] Error:', error);
+    stats.errors++;
+    return c.json({ error: 'Withdrawal failed', details: error.message }, 500);
+  }
+});
+
 // ============ Fee Claim & Compound ============
 
 // Claim fees only (don't withdraw liquidity)

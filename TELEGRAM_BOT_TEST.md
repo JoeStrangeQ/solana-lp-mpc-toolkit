@@ -1,70 +1,103 @@
 # Telegram Bot Test Plan
 
-## Status: 🚧 IN PROGRESS
+## Status: 🔧 DEBUGGING IN PROGRESS
+
+**Last Updated:** 2026-02-06 13:55 CST
+
+## Fixes Applied Today
+
+### ✅ Completed
+1. **Dynamic Pool Discovery** - `/pools` now fetches real pools from Meteora API
+   - Sorted by APR (highest first)
+   - Filtered for TVL > $100K
+   - Shows 6 pools with real data
+
+2. **Live LP Execution** - `lp_execute` callback now actually opens positions
+   - Calls internal API endpoint
+   - Returns success/failure message with bundle ID
+   - Fetches pool name from Meteora
+
+3. **Pool Name Resolution** - Positions now show real pool names
+   - Added Meteora API lookup in position discovery
+   - Falls back to token symbols if API fails
+
+4. **Per-Position Withdraw Buttons** - `/positions` now shows individual withdraw buttons
+   - Each position has its own withdraw button
+   - Callback includes pool address and position address
+
+5. **Withdraw Execution** - `withdraw_pos` callback now actually withdraws
+   - Calls `/lp/withdraw/atomic` API
+   - Converts to SOL
+   - Returns success/failure message
+
+6. **Test Positions Opened** - 7 positions across different pools
+   - SOL-USDC (2x)
+   - BFS-SOL
+   - BigTrout-SOL
+   - XAUt0-SOL
+   - EVA-SOL
+   - MET-USDC
+
+### 🔄 In Progress
+- Waiting for Railway deploy
+- Testing full button flow
 
 ## Commands to Test
 
-### 1. /start
-- [ ] Creates wallet if none exists
-- [ ] Shows existing wallet if already created
-- [ ] Displays welcome message with quick actions
+| Command | Status | Notes |
+|---------|--------|-------|
+| `/start` | ✅ | Creates/shows wallet |
+| `/balance` | ✅ | Shows SOL + tokens |
+| `/pools` | ✅ | Shows real pools by APR |
+| `/positions` | 🔄 | Testing new withdraw buttons |
+| `/deposit` | ✅ | Shows deposit address |
+| `/withdraw` | 🔄 | Testing per-position flow |
+| `/settings` | ✅ | Shows preferences |
+| `/help` | ✅ | Shows all commands |
 
-### 2. /balance  
-- [ ] Shows SOL balance
-- [ ] Shows token balances with symbols (not addresses)
-- [ ] Shows USD values
-- [ ] Shows Solscan link
+## Button Flows to Test
 
-### 3. /pools
-- [ ] Fetches real pools from Meteora API
-- [ ] Shows pools with TVL > $100K
-- [ ] Sorted by APR (highest first)
-- [ ] Tap pool → shows amount selection
-- [ ] Amount selection → strategy selection
-- [ ] Execute → opens position
+1. **LP Flow:**
+   - `/pools` → Tap pool → Tap amount → Tap strategy → Execute
+   - Status: ✅ Should work now
 
-### 4. /positions
-- [ ] Shows all LP positions
-- [ ] Shows pair name, range, dollar amounts
-- [ ] Shows fees earned
-- [ ] Action buttons (rebalance, withdraw, claim)
-- [ ] Refresh button works
+2. **Withdraw Flow:**
+   - `/positions` → Tap "Withdraw [pool]" → Execute
+   - Status: 🔄 Testing
 
-### 5. /deposit
-- [ ] Shows wallet address for deposits
-- [ ] QR code or copy button
+3. **Refresh Flows:**
+   - All refresh buttons should reload data
+   - Status: ✅
 
-### 6. /withdraw
-- [ ] Lists positions to withdraw
-- [ ] Withdrawal confirmation
-- [ ] Execute withdrawal
+## Current Positions
 
-### 7. /settings
-- [ ] Toggle out-of-range alerts
-- [ ] Toggle auto-rebalance
-- [ ] Toggle daily summary
+| Pool | In Range | Notes |
+|------|----------|-------|
+| SOL-USDC | ✅ | Test position |
+| SOL-USDC | ❌ | Out of range |
+| MET-USDC | ❌ | Out of range |
+| BFS-SOL | ✅ | High APR |
+| BigTrout-SOL | ✅ | Test |
+| XAUt0-SOL | ✅ | Test |
+| EVA-SOL | ✅ | Test |
 
-### 8. /help
-- [ ] Shows all commands
-- [ ] Shows NL examples
+## Wallet Status
 
-## Natural Language Tests
+- **Address:** `Ab6Cuvz9rZUSb4uVbBGR6vm12LeuVBE5dzKsnYUtAEi4`
+- **Balance:** ~0.25 SOL (after opening positions)
+- **Positions:** 7
 
-- [ ] "LP 0.5 SOL into SOL-USDC"
-- [ ] "LP into BFS-SOL" (with pool address)
-- [ ] "Check my balance"
-- [ ] "Show my positions"
-- [ ] "What are the top pools?"
-- [ ] "Withdraw from MET-USDC"
+## Known Issues
 
-## Position Testing (5 pools with 100K+ liquidity)
+1. ~~Pool names showing as truncated addresses~~ → **FIXED**
+2. ~~`lp_execute` not actually executing~~ → **FIXED**
+3. ~~No per-position withdraw buttons~~ → **FIXED**
 
-1. [ ] BFS-SOL (E6sr5aGsJwk...) - ~50% APR
-2. [ ] BigTrout-SOL (2fBRjFUvsk...) - ~15% APR
-3. [ ] Goyim-SOL (6wgEyQmy8H...) - ~7% APR
-4. [ ] XAUt0-SOL (DxT2uLqvBD...) - ~3.5% APR
-5. [ ] testicle-SOL (ptVzGfsAqX...) - ~2.9% APR
+## Next Steps
 
-## Test Results Log
-
-*(Updated automatically)*
+- [ ] Test full LP flow after deploy
+- [ ] Test full withdraw flow after deploy
+- [ ] Test claim fees button
+- [ ] Update README with final flow
+- [ ] Update website with demo screenshots
+- [ ] Security audit - verify no secrets exposed

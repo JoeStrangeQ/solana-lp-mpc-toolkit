@@ -545,26 +545,20 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
         return '❌ Invalid position. Please try again.';
       }
       
-      // Get wallet address
-      const user = await getUserByChat(chatId);
-      if (!user) {
-        return '❌ User not found. Use /start first.';
-      }
-      
-      // Execute withdrawal via API
+      // Execute withdrawal via new execute endpoint (builds, signs, submits)
       try {
         const apiUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
           ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
           : 'http://localhost:3000';
         
-        const response = await fetch(`${apiUrl}/lp/withdraw/atomic`, {
+        const response = await fetch(`${apiUrl}/lp/withdraw/execute`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            walletAddress: user.walletAddress,
+            walletId,
             poolAddress,
             positionAddress,
-            convertToSol: true, // Convert proceeds to SOL
+            convertToSol: true,
           }),
         });
         
