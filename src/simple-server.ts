@@ -2116,10 +2116,61 @@ import {
   upsertRecipient,
   consumeLinkCode,
   sendAlert,
-  handleTelegramStart,
   handleTelegramCallback,
   type AlertPayload,
 } from './notifications/index.js';
+
+import {
+  onboardTelegram,
+  onboardAgent,
+  handleStart,
+  handleBalance,
+  handlePositions,
+  handleStatus,
+  getUserByChat,
+} from './onboarding/index.js';
+
+/**
+ * One-call agent onboarding
+ * Creates wallet + registers webhook in one step
+ */
+app.post('/onboard', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { webhookUrl, webhookSecret } = body;
+    
+    if (!webhookUrl) {
+      return c.json({
+        error: 'webhookUrl is required',
+        example: {
+          webhookUrl: 'https://your-agent.com/webhook',
+          webhookSecret: 'optional-hmac-secret',
+        },
+      }, 400);
+    }
+    
+    const result = await onboardAgent(webhookUrl, webhookSecret);
+    
+    return c.json({
+      success: true,
+      walletId: result.user.walletId,
+      walletAddress: result.user.walletAddress,
+      webhook: {
+        url: webhookUrl,
+        configured: true,
+      },
+      message: result.message,
+      nextSteps: [
+        `1. Send SOL to ${result.user.walletAddress}`,
+        '2. Create LP position: POST /lp/execute { walletId, poolAddress, ... }',
+        '3. Receive alerts at your webhook URL',
+      ],
+    });
+  } catch (error: any) {
+    console.error('[Onboard] Error:', error);
+    return c.json({ error: 'Onboarding failed', details: error.message }, 500);
+  }
+});
 
 /**
  * Register for notifications
@@ -2232,18 +2283,61 @@ app.post('/notify/:walletId/test', async (c) => {
  */
 app.post('/telegram/webhook', async (c) => {
   const update = await c.req.json();
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  
+  if (!botToken) {
+    return c.json({ ok: false, error: 'Bot token not configured' });
+  }
   
   try {
-    // Handle /start command
-    if (update.message?.text?.startsWith('/start')) {
-      const chatId = update.message.chat.id;
-      const username = update.message.from?.username;
+    const chatId = update.message?.chat?.id || update.callback_query?.message?.chat?.id;
+    const text = update.message?.text || '';
+    const username = update.message?.from?.username;
+    
+    let response = '';
+    
+    // Handle text commands
+    if (update.message?.text) {
+      const command = text.split(' ')[0].toLowerCase();
       
-      const response = await handleTelegramStart(chatId, username);
+      switch (command) {
+        case '/start':
+          response = await handleStart(chatId, username);
+          break;
+        case '/balance':
+          response = await handleBalance(chatId);
+          break;
+        case '/positions':
+          response = await handlePositions(chatId);
+          break;
+        case '/status':
+          response = await handleStatus(chatId);
+          break;
+        case '/help':
+          response = [
+            `🤖 *MnM LP Toolkit Commands*`,
+            ``,
+            `/start - Create wallet / Welcome`,
+            `/balance - Check wallet balance`,
+            `/positions - View LP positions`,
+            `/status - Portfolio overview`,
+            `/help - This message`,
+            ``,
+            `_More commands coming soon!_`,
+          ].join('\n');
+          break;
+        default:
+          // Check if user exists
+          const user = await getUserByChat(chatId);
+          if (!user) {
+            response = `👋 Hi! Use /start to create your wallet.`;
+          } else {
+            response = `I don't understand that command. Try /help`;
+          }
+      }
       
       // Send response
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      if (botToken) {
+      if (response) {
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2258,36 +2352,32 @@ app.post('/telegram/webhook', async (c) => {
     
     // Handle callback queries (button presses)
     if (update.callback_query) {
-      const chatId = update.callback_query.message?.chat.id;
       const data = update.callback_query.data;
       const callbackId = update.callback_query.id;
       
       if (chatId && data) {
-        const response = await handleTelegramCallback(chatId, data);
+        response = await handleTelegramCallback(chatId, data);
         
-        const botToken = process.env.TELEGRAM_BOT_TOKEN;
-        if (botToken) {
-          // Answer callback query
-          await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              callback_query_id: callbackId,
-              text: 'Processing...',
-            }),
-          });
-          
-          // Send response message
-          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId,
-              text: response,
-              parse_mode: 'Markdown',
-            }),
-          });
-        }
+        // Answer callback query
+        await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callback_query_id: callbackId,
+            text: 'Processing...',
+          }),
+        });
+        
+        // Send response message
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: response,
+            parse_mode: 'Markdown',
+          }),
+        });
       }
     }
     
