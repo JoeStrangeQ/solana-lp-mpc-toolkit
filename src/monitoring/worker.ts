@@ -415,6 +415,14 @@ async function processWithdrawalQueue(): Promise<void> {
         ].filter(Boolean).join('\n');
         
         await log('info', `Withdrawal ${job.id} successful`, { bundleId: result.bundle?.bundleId });
+        
+        // CACHE FIX: Invalidate position caches after successful withdrawal
+        try {
+          await client.del(`positions:${job.walletId}`); // Clear position map cache
+          await log('info', `Invalidated position cache for wallet ${job.walletId}`);
+        } catch (e) {
+          await log('warn', 'Failed to invalidate position cache', { error: (e as Error).message });
+        }
       } else {
         message = [
           `❌ *Withdrawal Failed*`,
