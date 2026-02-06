@@ -259,6 +259,8 @@ app.get('/', (c) => c.json({
     'POST /lp/open    { walletId, ... }   → open position',
     'POST /lp/close   { walletId, ... }   → close position',
     'POST /lp/execute { walletId, ... }   → full pipeline',
+    'POST /lp/withdraw  { walletAddress, poolAddress, positionAddress } → withdraw with PnL',
+    'POST /lp/withdraw/atomic { ... }     → atomic withdrawal via Jito',
     'POST /lp/rebalance { walletId, poolAddress, positionAddress, ... } → prepare rebalance',
     'POST /lp/rebalance/execute { ... }   → execute atomic rebalance',
     'GET  /positions/:walletId            → list positions (with token names & prices)',
@@ -1627,6 +1629,120 @@ app.post('/lp/rebalance/execute', async (c) => {
     console.error('[Rebalance Execute] Error:', error);
     stats.errors++;
     return c.json({ error: 'Rebalance execution failed', details: error.message }, 500);
+  }
+});
+
+// ============ Withdraw Endpoints ============
+
+/**
+ * POST /lp/withdraw
+ * 
+ * Build withdrawal transactions for an LP position.
+ * Returns unsigned transactions and PnL summary.
+ */
+app.post('/lp/withdraw', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { walletAddress, poolAddress, positionAddress, tipSpeed = 'fast' } = body;
+    
+    if (!walletAddress || !poolAddress || !positionAddress) {
+      return c.json({ 
+        error: 'Missing walletAddress, poolAddress, or positionAddress',
+        example: {
+          walletAddress: 'your-wallet-address',
+          poolAddress: 'pool-address',
+          positionAddress: 'position-address-to-withdraw',
+          tipSpeed: 'fast',
+        },
+      }, 400);
+    }
+    
+    console.log(`[Withdraw] Building withdrawal for position ${positionAddress}...`);
+    
+    const result = await buildAtomicWithdraw({
+      walletAddress,
+      poolAddress,
+      positionAddress,
+      tipSpeed: tipSpeed as TipSpeed,
+    });
+    
+    stats.actions.lpWithdrawn++;
+    
+    return c.json({
+      success: true,
+      message: 'Withdrawal transactions prepared',
+      walletAddress,
+      poolAddress,
+      positionAddress,
+      transactions: result.unsignedTransactions,
+      estimatedWithdraw: result.estimatedWithdraw,
+      fee: result.fee,
+      pnl: result.pnl,
+      encryptedStrategy: result.encryptedStrategy,
+      hint: 'Sign transactions with your wallet and submit via Jito bundle',
+    });
+  } catch (error: any) {
+    console.error('[Withdraw] Error:', error);
+    stats.errors++;
+    return c.json({ error: 'Withdrawal failed', details: error.message }, 500);
+  }
+});
+
+/**
+ * POST /lp/withdraw/atomic
+ * 
+ * Build and return atomic withdrawal via Jito bundle.
+ * Same as /lp/withdraw but explicitly for Jito atomic execution.
+ */
+app.post('/lp/withdraw/atomic', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { walletAddress, poolAddress, positionAddress, tipSpeed = 'fast' } = body;
+    
+    if (!walletAddress || !poolAddress || !positionAddress) {
+      return c.json({ 
+        error: 'Missing walletAddress, poolAddress, or positionAddress',
+        example: {
+          walletAddress: 'your-wallet-address',
+          poolAddress: 'pool-address',
+          positionAddress: 'position-address-to-withdraw',
+          tipSpeed: 'fast',
+        },
+      }, 400);
+    }
+    
+    console.log(`[AtomicWithdraw] Building withdrawal for position ${positionAddress}...`);
+    
+    const result = await buildAtomicWithdraw({
+      walletAddress,
+      poolAddress,
+      positionAddress,
+      tipSpeed: tipSpeed as TipSpeed,
+    });
+    
+    stats.actions.lpWithdrawn++;
+    
+    return c.json({
+      success: true,
+      message: 'Atomic withdrawal prepared via Jito',
+      walletAddress,
+      poolAddress,
+      positionAddress,
+      bundle: {
+        transactions: result.unsignedTransactions,
+        count: result.unsignedTransactions.length,
+        tipSpeed,
+      },
+      estimatedWithdraw: result.estimatedWithdraw,
+      fee: result.fee,
+      pnl: result.pnl,
+      encryptedStrategy: result.encryptedStrategy,
+      hint: 'Sign all transactions and submit as Jito bundle for atomic execution',
+    });
+  } catch (error: any) {
+    console.error('[AtomicWithdraw] Error:', error);
+    stats.errors++;
+    return c.json({ error: 'Atomic withdrawal failed', details: error.message }, 500);
   }
 });
 
