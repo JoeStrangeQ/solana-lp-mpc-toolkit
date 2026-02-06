@@ -35,6 +35,7 @@ import {
   type AlertResult,
 } from './monitoring/index.js';
 import { Redis } from '@upstash/redis';
+import { assessPoolRisk, assessPositionRisk, getTokenVolatility, type PoolRiskAssessment, type PositionRiskAssessment } from './risk/index.js';
 
 // Redis client for cache invalidation
 let redis: Redis | null = null;
@@ -190,6 +191,29 @@ if (MONITOR_INTERVAL_MS > 0) {
   monitoringState.enabled = false;
 }
 
+// Keep-alive self-ping to prevent Railway cold starts
+// Pings health endpoint every 4 minutes (Railway idles after ~10 min)
+const KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
+const selfPing = async () => {
+  const domain = process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (!domain) return; // Only in production
+  
+  try {
+    const response = await fetch(`https://${domain}/health`);
+    if (response.ok) {
+      console.log('[KeepAlive] Ping successful');
+    }
+  } catch (e) {
+    console.warn('[KeepAlive] Ping failed:', (e as Error).message);
+  }
+};
+
+// Start keep-alive after 1 minute
+setTimeout(() => {
+  setInterval(selfPing, KEEPALIVE_INTERVAL_MS);
+  console.log(`✅ Keep-alive enabled (interval: ${KEEPALIVE_INTERVAL_MS / 1000}s)`);
+}, 60000);
+
 // Stateless Privy helpers - load wallet fresh per request
 async function createPrivyClient() {
   if (!config.privy?.appId || !config.privy?.appSecret) {
@@ -273,6 +297,8 @@ app.get('/', (c) => c.json({
     'GET  /fees',
     'GET  /fees/calculate?amount=1000',
     'GET  /pools/scan?tokenA=SOL&tokenB=USDC',
+    'GET  /pools/top?limit=5&riskMax=7    → top pools with risk scoring',
+    'GET  /pools/:address/risk            → risk assessment for a pool',
     'POST /encrypt',
     'GET  /encrypt/info',
     'POST /wallet/create                  → returns walletId',
@@ -289,6 +315,8 @@ app.get('/', (c) => c.json({
     'POST /lp/rebalance/execute { ... }   → execute atomic rebalance',
     'GET  /positions/:walletId            → list positions (with token names & prices)',
     'GET  /positions?address=...          → list positions by address',
+    'GET  /positions/:walletId/risk       → risk assessment for all positions',
+    'GET  /risk/volatility/:symbol        → token volatility data',
     'POST /chat       { message, walletId? }',
     '--- Monitoring ---',
     'POST /monitor/add                    → add position to monitor',
@@ -737,6 +765,214 @@ app.get('/pools/scan', (c) => {
     pair: `${tokenA}-${tokenB}`,
     count: pools.length,
     pools,
+  });
+});
+
+/**
+ * GET /pools/top - Top pools with risk scoring
+ * 
+ * Query params:
+ * - limit: number of pools (default 5, max 20)
+ * - riskMax: max risk score (1-10, default 10)
+ * - minTvl: minimum TVL in USD (default 100000)
+ * - sortBy: 'sharpe' | 'apr' | 'tvl' | 'risk' (default 'sharpe')
+ */
+app.get('/pools/top', async (c) => {
+  const limit = Math.min(20, parseInt(c.req.query('limit') || '5'));
+  const riskMax = parseInt(c.req.query('riskMax') || '10');
+  const minTvl = parseInt(c.req.query('minTvl') || '100000');
+  const sortBy = c.req.query('sortBy') || 'sharpe';
+  
+  try {
+    // Fetch pools from Meteora API
+    const response = await fetch('https://dlmm-api.meteora.ag/pair/all_with_pagination?limit=100&offset=0');
+    if (!response.ok) {
+      return c.json({ error: 'Failed to fetch pools from Meteora' }, 502);
+    }
+    
+    const data = await response.json() as any;
+    const pools = data.data || [];
+    
+    // Filter and assess risk
+    const assessedPools: PoolRiskAssessment[] = [];
+    
+    for (const pool of pools) {
+      const tvl = parseFloat(pool.liquidity || pool.tvl || 0);
+      if (tvl < minTvl) continue;
+      
+      // Parse token symbols from name (e.g., "SOL-USDC" -> ["SOL", "USDC"])
+      const nameParts = (pool.name || '').split('-');
+      const tokenX = nameParts[0] || 'UNKNOWN';
+      const tokenY = nameParts[1] || 'UNKNOWN';
+      
+      const apr = parseFloat(pool.apr || pool.apy || 0);
+      const volume24h = parseFloat(pool.trade_volume_24h || pool.volume24h || 0);
+      const binStep = parseInt(pool.bin_step || pool.binStep || 10);
+      
+      const assessment = await assessPoolRisk(
+        pool.address,
+        pool.name || `${tokenX}-${tokenY}`,
+        apr,
+        tvl,
+        binStep,
+        volume24h,
+        tokenX,
+        tokenY
+      );
+      
+      if (assessment.riskScore <= riskMax) {
+        assessedPools.push(assessment);
+      }
+      
+      // Limit API calls
+      if (assessedPools.length >= limit * 2) break;
+    }
+    
+    // Sort
+    assessedPools.sort((a, b) => {
+      switch (sortBy) {
+        case 'apr': return b.apr - a.apr;
+        case 'tvl': return b.tvl - a.tvl;
+        case 'risk': return a.riskScore - b.riskScore;
+        case 'sharpe':
+        default:
+          return b.sharpeRatio - a.sharpeRatio;
+      }
+    });
+    
+    return c.json({
+      success: true,
+      count: Math.min(limit, assessedPools.length),
+      sortedBy: sortBy,
+      filters: { riskMax, minTvl },
+      pools: assessedPools.slice(0, limit),
+    });
+    
+  } catch (error: any) {
+    console.error('Pool risk assessment error:', error);
+    return c.json({ error: 'Failed to assess pools', details: error.message }, 500);
+  }
+});
+
+/**
+ * GET /pools/:address/risk - Risk assessment for a specific pool
+ */
+app.get('/pools/:address/risk', async (c) => {
+  const poolAddress = c.req.param('address');
+  
+  try {
+    // Fetch pool data from Meteora
+    const response = await fetch(`https://dlmm-api.meteora.ag/pair/${poolAddress}`);
+    if (!response.ok) {
+      return c.json({ error: 'Pool not found' }, 404);
+    }
+    
+    const pool = await response.json() as any;
+    
+    const nameParts = (pool.name || '').split('-');
+    const tokenX = nameParts[0] || 'UNKNOWN';
+    const tokenY = nameParts[1] || 'UNKNOWN';
+    
+    const assessment = await assessPoolRisk(
+      pool.address,
+      pool.name,
+      parseFloat(pool.apr || pool.apy || 0),
+      parseFloat(pool.liquidity || pool.tvl || 0),
+      parseInt(pool.bin_step || pool.binStep || 10),
+      parseFloat(pool.trade_volume_24h || pool.volume24h || 0),
+      tokenX,
+      tokenY
+    );
+    
+    return c.json({
+      success: true,
+      assessment,
+    });
+    
+  } catch (error: any) {
+    return c.json({ error: 'Risk assessment failed', details: error.message }, 500);
+  }
+});
+
+/**
+ * GET /positions/:walletId/risk - Risk assessment for all positions of a wallet
+ */
+app.get('/positions/:walletId/risk', async (c) => {
+  const walletId = c.req.param('walletId');
+  
+  try {
+    // Load wallet
+    const { wallet } = await loadWalletById(walletId);
+    const walletAddress = wallet.address;
+    
+    // Discover all positions
+    const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+    const positions = await discoverAllPositions(connection, walletAddress);
+    
+    if (positions.length === 0) {
+      return c.json({
+        success: true,
+        message: 'No positions found',
+        assessments: [],
+      });
+    }
+    
+    // Assess risk for each position
+    const assessments: PositionRiskAssessment[] = [];
+    
+    for (const pos of positions) {
+      const tokenX = pos.pool.tokenX.symbol || 'UNKNOWN';
+      
+      const assessment = await assessPositionRisk(
+        pos.address,
+        pos.pool.address,
+        pos.pool.name || 'Unknown Pool',
+        pos.activeBinId,
+        pos.binRange.lower,
+        pos.binRange.upper,
+        pos.inRange ? undefined : new Date().toISOString(), // Simplified
+        tokenX
+      );
+      
+      assessments.push(assessment);
+    }
+    
+    // Sort by health score (worst first)
+    assessments.sort((a, b) => a.healthScore - b.healthScore);
+    
+    return c.json({
+      success: true,
+      walletId,
+      walletAddress,
+      totalPositions: positions.length,
+      assessments,
+      summary: {
+        critical: assessments.filter(a => a.urgency === 'critical').length,
+        high: assessments.filter(a => a.urgency === 'high').length,
+        medium: assessments.filter(a => a.urgency === 'medium').length,
+        low: assessments.filter(a => a.urgency === 'low').length,
+      },
+    });
+    
+  } catch (error: any) {
+    return c.json({ error: 'Position risk assessment failed', details: error.message }, 500);
+  }
+});
+
+/**
+ * GET /risk/volatility/:symbol - Get token volatility
+ */
+app.get('/risk/volatility/:symbol', async (c) => {
+  const symbol = c.req.param('symbol').toUpperCase();
+  
+  const volatility = await getTokenVolatility(symbol);
+  if (!volatility) {
+    return c.json({ error: 'Token not found or volatility unavailable' }, 404);
+  }
+  
+  return c.json({
+    success: true,
+    volatility,
   });
 });
 
