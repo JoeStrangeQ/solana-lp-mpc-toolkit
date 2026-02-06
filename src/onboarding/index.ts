@@ -932,6 +932,110 @@ export async function handleSettings(chatId: number | string): Promise<{ text: s
   };
 }
 
+/**
+ * Handle /pools - Show top pools with LP buttons
+ */
+export async function handlePools(chatId: number | string): Promise<{ text: string; buttons?: any[][] }> {
+  const user = await getUserByChat(chatId);
+  
+  // Top pools (could be fetched dynamically)
+  const topPools = [
+    { name: 'SOL-USDC', address: 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', apy: '42.5%', tvl: '$4.8M', binStep: 4 },
+    { name: 'SOL-USDC', address: 'ARwi1S4DaiTG5DX7S4M4ZsrXqpMD1MrTmbu9ue2tpmEq', apy: '38.2%', tvl: '$2.1M', binStep: 2 },
+    { name: 'MET-USDC', address: '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd', apy: '65.0%', tvl: '$890K', binStep: 20 },
+  ];
+  
+  const poolLines = topPools.map((p, i) => 
+    `${i + 1}. *${p.name}* (binStep: ${p.binStep})\n   📈 APY: ${p.apy} | 💰 TVL: ${p.tvl}`
+  ).join('\n\n');
+  
+  const buttons: any[][] = topPools.map(p => ([
+    { text: `🚀 LP into ${p.name}`, callback_data: `lp_pool:${p.address}:${p.name}` },
+  ]));
+  
+  // Add refresh button
+  buttons.push([{ text: '🔄 Refresh', callback_data: 'refresh_pools' }]);
+  
+  const walletNote = user 
+    ? `\n\n💳 Wallet: \`${user.walletAddress.slice(0, 8)}...\`` 
+    : `\n\n⚠️ Create a wallet first with /start`;
+  
+  return {
+    text: [
+      `🏊 *Top LP Pools*`,
+      ``,
+      poolLines,
+      walletNote,
+      ``,
+      `_Tap a pool to start LPing!_`,
+    ].join('\n'),
+    buttons,
+  };
+}
+
+/**
+ * Handle LP entry flow - Step 1: Select amount
+ */
+export function handleLpAmountPrompt(poolAddress: string, poolName: string): { text: string; buttons: any[][] } {
+  return {
+    text: [
+      `🚀 *LP into ${poolName}*`,
+      ``,
+      `How much SOL do you want to LP?`,
+      ``,
+      `🔐 Your strategy will be:`,
+      `• Encrypted with Arcium`,
+      `• Bundled via Jito (MEV-protected)`,
+    ].join('\n'),
+    buttons: [
+      [
+        { text: '0.1 SOL', callback_data: `lp_amount:${poolAddress}:0.1` },
+        { text: '0.5 SOL', callback_data: `lp_amount:${poolAddress}:0.5` },
+      ],
+      [
+        { text: '1 SOL', callback_data: `lp_amount:${poolAddress}:1` },
+        { text: '5 SOL', callback_data: `lp_amount:${poolAddress}:5` },
+      ],
+      [
+        { text: '❌ Cancel', callback_data: 'dismiss' },
+      ],
+    ],
+  };
+}
+
+/**
+ * Handle LP entry flow - Step 2: Select strategy
+ */
+export function handleLpStrategyPrompt(poolAddress: string, amount: string): { text: string; buttons: any[][] } {
+  return {
+    text: [
+      `📊 *Position Strategy*`,
+      ``,
+      `Amount: *${amount} SOL*`,
+      ``,
+      `Choose your range strategy:`,
+      ``,
+      `*Concentrated* → Higher fees, needs rebalancing`,
+      `*Wide* → Lower fees, less maintenance`,
+      `*Spot* → Single-sided entry`,
+    ].join('\n'),
+    buttons: [
+      [
+        { text: '🎯 Concentrated (±5 bins)', callback_data: `lp_execute:${poolAddress}:${amount}:concentrated` },
+      ],
+      [
+        { text: '📏 Wide (±20 bins)', callback_data: `lp_execute:${poolAddress}:${amount}:wide` },
+      ],
+      [
+        { text: '⚡ Spot (single-sided)', callback_data: `lp_execute:${poolAddress}:${amount}:spot` },
+      ],
+      [
+        { text: '❌ Cancel', callback_data: 'dismiss' },
+      ],
+    ],
+  };
+}
+
 export default {
   getUserProfile,
   getUserByChat,
@@ -950,4 +1054,7 @@ export default {
   handleDeposit,
   handleWithdraw,
   handleSettings,
+  handlePools,
+  handleLpAmountPrompt,
+  handleLpStrategyPrompt,
 };

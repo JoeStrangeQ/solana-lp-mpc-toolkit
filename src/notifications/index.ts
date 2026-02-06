@@ -519,6 +519,10 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
     
     case 'claim_fees': {
       const walletId = param || await getWalletByChatId(chatId);
+      if (!walletId) {
+        return '❌ Wallet not linked. Use /start first.';
+      }
+      // TODO: Actually trigger fee claim via API
       return [
         `💸 *Claim Fees Initiated*`,
         ``,
@@ -527,6 +531,69 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
         ``,
         `Claiming fees from all positions...`,
         `I'll notify you when complete.`,
+        ``,
+        `_To claim via API:_`,
+        `\`POST /fees/claim\``,
+      ].join('\n');
+    }
+    
+    case 'refresh_positions': {
+      return `🔄 Use /positions to refresh your LP positions.`;
+    }
+    
+    case 'refresh_pools': {
+      return `🔄 Use /pools to see updated pool list.`;
+    }
+    
+    case 'lp_pool': {
+      // param format: poolAddress:poolName
+      const [poolAddress, poolName] = param?.split(':') || [];
+      if (!poolAddress) {
+        return '❌ Invalid pool selection.';
+      }
+      // Return response that triggers amount selection
+      return `LP_AMOUNT_PROMPT:${poolAddress}:${poolName || 'Pool'}`;
+    }
+    
+    case 'lp_amount': {
+      // param format: poolAddress:amount
+      const [poolAddress, amount] = param?.split(':') || [];
+      if (!poolAddress || !amount) {
+        return '❌ Invalid amount selection.';
+      }
+      // Return response that triggers strategy selection
+      return `LP_STRATEGY_PROMPT:${poolAddress}:${amount}`;
+    }
+    
+    case 'lp_execute': {
+      // param format: poolAddress:amount:strategy
+      const [poolAddress, amount, strategy] = param?.split(':') || [];
+      const walletId = await getWalletByChatId(chatId);
+      
+      if (!walletId) {
+        return '❌ Wallet not linked. Use /start first.';
+      }
+      
+      if (!poolAddress || !amount || !strategy) {
+        return '❌ Invalid LP parameters.';
+      }
+      
+      return [
+        `🚀 *LP Position Creating...*`,
+        ``,
+        `📊 Pool: ${poolAddress.slice(0, 8)}...`,
+        `💰 Amount: ${amount} SOL`,
+        `📐 Strategy: ${strategy}`,
+        ``,
+        `🔐 Encrypting strategy with Arcium...`,
+        `⚡ Building Jito bundle...`,
+        ``,
+        `_This may take 10-30 seconds._`,
+        `I'll notify you when complete!`,
+        ``,
+        `To execute via API:`,
+        `\`POST /lp/atomic\``,
+        `\`{ "walletId": "${walletId}", "poolAddress": "${poolAddress}", "amountSol": ${amount} }\``,
       ].join('\n');
     }
     

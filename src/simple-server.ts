@@ -2131,6 +2131,9 @@ import {
   handleDeposit,
   handleWithdraw,
   handleSettings,
+  handlePools,
+  handleLpAmountPrompt,
+  handleLpStrategyPrompt,
   getUserByChat,
   linkWalletToChat,
 } from './onboarding/index.js';
@@ -2519,14 +2522,32 @@ app.post('/telegram/webhook', async (c) => {
           response = settingsResult.text;
           break;
         }
+        case '/pools': {
+          const poolsResult = await handlePools(chatId);
+          if (poolsResult.buttons) {
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: poolsResult.text,
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: poolsResult.buttons },
+              }),
+            });
+            return c.json({ ok: true });
+          }
+          response = poolsResult.text;
+          break;
+        }
         case '/help':
           response = [
             `🤖 *MnM LP Toolkit Commands*`,
             ``,
             `/start - Create wallet or show existing`,
             `/balance - Check wallet balance`,
-            `/positions - View LP positions`,
-            `/status - Portfolio overview`,
+            `/pools - Browse top LP pools`,
+            `/positions - View your LP positions`,
             `/deposit - Get deposit address`,
             `/withdraw - Withdraw funds`,
             `/settings - Alert preferences`,
@@ -2580,7 +2601,40 @@ app.post('/telegram/webhook', async (c) => {
           }),
         });
         
-        // Send response message
+        // Check for special multi-step prompts
+        if (response.startsWith('LP_AMOUNT_PROMPT:')) {
+          const [, poolAddress, poolName] = response.split(':');
+          const prompt = handleLpAmountPrompt(poolAddress, poolName);
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: prompt.text,
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: prompt.buttons },
+            }),
+          });
+          return c.json({ ok: true });
+        }
+        
+        if (response.startsWith('LP_STRATEGY_PROMPT:')) {
+          const [, poolAddress, amount] = response.split(':');
+          const prompt = handleLpStrategyPrompt(poolAddress, amount);
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: prompt.text,
+              parse_mode: 'Markdown',
+              reply_markup: { inline_keyboard: prompt.buttons },
+            }),
+          });
+          return c.json({ ok: true });
+        }
+        
+        // Send regular response message
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2590,6 +2644,7 @@ app.post('/telegram/webhook', async (c) => {
             parse_mode: 'Markdown',
           }),
         });
+        return c.json({ ok: true });
       }
     }
     
@@ -2647,7 +2702,8 @@ app.post('/telegram/commands', async (c) => {
   const commands = [
     { command: 'start', description: '🚀 Create wallet or show existing' },
     { command: 'balance', description: '💰 Check wallet balance & tokens' },
-    { command: 'positions', description: '📊 View LP positions with details' },
+    { command: 'pools', description: '🏊 Browse top LP pools' },
+    { command: 'positions', description: '📊 View your LP positions' },
     { command: 'deposit', description: '💳 Get deposit address' },
     { command: 'withdraw', description: '📤 Withdraw funds' },
     { command: 'settings', description: '⚙️ Alert preferences' },
