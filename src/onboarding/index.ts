@@ -1084,6 +1084,8 @@ export function handleLpAmountPrompt(poolAddress: string, poolName: string): { t
  * Handle LP entry flow - Step 2: Select strategy
  */
 export function handleLpStrategyPrompt(poolAddress: string, amount: string): { text: string; buttons: any[][] } {
+  // Use short callback prefixes to stay under Telegram's 64-byte limit
+  // lpx = lp_execute (shortened)
   return {
     text: [
       `📊 *Position Strategy*`,
@@ -1098,13 +1100,13 @@ export function handleLpStrategyPrompt(poolAddress: string, amount: string): { t
     ].join('\n'),
     buttons: [
       [
-        { text: '🎯 Concentrated (±5 bins)', callback_data: `lp_execute:${poolAddress}:${amount}:concentrated` },
+        { text: '🎯 Concentrated (±5 bins)', callback_data: `lpx:${poolAddress}:${amount}:c` },
       ],
       [
-        { text: '📏 Wide (±20 bins)', callback_data: `lp_execute:${poolAddress}:${amount}:wide` },
+        { text: '📏 Wide (±20 bins)', callback_data: `lpx:${poolAddress}:${amount}:w` },
       ],
       [
-        { text: '⚡ Spot (single-sided)', callback_data: `lp_execute:${poolAddress}:${amount}:spot` },
+        { text: '⚡ Spot (single-sided)', callback_data: `lpx:${poolAddress}:${amount}:s` },
       ],
       [
         { text: '❌ Cancel', callback_data: 'dismiss' },

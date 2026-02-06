@@ -656,9 +656,13 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
       return `LP_STRATEGY_PROMPT:${poolAddress}:${amount}`;
     }
     
+    case 'lpx':  // Short version of lp_execute (Telegram 64-byte limit)
     case 'lp_execute': {
       // param format: poolAddress:amount:strategy
-      const [poolAddress, amount, strategy] = param?.split(':') || [];
+      // strategy can be: c=concentrated, w=wide, s=spot (short) or full names
+      const [poolAddress, amount, strategyShort] = param?.split(':') || [];
+      const strategyMap: Record<string, string> = { c: 'concentrated', w: 'wide', s: 'spot' };
+      const strategy = strategyMap[strategyShort] || strategyShort;
       const walletId = await getWalletByChatId(chatId);
       
       if (!walletId) {
