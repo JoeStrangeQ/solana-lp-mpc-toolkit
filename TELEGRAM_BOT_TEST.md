@@ -1,103 +1,71 @@
 # Telegram Bot Test Plan
 
-## Status: 🔧 DEBUGGING IN PROGRESS
+## Status: ✅ CORE BUGS FIXED
 
-**Last Updated:** 2026-02-06 13:55 CST
+**Last Updated:** 2026-02-06 14:40 CST
 
-## Fixes Applied Today
+## Critical Bug Fixed
 
-### ✅ Completed
-1. **Dynamic Pool Discovery** - `/pools` now fetches real pools from Meteora API
-   - Sorted by APR (highest first)
-   - Filtered for TVL > $100K
-   - Shows 6 pools with real data
+### 🐛 Telegram 64-Byte Callback Limit
+- **Problem:** `lp_execute:ADDRESS:AMOUNT:strategy` was 65 bytes, 1 byte over Telegram's limit
+- **Result:** Telegram silently truncated the data, corrupting the pool address
+- **Fix:** Shortened to `lpx:ADDRESS:AMOUNT:s` (55 bytes)
+- **Status:** ✅ VERIFIED - LP now opens on correct pool
 
-2. **Live LP Execution** - `lp_execute` callback now actually opens positions
-   - Calls internal API endpoint
-   - Returns success/failure message with bundle ID
-   - Fetches pool name from Meteora
+## Fixes Applied
 
-3. **Pool Name Resolution** - Positions now show real pool names
-   - Added Meteora API lookup in position discovery
-   - Falls back to token symbols if API fails
+### ✅ Completed & Verified
+1. **Shortened callback data** - Under 64-byte limit
+2. **Dynamic pool discovery** - Fetches from Meteora API
+3. **SOL-USDC always first** - Highest TVL pool shown first
+4. **Popular tokens prioritized** - SOL, USDC, JUP, BONK, etc.
+5. **All position buttons** - Shows up to 8 positions with actions
+6. **Pool names from Meteora** - Proper names, not truncated addresses
+7. **LP execute callback** - Actually executes the transaction
 
-4. **Per-Position Withdraw Buttons** - `/positions` now shows individual withdraw buttons
-   - Each position has its own withdraw button
-   - Callback includes pool address and position address
+## Test Positions Created
 
-5. **Withdraw Execution** - `withdraw_pos` callback now actually withdraws
-   - Calls `/lp/withdraw/atomic` API
-   - Converts to SOL
-   - Returns success/failure message
+| Pool | Count | Status |
+|------|-------|--------|
+| SOL-USDC | 3 | ✅ Mixed in/out range |
+| BigTrout-SOL | 2 | ❌ Out of range |
+| BFS-SOL | 2 | ✅ 1 in range |
+| MET-USDC | 1 | ❌ Out of range |
+| EVA-SOL | 1 | ❌ Out of range |
+| XAUt0-SOL | 1 | ✅ In range |
 
-6. **Test Positions Opened** - 7 positions across different pools
-   - SOL-USDC (2x)
-   - BFS-SOL
-   - BigTrout-SOL
-   - XAUt0-SOL
-   - EVA-SOL
-   - MET-USDC
-
-### 🔄 In Progress
-- Waiting for Railway deploy
-- Testing full button flow
-
-## Commands to Test
-
-| Command | Status | Notes |
-|---------|--------|-------|
-| `/start` | ✅ | Creates/shows wallet |
-| `/balance` | ✅ | Shows SOL + tokens |
-| `/pools` | ✅ | Shows real pools by APR |
-| `/positions` | 🔄 | Testing new withdraw buttons |
-| `/deposit` | ✅ | Shows deposit address |
-| `/withdraw` | 🔄 | Testing per-position flow |
-| `/settings` | ✅ | Shows preferences |
-| `/help` | ✅ | Shows all commands |
-
-## Button Flows to Test
-
-1. **LP Flow:**
-   - `/pools` → Tap pool → Tap amount → Tap strategy → Execute
-   - Status: ✅ Should work now
-
-2. **Withdraw Flow:**
-   - `/positions` → Tap "Withdraw [pool]" → Execute
-   - Status: 🔄 Testing
-
-3. **Refresh Flows:**
-   - All refresh buttons should reload data
-   - Status: ✅
-
-## Current Positions
-
-| Pool | In Range | Notes |
-|------|----------|-------|
-| SOL-USDC | ✅ | Test position |
-| SOL-USDC | ❌ | Out of range |
-| MET-USDC | ❌ | Out of range |
-| BFS-SOL | ✅ | High APR |
-| BigTrout-SOL | ✅ | Test |
-| XAUt0-SOL | ✅ | Test |
-| EVA-SOL | ✅ | Test |
+**Total: 10 positions**
 
 ## Wallet Status
 
 - **Address:** `Ab6Cuvz9rZUSb4uVbBGR6vm12LeuVBE5dzKsnYUtAEi4`
-- **Balance:** ~0.25 SOL (after opening positions)
-- **Positions:** 7
+- **Balance:** 0.03 SOL (after testing)
 
-## Known Issues
+## Commands Working
 
-1. ~~Pool names showing as truncated addresses~~ → **FIXED**
-2. ~~`lp_execute` not actually executing~~ → **FIXED**
-3. ~~No per-position withdraw buttons~~ → **FIXED**
+| Command | Status | Notes |
+|---------|--------|-------|
+| `/start` | ✅ | Shows existing wallet |
+| `/balance` | ✅ | SOL + token balances |
+| `/pools` | ✅ | Real pools, SOL-USDC first |
+| `/positions` | ✅ | All 10 positions with buttons |
+| `/deposit` | ✅ | Shows address |
+| `/withdraw` | 🔄 | Needs more testing |
+| `/settings` | ✅ | Preferences |
+| `/help` | ✅ | All commands |
+
+## LP Flow (Verified ✅)
+
+1. `/pools` → Shows 6 pools with LP buttons
+2. Tap pool → Amount selection appears
+3. Tap amount → Strategy selection appears
+4. Tap strategy → LP executes on CORRECT pool
+5. `/positions` → Shows new position
 
 ## Next Steps
 
-- [ ] Test full LP flow after deploy
-- [ ] Test full withdraw flow after deploy
-- [ ] Test claim fees button
-- [ ] Update README with final flow
-- [ ] Update website with demo screenshots
-- [ ] Security audit - verify no secrets exposed
+- [ ] Test withdrawal flow end-to-end
+- [ ] Verify claim fees works
+- [ ] Test rebalance
+- [ ] Demo video
+- [ ] Colosseum submission
