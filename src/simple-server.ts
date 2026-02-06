@@ -2585,6 +2585,40 @@ app.post('/telegram/webhook', async (c) => {
 });
 
 /**
+ * Get Telegram bot info and verify commands
+ */
+app.get('/telegram/info', async (c) => {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  
+  if (!botToken) {
+    return c.json({ error: 'TELEGRAM_BOT_TOKEN not configured' }, 400);
+  }
+  
+  try {
+    // Get bot info
+    const meResponse = await fetch(`https://api.telegram.org/bot${botToken}/getMe`);
+    const meData = await meResponse.json() as any;
+    
+    // Get current commands
+    const cmdResponse = await fetch(`https://api.telegram.org/bot${botToken}/getMyCommands`);
+    const cmdData = await cmdResponse.json() as any;
+    
+    return c.json({
+      success: true,
+      bot: meData.ok ? {
+        id: meData.result.id,
+        username: meData.result.username,
+        name: meData.result.first_name,
+      } : null,
+      commands: cmdData.ok ? cmdData.result : [],
+      commandsCount: cmdData.ok ? cmdData.result.length : 0,
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
  * Set up Telegram bot commands menu
  */
 app.post('/telegram/commands', async (c) => {
