@@ -727,14 +727,15 @@ export async function handlePositions(chatId: number | string): Promise<{ text: 
     ].join('\n');
   }).join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n');
   
-  // Build buttons for each position
+  // Build buttons for each position (all positions, up to 8)
   const buttons: any[][] = [];
   
-  // Per-position withdraw buttons (show first 4 positions)
-  for (const p of positions.slice(0, 4)) {
-    const shortAddr = p.address.slice(0, 8);
+  // Per-position action buttons
+  for (const p of positions.slice(0, 8)) {
+    const rangeIcon = p.inRange ? '🟢' : '🔴';
     buttons.push([
-      { text: `📤 Withdraw ${p.pool}`, callback_data: `withdraw_pos:${p.poolAddress}:${p.address}` },
+      { text: `${rangeIcon} ${p.pool}`, callback_data: `position_detail:${p.poolAddress}:${p.address}` },
+      { text: `📤 Withdraw`, callback_data: `withdraw_pos:${p.poolAddress}:${p.address}` },
     ]);
   }
   
@@ -744,6 +745,7 @@ export async function handlePositions(chatId: number | string): Promise<{ text: 
     { text: '🔄 Rebalance All', callback_data: `rebalance:${user.walletId}` },
   ]);
   buttons.push([
+    { text: '➕ Add New LP', callback_data: `add_lp:${user.walletId}` },
     { text: '🔄 Refresh', callback_data: `refresh_positions:${user.walletId}` },
   ]);
   
@@ -938,7 +940,13 @@ export async function handleSettings(chatId: number | string): Promise<{ text: s
 export async function handlePools(chatId: number | string): Promise<{ text: string; buttons?: any[][] }> {
   const user = await getUserByChat(chatId);
   
-  // Fetch top pools from Meteora API - TVL > $100K, sorted by APR
+  // Known popular base tokens (SOL, USDC, USDT, and top ecosystem tokens)
+  const POPULAR_TOKENS = new Set([
+    'SOL', 'USDC', 'USDT', 'JUP', 'BONK', 'WIF', 'RAY', 'mSOL', 'bSOL', 'JTO', 'PYTH',
+    'ETH', 'stSOL', 'RENDER', 'HNT', 'RNDR', 'MET', 'FIDA', 'MNGO', 'SRM', 'ORCA',
+  ]);
+  
+  // Fetch top pools from Meteora API
   let topPools: Array<{ name: string; address: string; apr: string; tvl: string; binStep: number }> = [];
   
   try {
@@ -946,14 +954,28 @@ export async function handlePools(chatId: number | string): Promise<{ text: stri
     if (meteoraResp.ok) {
       const allPools = await meteoraResp.json() as any[];
       
-      // Filter for pools with TVL > $100K and sort by APR descending
-      const filteredPools = allPools
-        .filter(p => p.liquidity && parseFloat(p.liquidity) > 100000)
-        .sort((a, b) => (b.apr || 0) - (a.apr || 0))
-        .slice(0, 6);  // Top 6 pools
+      // Filter for pools with TVL > $100K
+      const highTvlPools = allPools.filter(p => p.liquidity && parseFloat(p.liquidity) > 100000);
       
-      topPools = filteredPools.map(p => ({
-        name: p.name || `${p.mint_x_symbol}-${p.mint_y_symbol}`,
+      // Categorize pools: popular token pairs vs others
+      const popularPools = highTvlPools.filter(p => {
+        const [tokenA, tokenB] = (p.name || '').split('-');
+        return POPULAR_TOKENS.has(tokenA) || POPULAR_TOKENS.has(tokenB);
+      });
+      
+      // Sort by APR
+      const sortedPopular = popularPools.sort((a, b) => (b.apr || 0) - (a.apr || 0)).slice(0, 4);
+      const sortedAll = highTvlPools.sort((a, b) => (b.apr || 0) - (a.apr || 0)).slice(0, 4);
+      
+      // Combine: prioritize popular pools, then fill with highest APR
+      const combined = new Map<string, any>();
+      for (const p of sortedPopular) combined.set(p.address, p);
+      for (const p of sortedAll) {
+        if (combined.size < 6) combined.set(p.address, p);
+      }
+      
+      topPools = Array.from(combined.values()).map(p => ({
+        name: p.name || `${p.mint_x_symbol || '?'}-${p.mint_y_symbol || '?'}`,
         address: p.address,
         apr: p.apr > 0 ? `${p.apr.toFixed(1)}%` : '0%',
         tvl: formatTvl(parseFloat(p.liquidity)),
@@ -967,9 +989,9 @@ export async function handlePools(chatId: number | string): Promise<{ text: stri
   // Fallback to known pools if API fails
   if (topPools.length === 0) {
     topPools = [
-      { name: 'SOL-USDC', address: 'BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', apr: '~40%', tvl: '$4.8M', binStep: 4 },
-      { name: 'BFS-SOL', address: 'E6sr5aGsJwkmvxQxLWrLzo78wMFQm7JUn6aCTGpF4zmH', apr: '~50%', tvl: '$175K', binStep: 20 },
-      { name: 'BigTrout-SOL', address: '2fBRjFUvskQDjaNNFfWRyEZmsUj5Z2Yn7gfj8vn5ciAj', apr: '~15%', tvl: '$140K', binStep: 20 },
+      { name: 'SOL-USDC', address: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7', apr: '~10%', tvl: '$183K', binStep: 1 },
+      { name: 'MET-USDC', address: '5hbf9JP8k5zdrZp9pokPypFQoBse5mGCmW6nqodurGcd', apr: '~5%', tvl: '$200K', binStep: 20 },
+      { name: 'JUP-SOL', address: 'Bz8dN5dnr6UG6nPqBLDSiJrgxtNNubnXUMFdWCQTnLC1', apr: '~15%', tvl: '$500K', binStep: 10 },
     ];
   }
   
