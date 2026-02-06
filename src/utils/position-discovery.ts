@@ -15,6 +15,34 @@ import {
   formatPrice,
 } from './token-metadata';
 
+// Cache for Meteora pool names
+const poolNameCache = new Map<string, string>();
+
+/**
+ * Fetch pool name from Meteora API
+ */
+async function getMeteoraPoolName(poolAddress: string): Promise<string | null> {
+  // Check cache first
+  if (poolNameCache.has(poolAddress)) {
+    return poolNameCache.get(poolAddress)!;
+  }
+  
+  try {
+    const resp = await fetch(`https://dlmm-api.meteora.ag/pair/${poolAddress}`);
+    if (resp.ok) {
+      const data = await resp.json() as { name?: string };
+      const name = data.name || null;
+      if (name) {
+        poolNameCache.set(poolAddress, name);
+      }
+      return name;
+    }
+  } catch (e) {
+    // Ignore fetch errors
+  }
+  return null;
+}
+
 export interface DiscoveredPosition {
   address: string;
   pool: {
@@ -145,11 +173,15 @@ export async function discoverAllPositions(
           const feeXNum = Number(feeXRaw) / Math.pow(10, tokenX.decimals);
           const feeYNum = Number(feeYRaw) / Math.pow(10, tokenY.decimals);
           
+          // Get pool name from Meteora API (falls back to token symbols)
+          const meteoraPoolName = await getMeteoraPoolName(poolAddress);
+          const poolName = meteoraPoolName || `${tokenX.symbol}-${tokenY.symbol}`;
+          
           allPositions.push({
             address: lbPosition.publicKey.toBase58(),
             pool: {
               address: poolAddress,
-              name: `${tokenX.symbol}-${tokenY.symbol}`,
+              name: poolName,
               tokenX,
               tokenY,
               binStep,

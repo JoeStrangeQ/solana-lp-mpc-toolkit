@@ -11,6 +11,16 @@
 import { Redis } from '@upstash/redis';
 import crypto from 'crypto';
 
+// Import getUserByChat from onboarding (lazy import to avoid circular deps)
+async function getUserByChat(chatId: string | number): Promise<{ walletId: string; walletAddress: string } | null> {
+  const client = getRedis();
+  const walletId = await client.get<string>(`notify:chat:${chatId}`);
+  if (!walletId) return null;
+  
+  const profile = await client.get<{ walletId: string; walletAddress: string }>(`user:${walletId}`);
+  return profile || null;
+}
+
 // ============ Types ============
 
 export interface NotificationRecipient {
@@ -518,6 +528,90 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
         `Use /positions to see your LP positions,`,
         `then tap a position to withdraw.`,
       ].join('\n');
+    }
+    
+    case 'withdraw_pos': {
+      // param format: poolAddress:positionAddress
+      const colonIdx = param?.indexOf(':') ?? -1;
+      const poolAddress = colonIdx > -1 ? param!.slice(0, colonIdx) : param;
+      const positionAddress = colonIdx > -1 ? param!.slice(colonIdx + 1) : undefined;
+      
+      const walletId = await getWalletByChatId(chatId);
+      if (!walletId) {
+        return '❌ Wallet not linked. Use /start first.';
+      }
+      
+      if (!poolAddress || !positionAddress) {
+        return '❌ Invalid position. Please try again.';
+      }
+      
+      // Get wallet address
+      const user = await getUserByChat(chatId);
+      if (!user) {
+        return '❌ User not found. Use /start first.';
+      }
+      
+      // Execute withdrawal via API
+      try {
+        const apiUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
+          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+          : 'http://localhost:3000';
+        
+        const response = await fetch(`${apiUrl}/lp/withdraw/atomic`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            walletAddress: user.walletAddress,
+            poolAddress,
+            positionAddress,
+            convertToSol: true, // Convert proceeds to SOL
+          }),
+        });
+        
+        const result = await response.json() as any;
+        
+        if (result.success) {
+          // Get pool name
+          let poolName = poolAddress.slice(0, 8) + '...';
+          try {
+            const poolResp = await fetch(`https://dlmm-api.meteora.ag/pair/${poolAddress}`);
+            if (poolResp.ok) {
+              const poolData = await poolResp.json() as any;
+              poolName = poolData.name || poolName;
+            }
+          } catch (e) { /* ignore */ }
+          
+          return [
+            `✅ *Withdrawal Complete!*`,
+            ``,
+            `📊 Pool: ${poolName}`,
+            `📤 Withdrawn & converted to SOL`,
+            ``,
+            `🔐 Encrypted with Arcium`,
+            `⚡ Bundled via Jito`,
+            result.bundle?.bundleId ? `📍 Bundle: \`${result.bundle.bundleId.slice(0, 16)}...\`` : '',
+            ``,
+            `_Use /balance to see your updated balance_`,
+          ].filter(Boolean).join('\n');
+        } else {
+          return [
+            `❌ *Withdrawal Failed*`,
+            ``,
+            `Error: ${result.error || 'Unknown error'}`,
+            result.details ? `Details: ${result.details}` : '',
+            ``,
+            `_Please try again or contact support._`,
+          ].filter(Boolean).join('\n');
+        }
+      } catch (error: any) {
+        return [
+          `❌ *Withdrawal Failed*`,
+          ``,
+          `Error: ${error.message || 'Request failed'}`,
+          ``,
+          `_Please try again later._`,
+        ].join('\n');
+      }
     }
     
     case 'claim_fees': {

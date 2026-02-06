@@ -730,20 +730,20 @@ export async function handlePositions(chatId: number | string): Promise<{ text: 
   // Build buttons for each position
   const buttons: any[][] = [];
   
-  // Solscan links
-  const solscanRow = positions.slice(0, 2).map(p => ({
-    text: `🔍 ${p.pool}`,
-    url: p.solscanUrl,
-  }));
-  if (solscanRow.length > 0) buttons.push(solscanRow);
+  // Per-position withdraw buttons (show first 4 positions)
+  for (const p of positions.slice(0, 4)) {
+    const shortAddr = p.address.slice(0, 8);
+    buttons.push([
+      { text: `📤 Withdraw ${p.pool}`, callback_data: `withdraw_pos:${p.poolAddress}:${p.address}` },
+    ]);
+  }
   
-  // Action buttons
+  // General action buttons
   buttons.push([
-    { text: '💸 Claim Fees', callback_data: `claim_fees:${user.walletId}` },
-    { text: '🔄 Rebalance', callback_data: `rebalance:${user.walletId}` },
+    { text: '💸 Claim All Fees', callback_data: `claim_fees:${user.walletId}` },
+    { text: '🔄 Rebalance All', callback_data: `rebalance:${user.walletId}` },
   ]);
   buttons.push([
-    { text: '📉 Withdraw', callback_data: `withdraw_lp:${user.walletId}` },
     { text: '🔄 Refresh', callback_data: `refresh_positions:${user.walletId}` },
   ]);
   
