@@ -1106,74 +1106,99 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
       { programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA') }
     );
     
-    const swaps: Array<{ from: string; to: string; amount: string; mint: string }> = [];
-    const transactions: any[] = [];
+    console.log(`[Swap] Found ${tokenAccounts.value.length} token accounts for ${walletAddress}`);
+    
+    const swaps: Array<{ from: string; to: string; amount: string; mint: string; symbol?: string; error?: string }> = [];
+    const errors: string[] = [];
     
     // SOL mint for reference
     const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    
+    // Known token symbols
+    const KNOWN_TOKENS: Record<string, string> = {
+      'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 'USDC',
+      'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN': 'JUP',
+      'METADDFL6wWMWEoKTFJwcThTbUmtarRJZjRpzUvkxhr': 'MET',
+      'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+    };
     
     for (const account of tokenAccounts.value) {
       const info = account.account.data.parsed.info;
       const mint = info.mint;
       const amount = info.tokenAmount.uiAmount;
+      const symbol = KNOWN_TOKENS[mint] || mint.slice(0, 8) + '...';
       
-      // Skip if no balance or already SOL
-      if (!amount || amount === 0 || mint === SOL_MINT) continue;
+      console.log(`[Swap] Token ${symbol}: ${amount} (mint: ${mint})`);
+      
+      // Skip if no balance or already SOL (wrapped)
+      if (!amount || amount === 0) {
+        console.log(`[Swap] Skipping ${symbol}: zero balance`);
+        continue;
+      }
+      if (mint === SOL_MINT) {
+        console.log(`[Swap] Skipping ${symbol}: is wrapped SOL`);
+        continue;
+      }
       
       // Get swap quote from Jupiter
       try {
-        const quoteResp = await fetch(
-          `https://quote-api.jup.ag/v6/quote?inputMint=${mint}&outputMint=${SOL_MINT}&amount=${info.tokenAmount.amount}&slippageBps=100`
-        );
+        const quoteUrl = `https://quote-api.jup.ag/v6/quote?inputMint=${mint}&outputMint=${SOL_MINT}&amount=${info.tokenAmount.amount}&slippageBps=300`;
+        console.log(`[Swap] Getting quote for ${symbol}...`);
         
-        if (!quoteResp.ok) continue;
+        const quoteResp = await fetch(quoteUrl, {
+          headers: { 'Accept': 'application/json' },
+        });
+        
+        if (!quoteResp.ok) {
+          const errText = await quoteResp.text();
+          console.warn(`[Swap] Quote failed for ${symbol}: ${quoteResp.status} - ${errText}`);
+          errors.push(`${symbol}: Quote failed (${quoteResp.status})`);
+          swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: '0', mint, symbol, error: `Quote failed: ${quoteResp.status}` });
+          continue;
+        }
         
         const quote = await quoteResp.json() as any;
         
-        // Get swap transaction
-        const swapResp = await fetch('https://quote-api.jup.ag/v6/swap', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            quoteResponse: quote,
-            userPublicKey: walletAddress,
-            wrapAndUnwrapSol: true,
-          }),
-        });
+        if (quote.error) {
+          console.warn(`[Swap] Quote error for ${symbol}: ${quote.error}`);
+          errors.push(`${symbol}: ${quote.error}`);
+          swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: '0', mint, symbol, error: quote.error });
+          continue;
+        }
         
-        if (!swapResp.ok) continue;
-        
-        const swapData = await swapResp.json() as any;
+        const outAmountSol = (quote.outAmount / LAMPORTS_PER_SOL).toFixed(6);
+        console.log(`[Swap] Quote for ${symbol}: ${amount} → ${outAmountSol} SOL`);
         
         swaps.push({
-          from: info.tokenAmount.uiAmountString + ' tokens',
+          from: `${amount} ${symbol}`,
           to: 'SOL',
-          amount: (quote.outAmount / LAMPORTS_PER_SOL).toFixed(6),
+          amount: outAmountSol,
           mint,
+          symbol,
         });
         
-        transactions.push(swapData.swapTransaction);
-        
       } catch (e) {
-        console.warn(`Failed to get quote for ${mint}:`, (e as Error).message);
+        const errMsg = (e as Error).message;
+        console.warn(`[Swap] Exception for ${symbol}:`, errMsg);
+        errors.push(`${symbol}: ${errMsg}`);
+        swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: '0', mint, symbol, error: errMsg });
       }
     }
     
-    if (swaps.length === 0) {
-      return c.json({
-        success: true,
-        message: 'No tokens to swap',
-        swaps: [],
-      });
-    }
+    // Return detailed response
+    const successfulSwaps = swaps.filter(s => !s.error);
+    const failedSwaps = swaps.filter(s => s.error);
     
-    // TODO: Bundle transactions via Jito and sign with Privy
-    // For now, return what we would swap
     return c.json({
       success: true,
-      message: `Would swap ${swaps.length} token(s) to SOL`,
-      swaps,
-      note: 'Full Jito bundling coming soon',
+      message: successfulSwaps.length > 0 
+        ? `Found ${successfulSwaps.length} token(s) to swap` 
+        : 'No swappable tokens found',
+      tokensFound: tokenAccounts.value.length,
+      swaps: successfulSwaps,
+      failed: failedSwaps,
+      errors: errors.length > 0 ? errors : undefined,
+      note: 'Swap execution via Jito coming soon - this shows what would be swapped',
     });
     
   } catch (error: any) {
