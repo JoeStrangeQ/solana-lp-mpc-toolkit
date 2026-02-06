@@ -791,23 +791,28 @@ app.get('/pools/top', async (c) => {
     }
     
     const data = await response.json() as any;
-    const pools = data.data || [];
+    const pools = data.pairs || data.data || [];
     
     // Filter and assess risk
     const assessedPools: PoolRiskAssessment[] = [];
     
     for (const pool of pools) {
-      const tvl = parseFloat(pool.liquidity || pool.tvl || 0);
+      const tvl = parseFloat(pool.liquidity || pool.tvl || '0');
       if (tvl < minTvl) continue;
+      
+      // Skip blacklisted pools
+      if (pool.is_blacklisted || pool.hide) continue;
       
       // Parse token symbols from name (e.g., "SOL-USDC" -> ["SOL", "USDC"])
       const nameParts = (pool.name || '').split('-');
       const tokenX = nameParts[0] || 'UNKNOWN';
       const tokenY = nameParts[1] || 'UNKNOWN';
       
-      const apr = parseFloat(pool.apr || pool.apy || 0);
-      const volume24h = parseFloat(pool.trade_volume_24h || pool.volume24h || 0);
-      const binStep = parseInt(pool.bin_step || pool.binStep || 10);
+      // APR from Meteora is in decimal form (0.97 = 97%), convert to percentage
+      const rawApr = parseFloat(pool.apr || pool.apy || '0');
+      const apr = rawApr * 100; // Convert to percentage
+      const volume24h = parseFloat(pool.trade_volume_24h || pool.volume24h || '0');
+      const binStep = parseInt(pool.bin_step || pool.binStep || '10');
       
       const assessment = await assessPoolRisk(
         pool.address,
