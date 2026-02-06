@@ -14,6 +14,22 @@ import { resolveTokens, binIdToPrice, calculatePriceRange } from './utils/token-
 import { buildAtomicLP } from './lp/atomic';
 import { buildAtomicWithdraw } from './lp/atomicWithdraw';
 import { sendBundle, waitForBundle, TipSpeed } from './jito';
+import { 
+  getPositionMonitor, 
+  setWebhookConfig, 
+  getWebhookConfig,
+  deliverAlerts,
+  testWebhook,
+  loadData,
+  addPosition as persistAddPosition,
+  removePosition as persistRemovePosition,
+  setWebhook as persistSetWebhook,
+  setLastCheck,
+  getLastCheck,
+  type MonitoredPosition,
+  type WebhookConfig,
+  type AlertResult,
+} from './monitoring/index.js';
 
 // Lazy-load Privy to avoid ESM/CJS issues at startup
 let PrivyWalletClient: any = null;
@@ -51,6 +67,13 @@ const stats = {
   lastRequest: null as string | null,
 };
 
+// ============ Monitoring State ============
+const monitoringState = {
+  enabled: true,
+  lastCheck: null as string | null,
+  intervalId: null as NodeJS.Timeout | null,
+};
+
 // Middleware
 app.use('*', cors());
 
@@ -75,6 +98,74 @@ try {
 } catch (e) {
   console.warn('⚠️ Solana connection failed, using fallback');
   connection = new Connection('https://api.mainnet-beta.solana.com');
+}
+
+// ============ Position Monitor Initialization ============
+const monitor = getPositionMonitor(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+
+// Load persisted data on startup
+function initializeMonitoring() {
+  try {
+    const data = loadData();
+    
+    // Restore positions to monitor
+    for (const position of data.positions) {
+      monitor.addPosition(position);
+    }
+    
+    // Restore webhook config
+    if (data.webhook) {
+      setWebhookConfig(data.webhook);
+    }
+    
+    // Restore last check timestamp
+    if (data.lastCheck) {
+      monitoringState.lastCheck = data.lastCheck;
+    }
+    
+    console.log(`✅ Monitoring initialized: ${data.positions.length} positions, webhook: ${data.webhook ? 'configured' : 'none'}`);
+  } catch (e) {
+    console.warn('⚠️ Failed to initialize monitoring:', (e as Error).message);
+  }
+}
+
+// Run monitoring check
+async function runMonitoringCheck(): Promise<AlertResult[]> {
+  console.log('[Monitor] Running scheduled check...');
+  const now = new Date().toISOString();
+  
+  try {
+    const alerts = await monitor.checkAllPositions();
+    monitoringState.lastCheck = now;
+    setLastCheck(now);
+    
+    if (alerts.length > 0) {
+      console.log(`[Monitor] Found ${alerts.length} alerts, delivering to webhook...`);
+      const results = await deliverAlerts(alerts);
+      const successful = results.filter(r => r.success).length;
+      console.log(`[Monitor] Delivered ${successful}/${alerts.length} alerts`);
+    } else {
+      console.log('[Monitor] No alerts');
+    }
+    
+    return alerts;
+  } catch (e) {
+    console.error('[Monitor] Check failed:', (e as Error).message);
+    return [];
+  }
+}
+
+// Initialize on startup
+initializeMonitoring();
+
+// Background polling setup
+const MONITOR_INTERVAL_MS = parseInt(process.env.MONITOR_INTERVAL_MS || '300000'); // Default 5 min
+if (MONITOR_INTERVAL_MS > 0) {
+  console.log(`✅ Background monitoring enabled (interval: ${MONITOR_INTERVAL_MS}ms)`);
+  monitoringState.intervalId = setInterval(runMonitoringCheck, MONITOR_INTERVAL_MS);
+} else {
+  console.log('ℹ️ Background monitoring disabled (MONITOR_INTERVAL_MS=0)');
+  monitoringState.enabled = false;
 }
 
 // Stateless Privy helpers - load wallet fresh per request
@@ -144,11 +235,11 @@ const SAMPLE_POOLS = [
 
 app.get('/', (c) => c.json({ 
   name: 'LP Agent Toolkit', 
-  version: '2.1.0-stateless',
+  version: '2.2.0-monitoring',
   status: 'running',
   docs: 'https://mnm-web-seven.vercel.app',
   github: 'https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit',
-  features: ['MPC Custody', 'Arcium Privacy', 'Stateless API', 'Multi-DEX LP'],
+  features: ['MPC Custody', 'Arcium Privacy', 'Stateless API', 'Multi-DEX LP', 'Position Monitoring', 'Webhook Alerts'],
   design: 'STATELESS - pass walletId on every request',
   flow: [
     '1. POST /wallet/create → get walletId',
@@ -156,7 +247,7 @@ app.get('/', (c) => c.json({
     '3. All subsequent calls pass walletId',
   ],
   endpoints: [
-    'GET  /health',
+    'GET  /health                         → status + monitoring info',
     'GET  /fees',
     'GET  /fees/calculate?amount=1000',
     'GET  /pools/scan?tokenA=SOL&tokenB=USDC',
@@ -173,13 +264,34 @@ app.get('/', (c) => c.json({
     'GET  /positions/:walletId            → list positions (with token names & prices)',
     'GET  /positions?address=...          → list positions by address',
     'POST /chat       { message, walletId? }',
+    '--- Monitoring ---',
+    'POST /monitor/add                    → add position to monitor',
+    'DELETE /monitor/remove/:address      → stop tracking position',
+    'GET  /monitor/positions              → list all monitored positions',
+    'GET  /monitor/status/:address        → get current status of position',
+    'POST /monitor/webhook                → configure webhook for alerts',
+    'GET  /monitor/webhook                → get webhook config',
+    'DELETE /monitor/webhook              → remove webhook',
+    'POST /monitor/check                  → manually trigger check',
   ],
 }));
 
-app.get('/health', (c) => c.json({ 
-  status: 'ok', 
-  timestamp: new Date().toISOString(),
-}));
+app.get('/health', (c) => {
+  const positions = monitor.getPositions();
+  const webhookConfigured = getWebhookConfig() !== null;
+  
+  return c.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    monitoring: {
+      enabled: monitoringState.enabled,
+      positionsTracked: positions.length,
+      webhookConfigured,
+      lastCheck: monitoringState.lastCheck,
+      intervalMs: parseInt(process.env.MONITOR_INTERVAL_MS || '300000'),
+    },
+  });
+});
 
 // Usage stats endpoint
 app.get('/stats', (c) => {
@@ -228,6 +340,249 @@ app.get('/debug/config', (c) => c.json({
     PRIVY_AUTHORIZATION_PRIVATE_KEY: process.env.PRIVY_AUTHORIZATION_PRIVATE_KEY ? 'SET (' + process.env.PRIVY_AUTHORIZATION_PRIVATE_KEY.length + ' chars)' : 'NOT SET',
   }
 }));
+
+// ============ Position Monitoring API ============
+
+/**
+ * POST /monitor/add
+ * Add a position to monitoring
+ */
+app.post('/monitor/add', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { positionAddress, poolAddress, binRange, webhookUrl, alerts } = body;
+    
+    if (!positionAddress || !poolAddress) {
+      return c.json({ 
+        error: 'Missing positionAddress or poolAddress',
+        example: {
+          positionAddress: 'your-position-address',
+          poolAddress: 'pool-address',
+          binRange: { min: 100, max: 120 },
+          alerts: { outOfRange: true, valueChangePercent: 10 },
+        },
+      }, 400);
+    }
+    
+    const position: MonitoredPosition = {
+      positionAddress,
+      poolAddress,
+      binRange: binRange || { min: 0, max: 0 },
+      alertsEnabled: {
+        outOfRange: alerts?.outOfRange ?? true,
+        valueChange: alerts?.valueChangePercent ?? 0,
+      },
+      createdAt: new Date().toISOString(),
+    };
+    
+    // Add to monitor
+    monitor.addPosition(position);
+    
+    // Persist
+    persistAddPosition(position);
+    
+    // If per-position webhook provided, set it (overrides global)
+    if (webhookUrl) {
+      const webhookConfig: WebhookConfig = {
+        url: webhookUrl,
+        events: ['all'],
+        createdAt: new Date().toISOString(),
+        deliveryStats: { successful: 0, failed: 0 },
+      };
+      setWebhookConfig(webhookConfig);
+      persistSetWebhook(webhookConfig);
+    }
+    
+    return c.json({
+      success: true,
+      message: `Position ${positionAddress} added to monitoring`,
+      position,
+      totalMonitored: monitor.getPositions().length,
+    });
+  } catch (error: any) {
+    stats.errors++;
+    return c.json({ error: 'Failed to add position', details: error.message }, 500);
+  }
+});
+
+/**
+ * DELETE /monitor/remove/:positionAddress
+ * Stop tracking a position
+ */
+app.delete('/monitor/remove/:positionAddress', (c) => {
+  try {
+    const positionAddress = c.req.param('positionAddress');
+    
+    monitor.removePosition(positionAddress);
+    persistRemovePosition(positionAddress);
+    
+    return c.json({
+      success: true,
+      message: `Position ${positionAddress} removed from monitoring`,
+      totalMonitored: monitor.getPositions().length,
+    });
+  } catch (error: any) {
+    stats.errors++;
+    return c.json({ error: 'Failed to remove position', details: error.message }, 500);
+  }
+});
+
+/**
+ * GET /monitor/positions
+ * List all monitored positions with current status
+ */
+app.get('/monitor/positions', (c) => {
+  const positions = monitor.getPositions();
+  
+  return c.json({
+    success: true,
+    count: positions.length,
+    positions: positions.map(p => ({
+      ...p,
+      lastChecked: p.lastChecked || null,
+      lastActiveBin: p.lastActiveBin || null,
+    })),
+  });
+});
+
+/**
+ * GET /monitor/status/:positionAddress
+ * Get current status of one position
+ */
+app.get('/monitor/status/:positionAddress', async (c) => {
+  try {
+    const positionAddress = c.req.param('positionAddress');
+    
+    const status = await monitor.getPositionStatus(positionAddress);
+    const position = monitor.getPositions().find(p => p.positionAddress === positionAddress);
+    
+    return c.json({
+      success: true,
+      positionAddress,
+      poolAddress: position?.poolAddress,
+      ...status,
+      direction: !status.inRange 
+        ? (status.activeBin < status.binRange.min ? 'below' : 'above')
+        : null,
+    });
+  } catch (error: any) {
+    stats.errors++;
+    return c.json({ error: 'Failed to get status', details: error.message }, 500);
+  }
+});
+
+/**
+ * POST /monitor/webhook
+ * Register a global webhook for alerts
+ */
+app.post('/monitor/webhook', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { url, secret, events } = body;
+    
+    if (!url) {
+      return c.json({ 
+        error: 'Missing url',
+        example: {
+          url: 'https://your-server.com/webhook',
+          secret: 'optional-hmac-secret',
+          events: ['out_of_range', 'value_change', 'all'],
+        },
+      }, 400);
+    }
+    
+    const webhookConfig: WebhookConfig = {
+      url,
+      secret: secret || undefined,
+      events: events || ['all'],
+      createdAt: new Date().toISOString(),
+      deliveryStats: { successful: 0, failed: 0 },
+    };
+    
+    setWebhookConfig(webhookConfig);
+    persistSetWebhook(webhookConfig);
+    
+    // Test the webhook
+    const testResult = await testWebhook();
+    
+    return c.json({
+      success: true,
+      message: 'Webhook configured',
+      webhook: {
+        url: webhookConfig.url,
+        hasSecret: !!webhookConfig.secret,
+        events: webhookConfig.events,
+      },
+      testDelivery: testResult,
+    });
+  } catch (error: any) {
+    stats.errors++;
+    return c.json({ error: 'Failed to configure webhook', details: error.message }, 500);
+  }
+});
+
+/**
+ * DELETE /monitor/webhook
+ * Remove webhook
+ */
+app.delete('/monitor/webhook', (c) => {
+  setWebhookConfig(null);
+  persistSetWebhook(null);
+  
+  return c.json({
+    success: true,
+    message: 'Webhook removed',
+  });
+});
+
+/**
+ * POST /monitor/check
+ * Manually trigger a check of all positions
+ */
+app.post('/monitor/check', async (c) => {
+  try {
+    const alerts = await runMonitoringCheck();
+    
+    return c.json({
+      success: true,
+      message: `Checked ${monitor.getPositions().length} positions`,
+      alertsFound: alerts.length,
+      alerts,
+      webhookConfigured: getWebhookConfig() !== null,
+    });
+  } catch (error: any) {
+    stats.errors++;
+    return c.json({ error: 'Check failed', details: error.message }, 500);
+  }
+});
+
+/**
+ * GET /monitor/webhook
+ * Get current webhook configuration
+ */
+app.get('/monitor/webhook', (c) => {
+  const config = getWebhookConfig();
+  
+  if (!config) {
+    return c.json({
+      success: true,
+      configured: false,
+      webhook: null,
+    });
+  }
+  
+  return c.json({
+    success: true,
+    configured: true,
+    webhook: {
+      url: config.url,
+      hasSecret: !!config.secret,
+      events: config.events,
+      lastDelivery: config.lastDelivery || null,
+      stats: config.deliveryStats,
+    },
+  });
+});
 
 // ============ Fees ============
 

@@ -199,6 +199,91 @@ curl -X POST /lp/atomic -d '{
 
 ---
 
+## Position Monitoring & Webhooks
+
+### Overview
+The API includes a full position monitoring system that can:
+- Track LP positions and detect when they go out of range
+- Send webhook alerts when positions need attention
+- Run background checks every 5 minutes (configurable)
+- Persist monitoring config across restarts
+
+### Add Position to Monitor
+```bash
+curl -X POST /monitor/add -d '{
+  "positionAddress": "YOUR_POSITION_ADDRESS",
+  "poolAddress": "POOL_ADDRESS",
+  "binRange": { "min": 100, "max": 120 },
+  "alerts": {
+    "outOfRange": true,
+    "valueChangePercent": 10
+  },
+  "webhookUrl": "https://your-server.com/webhook"
+}'
+```
+
+### Configure Global Webhook
+```bash
+curl -X POST /monitor/webhook -d '{
+  "url": "https://your-server.com/alerts",
+  "secret": "your-hmac-secret",
+  "events": ["out_of_range", "value_change", "all"]
+}'
+```
+
+### Check Position Status
+```bash
+# Get current status (in range? distance from range?)
+curl /monitor/status/YOUR_POSITION_ADDRESS
+```
+
+### Manual Check
+```bash
+# Trigger immediate check of all positions
+curl -X POST /monitor/check
+```
+
+### Webhook Payload Format
+```json
+{
+  "event": "out_of_range",
+  "position": "position-address",
+  "pool": "pool-address",
+  "message": "🚨 Position OUT OF RANGE! Active bin 150 is above your range [100, 120]",
+  "data": {
+    "activeBin": 150,
+    "binRange": { "min": 100, "max": 120 },
+    "direction": "above"
+  },
+  "timestamp": "2026-02-06T07:25:00.000Z"
+}
+```
+
+### Webhook Security
+If a secret is configured, webhooks include HMAC signature:
+```
+X-Signature: sha256=abc123...
+```
+Verify by computing `HMAC-SHA256(payload, secret)`.
+
+### Monitoring Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/monitor/add` | POST | Add position to monitor |
+| `/monitor/remove/:address` | DELETE | Stop tracking position |
+| `/monitor/positions` | GET | List all monitored positions |
+| `/monitor/status/:address` | GET | Get position status |
+| `/monitor/webhook` | POST | Configure webhook |
+| `/monitor/webhook` | GET | Get webhook config |
+| `/monitor/webhook` | DELETE | Remove webhook |
+| `/monitor/check` | POST | Manually trigger check |
+
+### Environment Variables
+- `MONITOR_INTERVAL_MS`: Check interval in ms (default: 300000 = 5 min, set to 0 to disable)
+
+---
+
 ## Privacy & Security
 
 ### What's Protected
