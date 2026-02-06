@@ -564,63 +564,45 @@ export async function handleTelegramCallback(chatId: number | string, data: stri
         return '❌ Position not found. Try /positions again to refresh.';
       }
       
-      // Execute withdrawal via new execute endpoint (builds, signs, submits)
+      // Queue withdrawal for background processing (avoids Railway timeout)
       try {
-        const apiUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
-          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-          : 'http://localhost:3000';
+        // Get pool name first (fast)
+        let poolName = poolAddress.slice(0, 8) + '...';
+        try {
+          const poolResp = await fetch(`https://dlmm-api.meteora.ag/pair/${poolAddress}`);
+          if (poolResp.ok) {
+            const poolData = await poolResp.json() as any;
+            poolName = poolData.name || poolName;
+          }
+        } catch (e) { /* ignore */ }
         
-        const response = await fetch(`${apiUrl}/lp/withdraw/execute`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            walletId,
-            poolAddress,
-            positionAddress,
-            convertToSol: true,
-          }),
+        // Import and queue (lazy import to avoid circular deps)
+        const { queueWithdrawal } = await import('../monitoring/worker.js');
+        
+        const jobId = await queueWithdrawal({
+          walletId,
+          poolAddress,
+          positionAddress,
+          chatId,
+          convertToSol: true,
+          poolName,
         });
         
-        const result = await response.json() as any;
+        return [
+          `⏳ *Withdrawal Queued*`,
+          ``,
+          `📊 Pool: ${poolName}`,
+          `🔄 Processing in background...`,
+          ``,
+          `I'll send you a message when it's done!`,
+          `(Usually 30-60 seconds)`,
+        ].join('\n');
         
-        if (result.success) {
-          // Get pool name
-          let poolName = poolAddress.slice(0, 8) + '...';
-          try {
-            const poolResp = await fetch(`https://dlmm-api.meteora.ag/pair/${poolAddress}`);
-            if (poolResp.ok) {
-              const poolData = await poolResp.json() as any;
-              poolName = poolData.name || poolName;
-            }
-          } catch (e) { /* ignore */ }
-          
-          return [
-            `✅ *Withdrawal Complete!*`,
-            ``,
-            `📊 Pool: ${poolName}`,
-            `📤 Withdrawn & converted to SOL`,
-            ``,
-            `🔐 Encrypted with Arcium`,
-            `⚡ Bundled via Jito`,
-            result.bundle?.bundleId ? `📍 Bundle: \`${result.bundle.bundleId.slice(0, 16)}...\`` : '',
-            ``,
-            `_Use /balance to see your updated balance_`,
-          ].filter(Boolean).join('\n');
-        } else {
-          return [
-            `❌ *Withdrawal Failed*`,
-            ``,
-            `Error: ${result.error || 'Unknown error'}`,
-            result.details ? `Details: ${result.details}` : '',
-            ``,
-            `_Please try again or contact support._`,
-          ].filter(Boolean).join('\n');
-        }
       } catch (error: any) {
         return [
-          `❌ *Withdrawal Failed*`,
+          `❌ *Failed to Queue Withdrawal*`,
           ``,
-          `Error: ${error.message || 'Request failed'}`,
+          `Error: ${error.message || 'Queue failed'}`,
           ``,
           `_Please try again later._`,
         ].join('\n');

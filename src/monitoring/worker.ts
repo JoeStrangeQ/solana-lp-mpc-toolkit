@@ -36,7 +36,22 @@ const KEYS = {
   WORKER_LOGS: 'lp-toolkit:worker:logs',
   LAST_CHECK: 'lp-toolkit:worker:lastCheck',
   CHECK_COUNT: 'lp-toolkit:worker:checkCount',
+  WITHDRAWAL_QUEUE: 'lp-toolkit:withdrawal:queue',
+  WITHDRAWAL_PROCESSING: 'lp-toolkit:withdrawal:processing',
 };
+
+// ============ Withdrawal Job Types ============
+
+export interface WithdrawalJob {
+  id: string;
+  walletId: string;
+  poolAddress: string;
+  positionAddress: string;
+  chatId: number | string;
+  convertToSol: boolean;
+  queuedAt: string;
+  poolName?: string;
+}
 
 export interface WorkerState {
   running: boolean;
@@ -311,6 +326,151 @@ async function checkPosition(position: TrackedPosition): Promise<{ alertQueued: 
 
 // Alert processing now handled directly in checkPosition via unified notification system
 
+// ============ Withdrawal Queue ============
+
+const WITHDRAWAL_CHECK_INTERVAL_MS = 5 * 1000; // Check every 5 seconds
+let withdrawalQueueTimer: NodeJS.Timeout | null = null;
+
+/**
+ * Queue a withdrawal job for background processing
+ */
+export async function queueWithdrawal(job: Omit<WithdrawalJob, 'id' | 'queuedAt'>): Promise<string> {
+  const client = getRedis();
+  if (!client) throw new Error('Redis not available');
+  
+  const id = `wd_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const fullJob: WithdrawalJob = {
+    ...job,
+    id,
+    queuedAt: new Date().toISOString(),
+  };
+  
+  await client.lpush(KEYS.WITHDRAWAL_QUEUE, JSON.stringify(fullJob));
+  await log('info', `Queued withdrawal ${id}`, { poolAddress: job.poolAddress, chatId: job.chatId });
+  
+  return id;
+}
+
+/**
+ * Process one withdrawal job from the queue
+ */
+async function processWithdrawalQueue(): Promise<void> {
+  const client = getRedis();
+  if (!client) return;
+  
+  // Check if already processing (prevent concurrent processing)
+  const processing = await client.get(KEYS.WITHDRAWAL_PROCESSING);
+  if (processing) {
+    return; // Another job is in progress
+  }
+  
+  // Get next job
+  const rawJob = await client.rpop(KEYS.WITHDRAWAL_QUEUE);
+  if (!rawJob) return;
+  
+  const job: WithdrawalJob = typeof rawJob === 'string' ? JSON.parse(rawJob) : rawJob;
+  
+  // Mark as processing (with 5 min timeout to prevent stuck jobs)
+  await client.set(KEYS.WITHDRAWAL_PROCESSING, job.id, { ex: 300 });
+  
+  await log('info', `Processing withdrawal ${job.id}`, { 
+    poolAddress: job.poolAddress, 
+    positionAddress: job.positionAddress 
+  });
+  
+  try {
+    // Execute withdrawal via API
+    const apiUrl = process.env.RAILWAY_PUBLIC_DOMAIN 
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+      : 'http://localhost:3000';
+    
+    const response = await fetch(`${apiUrl}/lp/withdraw/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        walletId: job.walletId,
+        poolAddress: job.poolAddress,
+        positionAddress: job.positionAddress,
+        convertToSol: job.convertToSol,
+      }),
+    });
+    
+    const result = await response.json() as any;
+    
+    // Send result to Telegram
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (botToken && job.chatId) {
+      let message: string;
+      
+      if (result.success) {
+        const poolName = job.poolName || job.poolAddress.slice(0, 8) + '...';
+        message = [
+          `✅ *Withdrawal Complete!*`,
+          ``,
+          `📊 Pool: ${poolName}`,
+          `📤 Position closed`,
+          result.bundle?.bundleId ? `📍 Bundle: \`${result.bundle.bundleId.slice(0, 16)}...\`` : '',
+          ``,
+          `_Use /balance to see updated balance_`,
+        ].filter(Boolean).join('\n');
+        
+        await log('info', `Withdrawal ${job.id} successful`, { bundleId: result.bundle?.bundleId });
+      } else {
+        message = [
+          `❌ *Withdrawal Failed*`,
+          ``,
+          `Pool: ${job.poolName || job.poolAddress.slice(0, 8)}...`,
+          `Error: ${result.error || 'Unknown error'}`,
+          ``,
+          `_Click the withdraw button again to retry_`,
+        ].join('\n');
+        
+        await log('error', `Withdrawal ${job.id} failed`, { error: result.error });
+      }
+      
+      // Send via Telegram Bot API
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: job.chatId,
+          text: message,
+          parse_mode: 'Markdown',
+        }),
+      });
+    }
+    
+  } catch (error: any) {
+    await log('error', `Withdrawal ${job.id} threw error`, { error: error.message });
+    
+    // Notify user of error
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (botToken && job.chatId) {
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: job.chatId,
+          text: `❌ *Withdrawal Error*\n\nFailed to process withdrawal. Please try again.\n\nError: ${error.message}`,
+          parse_mode: 'Markdown',
+        }),
+      });
+    }
+  } finally {
+    // Clear processing lock
+    await client.del(KEYS.WITHDRAWAL_PROCESSING);
+  }
+}
+
+/**
+ * Get pending withdrawal count
+ */
+export async function getWithdrawalQueueLength(): Promise<number> {
+  const client = getRedis();
+  if (!client) return 0;
+  return await client.llen(KEYS.WITHDRAWAL_QUEUE);
+}
+
 // ============ Worker Control ============
 
 /**
@@ -338,7 +498,14 @@ export async function startWorker(): Promise<void> {
     }
   }, POSITION_CHECK_INTERVAL_MS);
   
-  await log('info', `Worker started. Position check interval: ${POSITION_CHECK_INTERVAL_MS / 1000}s`);
+  // Start withdrawal queue processing
+  withdrawalQueueTimer = setInterval(async () => {
+    if (isRunning) {
+      await processWithdrawalQueue();
+    }
+  }, WITHDRAWAL_CHECK_INTERVAL_MS);
+  
+  await log('info', `Worker started. Position check: ${POSITION_CHECK_INTERVAL_MS / 1000}s, Withdrawal queue: ${WITHDRAWAL_CHECK_INTERVAL_MS / 1000}s`);
 }
 
 /**
@@ -354,6 +521,11 @@ export async function stopWorker(): Promise<void> {
   if (positionCheckTimer) {
     clearInterval(positionCheckTimer);
     positionCheckTimer = null;
+  }
+  
+  if (withdrawalQueueTimer) {
+    clearInterval(withdrawalQueueTimer);
+    withdrawalQueueTimer = null;
   }
   
   await log('info', '🛑 Worker stopped');
