@@ -1751,6 +1751,7 @@ app.post('/lp/withdraw/execute', async (c) => {
       positionAddress,
       tipSpeed = 'fast',
       convertToSol = true,
+      chatId,  // Optional: for Telegram notification
     } = body;
 
     if (!walletId || !poolAddress || !positionAddress) {
@@ -1765,11 +1766,113 @@ app.post('/lp/withdraw/execute', async (c) => {
       }, 400);
     }
 
+    // Return immediately and process in background
+    const jobId = `wd_${Date.now()}_${positionAddress.slice(0, 8)}`;
+    console.log(`[Withdraw Execute] Starting background job ${jobId} for ${positionAddress}...`);
+    
+    // Process withdrawal in background (don't await)
+    (async () => {
+      try {
+        // Load wallet
+        const { client, wallet } = await loadWalletById(walletId);
+        const walletAddress = wallet.address;
+
+        console.log(`[Withdraw ${jobId}] Building transactions...`);
+        
+        // Build atomic withdrawal
+        const result = await buildAtomicWithdraw({
+          walletAddress,
+          poolAddress,
+          positionAddress,
+          convertToSol,
+          tipSpeed: tipSpeed as TipSpeed,
+        });
+
+        console.log(`[Withdraw ${jobId}] Signing ${result.unsignedTransactions.length} transactions...`);
+
+        // Sign all transactions with Privy
+        const signedTxs: string[] = [];
+        for (const unsignedTx of result.unsignedTransactions) {
+          try {
+            const signedTx = await client.signTransaction(unsignedTx);
+            signedTxs.push(signedTx);
+          } catch (signErr: any) {
+            signedTxs.push(unsignedTx);
+          }
+        }
+
+        // Submit to Jito
+        console.log(`[Withdraw ${jobId}] Submitting to Jito...`);
+        const { bundleId } = await sendBundle(signedTxs);
+        console.log(`[Withdraw ${jobId}] ✅ Bundle submitted: ${bundleId}`);
+
+        // Send Telegram notification if chatId provided
+        if (chatId && process.env.TELEGRAM_BOT_TOKEN) {
+          const msg = `✅ *Withdrawal Submitted*\n\nPool: ${poolAddress.slice(0, 8)}...\nBundle: \`${bundleId.slice(0, 16)}...\`\n\n_Check /positions in 30 seconds_`;
+          await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'Markdown' }),
+          });
+        }
+
+        stats.actions.lpWithdrawn++;
+      } catch (error: any) {
+        console.error(`[Withdraw ${jobId}] Error:`, error);
+        stats.errors++;
+        
+        // Send error notification if chatId provided
+        if (chatId && process.env.TELEGRAM_BOT_TOKEN) {
+          const msg = `❌ *Withdrawal Failed*\n\nError: ${error.message || 'Unknown'}`;
+          await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'Markdown' }),
+          });
+        }
+      }
+    })();
+
+    // Return immediately
+    return c.json({
+      success: true,
+      message: 'Withdrawal started in background',
+      jobId,
+      walletId,
+      poolAddress,
+      positionAddress,
+      hint: 'Processing... You will receive a notification when complete. Check /positions in 30-60 seconds.',
+    });
+  } catch (error: any) {
+    console.error('[Withdraw Execute] Error:', error);
+    stats.errors++;
+    return c.json({ error: 'Withdrawal failed', details: error.message }, 500);
+  }
+});
+
+// Keep the old endpoint logic as a separate sync version for direct API calls
+app.post('/lp/withdraw/execute/sync', async (c) => {
+  try {
+    const body = await c.req.json();
+    const {
+      walletId,
+      poolAddress,
+      positionAddress,
+      tipSpeed = 'fast',
+      convertToSol = true,
+    } = body;
+
+    if (!walletId || !poolAddress || !positionAddress) {
+      return c.json({
+        error: 'Missing walletId, poolAddress, or positionAddress',
+      }, 400);
+    }
+
     // Load wallet
     const { client, wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
 
-    console.log(`[Withdraw Execute] Withdrawing position ${positionAddress}...`);
+    console.log(`[Withdraw Execute Sync] Withdrawing position ${positionAddress}...`);
 
     // Build atomic withdrawal
     const result = await buildAtomicWithdraw({
