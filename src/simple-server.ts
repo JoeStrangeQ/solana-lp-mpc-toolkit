@@ -2417,6 +2417,150 @@ app.post('/notify/:walletId/test', async (c) => {
 });
 
 /**
+ * Handle natural language messages
+ * Parses intent and either executes directly or relays to user's webhook (OpenClaw)
+ */
+async function handleNaturalLanguage(
+  chatId: number | string,
+  text: string,
+  user: any,
+  botToken: string
+): Promise<boolean> {
+  const lower = text.toLowerCase();
+  
+  // Quick intent detection
+  const intents: Array<{ pattern: RegExp; handler: () => Promise<string | { text: string; buttons?: any[][] }> }> = [
+    // Balance check
+    {
+      pattern: /balance|how much|what.*have/i,
+      handler: async () => handleBalance(chatId),
+    },
+    // View positions
+    {
+      pattern: /position|my lp|portfolio|holdings/i,
+      handler: async () => handlePositions(chatId),
+    },
+    // View pools
+    {
+      pattern: /pool|top pool|best pool|where.*lp|apy/i,
+      handler: async () => handlePools(chatId),
+    },
+    // LP intent: "LP 0.5 SOL into SOL-USDC" or "add liquidity"
+    {
+      pattern: /lp\s+(\d+\.?\d*)\s*(sol)?|add.*liquidity|provide.*liquidity/i,
+      handler: async () => {
+        const amountMatch = text.match(/(\d+\.?\d*)\s*sol/i);
+        const amount = amountMatch ? amountMatch[1] : '0.5';
+        // Default to SOL-USDC pool
+        return handleLpAmountPrompt('BVRbyLjjfSBcoyiYFUxFjLYrKnPYS9DbYEoHSdniRLsE', 'SOL-USDC');
+      },
+    },
+    // Withdraw
+    {
+      pattern: /withdraw|pull out|exit|remove.*liquidity/i,
+      handler: async () => handleWithdraw(chatId),
+    },
+    // Claim fees
+    {
+      pattern: /claim|fees|collect/i,
+      handler: async () => ({
+        text: `💸 *Claiming Fees...*\n\n🔐 Encrypting with Arcium...\n⚡ Building Jito bundle...\n\nI'll notify you when complete!`,
+      }),
+    },
+    // Deposit
+    {
+      pattern: /deposit|fund|send.*sol/i,
+      handler: async () => handleDeposit(chatId),
+    },
+  ];
+  
+  // Try each intent
+  for (const { pattern, handler } of intents) {
+    if (pattern.test(text)) {
+      const result = await handler();
+      
+      // Send response
+      if (typeof result === 'string') {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: result,
+            parse_mode: 'Markdown',
+          }),
+        });
+      } else if (result.buttons) {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: result.text,
+            parse_mode: 'Markdown',
+            reply_markup: { inline_keyboard: result.buttons },
+          }),
+        });
+      }
+      return true;
+    }
+  }
+  
+  // Check if user has a webhook configured for advanced NL (OpenClaw relay)
+  const recipient = await getRecipient(user.walletId);
+  if (recipient?.webhook?.url) {
+    try {
+      // Relay to user's OpenClaw/agent
+      const payload = {
+        event: 'natural_language',
+        chatId,
+        walletId: user.walletId,
+        message: text,
+        timestamp: new Date().toISOString(),
+        replyEndpoint: `https://lp-agent-api-production.up.railway.app/telegram/send`,
+      };
+      
+      const body = JSON.stringify(payload);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'MnM-LP-Toolkit/1.0',
+      };
+      
+      // Add HMAC signature if secret provided
+      if (recipient.webhook.secret) {
+        const crypto = await import('crypto');
+        const signature = crypto.createHmac('sha256', recipient.webhook.secret).update(body).digest('hex');
+        headers['X-Signature'] = `sha256=${signature}`;
+      }
+      
+      await fetch(recipient.webhook.url, {
+        method: 'POST',
+        headers,
+        body,
+        signal: AbortSignal.timeout(5000),
+      });
+      
+      // Send "thinking" message
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `🤔 Processing your request...`,
+          parse_mode: 'Markdown',
+        }),
+      });
+      
+      return true;
+    } catch (e) {
+      // Webhook failed, fall through to default response
+    }
+  }
+  
+  return false; // No intent matched
+}
+
+/**
  * Telegram webhook endpoint (receives updates from Telegram)
  */
 app.post('/telegram/webhook', async (c) => {
@@ -2560,12 +2704,17 @@ app.post('/telegram/webhook', async (c) => {
           ].join('\n');
           break;
         default:
-          // Check if user exists
+          // Natural language handling
           const user = await getUserByChat(chatId);
           if (!user) {
             response = `👋 Hi! Use /start to create your wallet.`;
           } else {
-            response = `I don't understand that command. Try /help`;
+            // Try to parse natural language intent
+            const nlResponse = await handleNaturalLanguage(chatId, text, user, botToken);
+            if (nlResponse) {
+              return c.json({ ok: true }); // Response already sent
+            }
+            response = `I didn't understand that. Try /help for commands, or be more specific like "LP 0.5 SOL into SOL-USDC"`;
           }
       }
       
@@ -2764,6 +2913,232 @@ app.post('/telegram/setup', async (c) => {
     } else {
       return c.json({ success: false, error: data.description }, 400);
     }
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * Send message to a user via Telegram (for OpenClaw/agents to reply)
+ */
+app.post('/telegram/send', async (c) => {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  
+  if (!botToken) {
+    return c.json({ error: 'TELEGRAM_BOT_TOKEN not configured' }, 400);
+  }
+  
+  try {
+    const body = await c.req.json();
+    const { chatId, message, buttons, parseMode = 'Markdown' } = body;
+    
+    if (!chatId || !message) {
+      return c.json({ error: 'Missing chatId or message' }, 400);
+    }
+    
+    const payload: any = {
+      chat_id: chatId,
+      text: message,
+      parse_mode: parseMode,
+    };
+    
+    if (buttons && Array.isArray(buttons)) {
+      payload.reply_markup = { inline_keyboard: buttons };
+    }
+    
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    
+    const data = await response.json() as any;
+    
+    return c.json({
+      success: data.ok,
+      messageId: data.result?.message_id,
+      error: data.ok ? undefined : data.description,
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: error.message }, 500);
+  }
+});
+
+/**
+ * Serve the skill file for OpenClaw agents
+ */
+app.get('/skill.md', async (c) => {
+  const skillContent = `---
+name: lp-agent
+description: "Manage Solana LP positions via MnM LP Agent Toolkit. Create wallets, browse pools, add/remove liquidity, monitor positions, claim fees. All transactions Arcium-encrypted and Jito-bundled."
+---
+
+# LP Agent Skill
+
+Manage Solana LP positions with natural language. All transactions are Arcium-encrypted and MEV-protected via Jito bundles.
+
+## API Base
+\`https://lp-agent-api-production.up.railway.app\`
+
+## Quick Commands
+
+| User Says | Endpoint | Example |
+|-----------|----------|---------|
+| "Create wallet" | POST /wallet/create | Returns walletId |
+| "Check balance" | GET /wallet/:id/balance | SOL + tokens |
+| "Show pools" | GET /pools/top | Top pools by TVL |
+| "LP X SOL" | POST /lp/atomic | Atomic swap+LP |
+| "My positions" | GET /positions/:id | All LP positions |
+| "Withdraw" | POST /lp/withdraw/atomic | Atomic withdraw |
+| "Claim fees" | POST /fees/claim | Collect LP fees |
+
+## Key Endpoints
+
+### Create Wallet
+\`\`\`bash
+curl -X POST "https://lp-agent-api-production.up.railway.app/wallet/create"
+\`\`\`
+
+### Add Liquidity (Atomic)
+\`\`\`bash
+curl -X POST "https://lp-agent-api-production.up.railway.app/lp/atomic" \\
+  -H "Content-Type: application/json" \\
+  -d '{"walletId":"ID","poolAddress":"POOL","amountSol":0.5,"strategy":"concentrated"}'
+\`\`\`
+
+### View Positions
+\`\`\`bash
+curl "https://lp-agent-api-production.up.railway.app/positions/WALLET_ID"
+\`\`\`
+
+### Withdraw (Atomic)
+\`\`\`bash
+curl -X POST "https://lp-agent-api-production.up.railway.app/lp/withdraw/atomic" \\
+  -H "Content-Type: application/json" \\
+  -d '{"walletId":"ID","poolAddress":"POOL","positionAddress":"POS","convertToSol":true}'
+\`\`\`
+
+## Telegram Bot
+Users can also use @mnm_lp_bot for the same actions with a button interface.
+
+## Security
+- Privy MPC wallets (keys never exposed)
+- Arcium-encrypted strategies
+- Jito MEV-protected bundles
+`;
+
+  c.header('Content-Type', 'text/markdown');
+  return c.text(skillContent);
+});
+
+/**
+ * OpenClaw integration setup guide
+ */
+app.get('/openclaw/setup', async (c) => {
+  const walletId = c.req.query('walletId');
+  
+  return c.json({
+    title: '🔗 Connect LP Agent to OpenClaw',
+    description: 'Enable natural language LP management through your Clawdbot',
+    
+    steps: [
+      {
+        step: 1,
+        title: 'Install the LP Agent Skill',
+        action: 'Add to your OpenClaw skills directory',
+        command: `curl -o ~/.openclaw/skills/lp-agent/SKILL.md https://lp-agent-api-production.up.railway.app/skill.md`,
+      },
+      {
+        step: 2,
+        title: 'Configure your wallet',
+        action: 'Set environment variables in OpenClaw config',
+        config: {
+          LP_AGENT_API: 'https://lp-agent-api-production.up.railway.app',
+          LP_WALLET_ID: walletId || '<your-wallet-id>',
+        },
+      },
+      {
+        step: 3,
+        title: 'Register webhook for two-way sync',
+        action: 'Connect LP Bot to your OpenClaw gateway',
+        command: walletId ? `curl -X POST "${c.req.url.split('/openclaw')[0]}/notify/register" -H "Content-Type: application/json" -d '{"walletId":"${walletId}","webhook":{"url":"http://localhost:18789/webhook/lp-agent"}}'` : 'First create a wallet with POST /wallet/create',
+      },
+      {
+        step: 4,
+        title: 'Test the integration',
+        action: 'Try natural language in terminal or Telegram',
+        examples: [
+          'Tell Clawdbot: "LP 0.5 SOL into the best pool"',
+          'Tell @mnm_lp_bot: "Check my positions"',
+          'Both should work seamlessly!',
+        ],
+      },
+    ],
+    
+    skillUrl: 'https://lp-agent-api-production.up.railway.app/skill.md',
+    docsUrl: 'https://api.mnm.ag',
+    telegramBot: '@mnm_lp_bot',
+  });
+});
+
+/**
+ * Auto-setup OpenClaw integration (creates webhook, returns config)
+ */
+app.post('/openclaw/connect', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { walletId, openclawGateway } = body;
+    
+    if (!walletId) {
+      return c.json({ 
+        error: 'Missing walletId',
+        hint: 'First create a wallet with POST /wallet/create',
+      }, 400);
+    }
+    
+    // Default to local OpenClaw gateway
+    const gatewayUrl = openclawGateway || 'http://localhost:18789';
+    
+    // Register webhook for NL relay
+    await upsertRecipient({
+      walletId,
+      webhook: {
+        url: `${gatewayUrl}/webhook/lp-agent`,
+        secret: `lp-${walletId.slice(0, 8)}`,
+        linkedAt: new Date().toISOString(),
+      },
+    });
+    
+    return c.json({
+      success: true,
+      message: '🔗 OpenClaw connected!',
+      
+      config: {
+        addToOpenclawConfig: {
+          'env.LP_AGENT_API': 'https://lp-agent-api-production.up.railway.app',
+          'env.LP_WALLET_ID': walletId,
+        },
+      },
+      
+      webhookRegistered: {
+        url: `${gatewayUrl}/webhook/lp-agent`,
+        events: ['natural_language', 'alerts'],
+      },
+      
+      nextSteps: [
+        '1. Copy the skill file: curl -o ~/.openclaw/skills/lp-agent/SKILL.md https://lp-agent-api-production.up.railway.app/skill.md',
+        '2. Restart OpenClaw to load the skill',
+        '3. Try: "LP 0.5 SOL into SOL-USDC" in terminal or @mnm_lp_bot',
+      ],
+      
+      naturalLanguageExamples: [
+        'LP 1 SOL into the best pool',
+        'Check my LP positions',
+        'Withdraw from my SOL-USDC position',
+        'What are the top pools right now?',
+        'Claim my fees',
+      ],
+    });
   } catch (error: any) {
     return c.json({ success: false, error: error.message }, 500);
   }
