@@ -2456,16 +2456,21 @@ async function handleNaturalLanguage(
         const poolAddressMatch = text.match(/([1-9A-HJ-NP-Za-km-z]{32,44})/);
         if (poolAddressMatch) {
           const poolAddress = poolAddressMatch[1];
-          // Fetch pool info to get the name
+          // Fetch pool info from Meteora API to get the pair name
           try {
-            const poolResp = await fetch(`https://lp-agent-api-production.up.railway.app/pool/info?poolAddress=${poolAddress}`);
-            if (poolResp.ok) {
-              const poolData = await poolResp.json() as any;
-              const pairName = poolData.pairName || `Pool ${poolAddress.slice(0, 8)}...`;
+            const meteoraResp = await fetch(`https://dlmm-api.meteora.ag/pair/${poolAddress}`);
+            if (meteoraResp.ok) {
+              const poolData = await meteoraResp.json() as any;
+              // Try multiple fields for pair name
+              const pairName = poolData.name || 
+                (poolData.mint_x_symbol && poolData.mint_y_symbol 
+                  ? `${poolData.mint_x_symbol}-${poolData.mint_y_symbol}` 
+                  : null) ||
+                `Pool ${poolAddress.slice(0, 8)}...`;
               return handleLpAmountPrompt(poolAddress, pairName);
             }
           } catch (e) {
-            console.error('Pool lookup failed:', e);
+            console.error('Meteora pool lookup failed:', e);
           }
           // Fallback: use address as name
           return handleLpAmountPrompt(poolAddress, `Pool ${poolAddress.slice(0, 8)}...`);

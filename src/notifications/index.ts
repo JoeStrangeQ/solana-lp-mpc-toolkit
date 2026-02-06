@@ -461,7 +461,10 @@ export async function handleTelegramStart(chatId: number | string, username?: st
  * Handle callback queries (button presses)
  */
 export async function handleTelegramCallback(chatId: number | string, data: string): Promise<string> {
-  const [action, param] = data.split(':');
+  // Split only on first colon to preserve params with colons (e.g., lp_amount:ADDRESS:0.5)
+  const colonIdx = data.indexOf(':');
+  const action = colonIdx > -1 ? data.slice(0, colonIdx) : data;
+  const param = colonIdx > -1 ? data.slice(colonIdx + 1) : undefined;
   
   switch (action) {
     case 'rebalance':
