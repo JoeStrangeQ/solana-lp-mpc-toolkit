@@ -1140,14 +1140,18 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
         continue;
       }
       
-      // Get swap quote from Jupiter
+      // Get swap quote from Jupiter (requires API key)
       try {
+        const jupiterApiKey = process.env.JUPITER_API_KEY;
         const quoteUrl = `https://quote-api.jup.ag/v6/quote?inputMint=${mint}&outputMint=${SOL_MINT}&amount=${info.tokenAmount.amount}&slippageBps=300`;
-        console.log(`[Swap] Getting quote for ${symbol}...`);
+        console.log(`[Swap] Getting quote for ${symbol}... (API key: ${jupiterApiKey ? 'present' : 'MISSING'})`);
         
-        const quoteResp = await fetch(quoteUrl, {
-          headers: { 'Accept': 'application/json' },
-        });
+        const headers: Record<string, string> = { 'Accept': 'application/json' };
+        if (jupiterApiKey) {
+          headers['x-api-key'] = jupiterApiKey;
+        }
+        
+        const quoteResp = await fetch(quoteUrl, { headers });
         
         if (!quoteResp.ok) {
           const errText = await quoteResp.text();
