@@ -1,27 +1,32 @@
 /**
  * Unified Onboarding System
  * 
- * Single entry point for both humans (Telegram) and agents (API).
- * Creates wallet, sets up notifications, starts monitoring.
+ * Single source of truth for user ↔ wallet ↔ notification mappings.
+ * Supports both humans (Telegram) and agents (API).
  */
 
 import { Redis } from '@upstash/redis';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { config } from '../config/index.js';
-import {
-  upsertRecipient,
-  getRecipient,
-  getWalletByChatId,
-  type NotificationRecipient,
-} from '../notifications/index.js';
+import { upsertRecipient } from '../notifications/index.js';
 import { discoverAllPositions } from '../utils/position-discovery.js';
 
-// Redis keys for user data
+// ============ Redis Keys (UNIFIED) ============
 const KEYS = {
+  // User profile by wallet
   USER: (walletId: string) => `lp:user:${walletId}`,
+  // Telegram chat → wallet mapping
   CHAT_WALLET: (chatId: string | number) => `lp:chat:${chatId}:wallet`,
+  // Wallet → Telegram chat mapping (reverse)
+  WALLET_CHAT: (walletId: string) => `lp:wallet:${walletId}:chat`,
+  // All users set
+  ALL_USERS: 'lp:users:all',
+  // Legacy key check (from old notification system)
+  LEGACY_RECIPIENT: (walletId: string) => `lp:notify:recipient:${walletId}`,
+  LEGACY_CHAT_WALLET: (chatId: string | number) => `lp:notify:chat:${chatId}`,
 };
 
+// ============ Types ============
 export interface UserProfile {
   walletId: string;
   walletAddress: string;
@@ -34,6 +39,13 @@ export interface UserProfile {
     url: string;
     secret?: string;
     linkedAt: string;
+  };
+  preferences: {
+    alertOnOutOfRange: boolean;
+    alertOnBackInRange: boolean;
+    dailySummary: boolean;
+    autoRebalance: boolean;
+    rebalanceThreshold: number;
   };
   createdAt: string;
   lastSeen: string;
@@ -51,7 +63,7 @@ export interface OnboardResult {
   message: string;
 }
 
-// Redis client
+// ============ Redis Client ============
 let redis: Redis | null = null;
 
 function getRedis(): Redis {
@@ -66,8 +78,9 @@ function getRedis(): Redis {
   return redis;
 }
 
-// Privy client loader (lazy)
+// ============ Privy Client ============
 let privyClient: any = null;
+
 async function getPrivyClient() {
   if (privyClient) return privyClient;
   
@@ -87,41 +100,200 @@ async function getPrivyClient() {
 
 // ============ User Profile Management ============
 
+/**
+ * Get user profile by wallet ID
+ */
 export async function getUserProfile(walletId: string): Promise<UserProfile | null> {
   const client = getRedis();
   return client.get<UserProfile>(KEYS.USER(walletId));
 }
 
+/**
+ * Get user by Telegram chat ID (checks both new and legacy systems)
+ */
 export async function getUserByChat(chatId: string | number): Promise<UserProfile | null> {
   const client = getRedis();
-  const walletId = await client.get<string>(KEYS.CHAT_WALLET(chatId));
+  
+  // Check new system first
+  let walletId = await client.get<string>(KEYS.CHAT_WALLET(chatId));
+  
+  // Check legacy system if not found
+  if (!walletId) {
+    walletId = await client.get<string>(KEYS.LEGACY_CHAT_WALLET(chatId));
+    
+    // If found in legacy, migrate to new system
+    if (walletId) {
+      console.log(`[Onboarding] Migrating legacy mapping: chat ${chatId} → wallet ${walletId}`);
+      await client.set(KEYS.CHAT_WALLET(chatId), walletId);
+      await client.set(KEYS.WALLET_CHAT(walletId), chatId);
+    }
+  }
+  
   if (!walletId) return null;
-  return getUserProfile(walletId);
+  
+  // Get full profile
+  let profile = await getUserProfile(walletId);
+  
+  // If no profile but wallet exists, try to load from Privy and create profile
+  if (!profile) {
+    try {
+      const privy = await getPrivyClient();
+      if (privy) {
+        const wallet = await privy.loadWallet(walletId);
+        if (wallet) {
+          profile = {
+            walletId,
+            walletAddress: wallet.address,
+            telegram: {
+              chatId,
+              linkedAt: new Date().toISOString(),
+            },
+            preferences: {
+              alertOnOutOfRange: true,
+              alertOnBackInRange: true,
+            dailySummary: false,
+              autoRebalance: false,
+              rebalanceThreshold: 5,
+            },
+            createdAt: new Date().toISOString(),
+            lastSeen: new Date().toISOString(),
+          };
+          await saveUserProfile(profile);
+        }
+      }
+    } catch (e) {
+      console.error('[Onboarding] Failed to load wallet from Privy:', e);
+    }
+  }
+  
+  return profile;
 }
 
+/**
+ * Get user by wallet address
+ */
+export async function getUserByAddress(walletAddress: string): Promise<UserProfile | null> {
+  const client = getRedis();
+  
+  // Get all users and find by address
+  const allUserIds = await client.smembers(KEYS.ALL_USERS);
+  
+  for (const walletId of allUserIds) {
+    const profile = await getUserProfile(walletId);
+    if (profile?.walletAddress === walletAddress) {
+      return profile;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Save user profile
+ */
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
   const client = getRedis();
   profile.lastSeen = new Date().toISOString();
-  await client.set(KEYS.USER(profile.walletId), profile);
   
-  // Create reverse lookup for Telegram
+  await client.set(KEYS.USER(profile.walletId), profile);
+  await client.sadd(KEYS.ALL_USERS, profile.walletId);
+  
+  // Update Telegram mappings if present
   if (profile.telegram?.chatId) {
     await client.set(KEYS.CHAT_WALLET(profile.telegram.chatId), profile.walletId);
+    await client.set(KEYS.WALLET_CHAT(profile.walletId), String(profile.telegram.chatId));
   }
+  
+  // Sync to notification system
+  await upsertRecipient({
+    walletId: profile.walletId,
+    telegram: profile.telegram ? {
+      chatId: profile.telegram.chatId,
+      linkedAt: profile.telegram.linkedAt,
+    } : undefined,
+    webhook: profile.webhook ? {
+      url: profile.webhook.url,
+      secret: profile.webhook.secret,
+      linkedAt: profile.webhook.linkedAt,
+    } : undefined,
+    preferences: profile.preferences,
+  });
+}
+
+/**
+ * Link existing wallet to Telegram chat
+ */
+export async function linkWalletToChat(walletId: string, chatId: number | string, username?: string): Promise<UserProfile | null> {
+  const client = getRedis();
+  
+  // Try to load wallet from Privy
+  const privy = await getPrivyClient();
+  if (!privy) {
+    throw new Error('Wallet service unavailable');
+  }
+  
+  let wallet;
+  try {
+    wallet = await privy.loadWallet(walletId);
+  } catch (e: any) {
+    throw new Error(`Wallet not found: ${walletId}`);
+  }
+  
+  const now = new Date().toISOString();
+  
+  // Check if profile exists
+  let profile = await getUserProfile(walletId);
+  
+  if (profile) {
+    // Update existing profile with Telegram
+    profile.telegram = {
+      chatId,
+      username,
+      linkedAt: now,
+    };
+    profile.lastSeen = now;
+  } else {
+    // Create new profile
+    profile = {
+      walletId,
+      walletAddress: wallet.address,
+      telegram: {
+        chatId,
+        username,
+        linkedAt: now,
+      },
+      preferences: {
+        alertOnOutOfRange: true,
+        alertOnBackInRange: true,
+            dailySummary: false,
+        autoRebalance: false,
+        rebalanceThreshold: 5,
+      },
+      createdAt: now,
+      lastSeen: now,
+    };
+  }
+  
+  await saveUserProfile(profile);
+  
+  console.log(`[Onboarding] Linked wallet ${walletId} to chat ${chatId}`);
+  return profile;
 }
 
 // ============ Onboarding Functions ============
 
 /**
- * Onboard a new user via Telegram
- * Creates wallet, links Telegram, returns ready-to-use profile
+ * Onboard via Telegram - finds existing wallet or creates new one
  */
 export async function onboardTelegram(chatId: number | string, username?: string): Promise<OnboardResult> {
-  // Check if already onboarded
+  // Check if already has a wallet
   const existing = await getUserByChat(chatId);
   
   if (existing) {
     // Return existing user with positions
+    existing.lastSeen = new Date().toISOString();
+    await saveUserProfile(existing);
+    
     const positions = await getUserPositions(existing.walletAddress);
     
     return {
@@ -151,27 +323,18 @@ export async function onboardTelegram(chatId: number | string, username?: string
       username,
       linkedAt: now,
     },
+    preferences: {
+      alertOnOutOfRange: true,
+      alertOnBackInRange: true,
+            dailySummary: false,
+      autoRebalance: false,
+      rebalanceThreshold: 5,
+    },
     createdAt: now,
     lastSeen: now,
   };
   
   await saveUserProfile(profile);
-  
-  // Also register for notifications
-  await upsertRecipient({
-    walletId: wallet.id,
-    telegram: {
-      chatId,
-      linkedAt: now,
-    },
-    preferences: {
-      alertOnOutOfRange: true,
-      alertOnBackInRange: true,
-      dailySummary: false,
-      autoRebalance: false,
-      rebalanceThreshold: 5,
-    },
-  });
   
   console.log(`[Onboarding] New Telegram user: ${chatId} → wallet ${wallet.id}`);
   
@@ -180,16 +343,14 @@ export async function onboardTelegram(chatId: number | string, username?: string
     isNew: true,
     user: profile,
     positions: [],
-    message: 'Wallet created! Send SOL to get started.',
+    message: 'Wallet created!',
   };
 }
 
 /**
- * Onboard a new agent via API
- * Creates wallet, registers webhook, returns ready-to-use profile
+ * Onboard agent via API
  */
 export async function onboardAgent(webhookUrl: string, webhookSecret?: string): Promise<OnboardResult> {
-  // Create new Privy wallet
   const privy = await getPrivyClient();
   if (!privy) {
     throw new Error('Wallet service unavailable');
@@ -198,7 +359,6 @@ export async function onboardAgent(webhookUrl: string, webhookSecret?: string): 
   const wallet = await privy.generateWallet();
   const now = new Date().toISOString();
   
-  // Create user profile
   const profile: UserProfile = {
     walletId: wallet.id,
     walletAddress: wallet.addresses.solana,
@@ -207,28 +367,18 @@ export async function onboardAgent(webhookUrl: string, webhookSecret?: string): 
       secret: webhookSecret,
       linkedAt: now,
     },
+    preferences: {
+      alertOnOutOfRange: true,
+      alertOnBackInRange: true,
+            dailySummary: false,
+      autoRebalance: true,
+      rebalanceThreshold: 5,
+    },
     createdAt: now,
     lastSeen: now,
   };
   
   await saveUserProfile(profile);
-  
-  // Also register for notifications
-  await upsertRecipient({
-    walletId: wallet.id,
-    webhook: {
-      url: webhookUrl,
-      secret: webhookSecret,
-      linkedAt: now,
-    },
-    preferences: {
-      alertOnOutOfRange: true,
-      alertOnBackInRange: true,
-      dailySummary: false,
-      autoRebalance: true, // Agents typically want auto
-      rebalanceThreshold: 5,
-    },
-  });
   
   console.log(`[Onboarding] New agent: webhook ${webhookUrl} → wallet ${wallet.id}`);
   
@@ -237,11 +387,11 @@ export async function onboardAgent(webhookUrl: string, webhookSecret?: string): 
     isNew: true,
     user: profile,
     positions: [],
-    message: 'Agent wallet created. Ready for deposits.',
+    message: 'Agent wallet created.',
   };
 }
 
-// ============ Position Discovery ============
+// ============ Position & Balance Functions ============
 
 /**
  * Get all LP positions for a wallet
@@ -275,31 +425,30 @@ export async function getUserPositions(walletAddress: string): Promise<Array<{
  */
 export async function getWalletBalance(walletAddress: string): Promise<{
   sol: number;
-  tokens: Array<{ symbol: string; amount: number }>;
+  tokens: Array<{ mint: string; symbol: string; amount: number }>;
 }> {
   try {
     const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
     const pubkey = new PublicKey(walletAddress);
     
-    // Get SOL balance
     const solBalance = await connection.getBalance(pubkey);
     
-    // Get token balances
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
       programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
     });
     
     const tokens = tokenAccounts.value
-      .map(acc => ({
-        symbol: acc.account.data.parsed.info.mint.slice(0, 4) + '...',
-        amount: parseFloat(acc.account.data.parsed.info.tokenAmount.uiAmountString || '0'),
-      }))
+      .map(acc => {
+        const info = acc.account.data.parsed.info;
+        return {
+          mint: info.mint,
+          symbol: info.mint.slice(0, 4) + '...',
+          amount: parseFloat(info.tokenAmount.uiAmountString || '0'),
+        };
+      })
       .filter(t => t.amount > 0);
     
-    return {
-      sol: solBalance / 1e9,
-      tokens,
-    };
+    return { sol: solBalance / 1e9, tokens };
   } catch (error: any) {
     console.error('[Onboarding] Balance check failed:', error.message);
     return { sol: 0, tokens: [] };
@@ -308,8 +457,28 @@ export async function getWalletBalance(walletAddress: string): Promise<{
 
 // ============ Telegram Command Handlers ============
 
+const BOT_INTRO = `
+🤖 *MnM LP Agent Toolkit*
+
+I help you manage Solana LP positions with AI-powered automation:
+
+✨ *What I Can Do:*
+• Create & manage your LP wallet (MPC-secured)
+• Monitor positions 24/7 for out-of-range
+• Alert you instantly when action needed
+• Rebalance with one tap
+
+🔐 *Security:*
+Your funds are secured by Privy MPC - private keys never exposed, even to us.
+
+🤝 *For AI Agents:*
+Integrate via webhook for fully autonomous LP management.
+
+Let's get started! 👇
+`;
+
 /**
- * Handle /start - Onboard new user or welcome back
+ * Handle /start - Onboard or welcome back
  */
 export async function handleStart(chatId: number | string, username?: string): Promise<string> {
   try {
@@ -317,44 +486,89 @@ export async function handleStart(chatId: number | string, username?: string): P
     
     if (result.isNew) {
       return [
-        `🎉 *Welcome to MnM LP Toolkit!*`,
+        BOT_INTRO,
+        `━━━━━━━━━━━━━━━━━━━━━━`,
         ``,
-        `Your wallet is ready:`,
+        `🎉 *Your Wallet is Ready!*`,
+        ``,
         `\`${result.user.walletAddress}\``,
         ``,
-        `📥 *Next step:* Send SOL to this address`,
+        `📥 *Next:* Send SOL to this address to start`,
         ``,
-        `Once funded, use:`,
-        `• /balance - Check your balance`,
-        `• /positions - View LP positions`,
-        `• /lp - Create new position`,
-        `• /help - All commands`,
+        `*Commands:*`,
+        `/balance - Check your balance`,
+        `/positions - View LP positions`,
+        `/status - Portfolio overview`,
+        `/help - All commands`,
       ].join('\n');
     } else {
       // Returning user
       const balance = await getWalletBalance(result.user.walletAddress);
       const posCount = result.positions?.length || 0;
+      const inRange = result.positions?.filter(p => p.inRange).length || 0;
       
       return [
         `👋 *Welcome back!*`,
         ``,
-        `💰 Balance: ${balance.sol.toFixed(4)} SOL`,
-        `📊 Positions: ${posCount}`,
+        `💼 *Your Wallet:*`,
+        `\`${result.user.walletAddress}\``,
         ``,
-        `Commands:`,
-        `• /balance - Check balance`,
-        `• /positions - View positions`,
-        `• /lp - Create position`,
+        `💰 *Balance:* ${balance.sol.toFixed(4)} SOL`,
+        `📊 *Positions:* ${posCount} (${inRange} in range)`,
+        ``,
+        `/positions - View details`,
+        `/status - Full overview`,
       ].join('\n');
     }
   } catch (error: any) {
     console.error('[Telegram] Start error:', error);
-    return `❌ Error: ${error.message}\n\nPlease try again or contact support.`;
+    return `❌ Error: ${error.message}\n\nPlease try again.`;
   }
 }
 
 /**
- * Handle /balance - Show wallet balance
+ * Handle /link <walletId> - Link existing wallet
+ */
+export async function handleLink(chatId: number | string, walletId: string, username?: string): Promise<string> {
+  try {
+    // Check if already has a wallet
+    const existing = await getUserByChat(chatId);
+    if (existing) {
+      return [
+        `⚠️ You already have a wallet linked:`,
+        `\`${existing.walletAddress}\``,
+        ``,
+        `To link a different wallet, contact support.`,
+      ].join('\n');
+    }
+    
+    const profile = await linkWalletToChat(walletId, chatId, username);
+    
+    if (!profile) {
+      return `❌ Wallet not found: ${walletId}`;
+    }
+    
+    const balance = await getWalletBalance(profile.walletAddress);
+    const positions = await getUserPositions(profile.walletAddress);
+    
+    return [
+      `✅ *Wallet Linked!*`,
+      ``,
+      `\`${profile.walletAddress}\``,
+      ``,
+      `💰 Balance: ${balance.sol.toFixed(4)} SOL`,
+      `📊 Positions: ${positions.length}`,
+      ``,
+      `You'll now receive alerts here.`,
+    ].join('\n');
+  } catch (error: any) {
+    console.error('[Telegram] Link error:', error);
+    return `❌ ${error.message}`;
+  }
+}
+
+/**
+ * Handle /balance
  */
 export async function handleBalance(chatId: number | string): Promise<string> {
   const user = await getUserByChat(chatId);
@@ -366,13 +580,13 @@ export async function handleBalance(chatId: number | string): Promise<string> {
   const balance = await getWalletBalance(user.walletAddress);
   
   const tokenLines = balance.tokens.length > 0
-    ? balance.tokens.map(t => `• ${t.symbol}: ${t.amount.toFixed(4)}`).join('\n')
-    : '• No tokens';
+    ? balance.tokens.map(t => `  • ${t.symbol}: ${t.amount.toFixed(4)}`).join('\n')
+    : '  _No tokens_';
   
   return [
     `💰 *Wallet Balance*`,
     ``,
-    `Address: \`${user.walletAddress.slice(0, 8)}...${user.walletAddress.slice(-4)}\``,
+    `📍 \`${user.walletAddress.slice(0, 8)}...${user.walletAddress.slice(-4)}\``,
     ``,
     `*SOL:* ${balance.sol.toFixed(4)}`,
     ``,
@@ -382,7 +596,7 @@ export async function handleBalance(chatId: number | string): Promise<string> {
 }
 
 /**
- * Handle /positions - Show all LP positions
+ * Handle /positions
  */
 export async function handlePositions(chatId: number | string): Promise<string> {
   const user = await getUserByChat(chatId);
@@ -399,13 +613,13 @@ export async function handlePositions(chatId: number | string): Promise<string> 
       ``,
       `You don't have any LP positions yet.`,
       ``,
-      `Use /lp to create your first position!`,
+      `Deposit SOL and create your first position!`,
     ].join('\n');
   }
   
   const posLines = positions.map(p => {
     const status = p.inRange ? '✅' : '⚠️';
-    return `${status} *${p.pool}*\n   \`${p.address.slice(0, 8)}...\``;
+    return `${status} *${p.pool}*\n   \`${p.address.slice(0, 12)}...\``;
   }).join('\n\n');
   
   return [
@@ -413,12 +627,12 @@ export async function handlePositions(chatId: number | string): Promise<string> 
     ``,
     posLines,
     ``,
-    `_Checked just now_`,
+    `_Last checked: just now_`,
   ].join('\n');
 }
 
 /**
- * Handle /status - Combined status view
+ * Handle /status
  */
 export async function handleStatus(chatId: number | string): Promise<string> {
   const user = await getUserByChat(chatId);
@@ -434,7 +648,6 @@ export async function handleStatus(chatId: number | string): Promise<string> {
   
   const inRange = positions.filter(p => p.inRange).length;
   const outOfRange = positions.length - inRange;
-  
   const statusEmoji = outOfRange > 0 ? '⚠️' : '✅';
   
   return [
@@ -442,21 +655,27 @@ export async function handleStatus(chatId: number | string): Promise<string> {
     ``,
     `💰 *Balance:* ${balance.sol.toFixed(4)} SOL`,
     `📊 *Positions:* ${positions.length}`,
-    `   • In range: ${inRange}`,
+    `   • In range: ${inRange} ✅`,
     outOfRange > 0 ? `   • Out of range: ${outOfRange} ⚠️` : '',
+    ``,
+    `🔔 *Alerts:* ${user.preferences.alertOnOutOfRange ? 'On' : 'Off'}`,
     ``,
     `_Use /positions for details_`,
   ].filter(Boolean).join('\n');
 }
 
 export default {
-  onboardTelegram,
-  onboardAgent,
   getUserProfile,
   getUserByChat,
+  getUserByAddress,
+  saveUserProfile,
+  linkWalletToChat,
+  onboardTelegram,
+  onboardAgent,
   getUserPositions,
   getWalletBalance,
   handleStart,
+  handleLink,
   handleBalance,
   handlePositions,
   handleStatus,

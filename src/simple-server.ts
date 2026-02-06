@@ -2124,10 +2124,12 @@ import {
   onboardTelegram,
   onboardAgent,
   handleStart,
+  handleLink,
   handleBalance,
   handlePositions,
   handleStatus,
   getUserByChat,
+  linkWalletToChat,
 } from './onboarding/index.js';
 
 /**
@@ -2304,6 +2306,21 @@ app.post('/telegram/webhook', async (c) => {
         case '/start':
           response = await handleStart(chatId, username);
           break;
+        case '/link':
+          // /link <walletId> - Link existing wallet
+          const walletIdArg = text.split(' ')[1];
+          if (!walletIdArg) {
+            response = [
+              `🔗 *Link Existing Wallet*`,
+              ``,
+              `Usage: \`/link <walletId>\``,
+              ``,
+              `Your walletId was returned when you created the wallet via API.`,
+            ].join('\n');
+          } else {
+            response = await handleLink(chatId, walletIdArg.trim(), username);
+          }
+          break;
         case '/balance':
           response = await handleBalance(chatId);
           break;
@@ -2317,13 +2334,17 @@ app.post('/telegram/webhook', async (c) => {
           response = [
             `🤖 *MnM LP Toolkit Commands*`,
             ``,
-            `/start - Create wallet / Welcome`,
+            `/start - Create wallet or show existing`,
+            `/link <id> - Link wallet created by agent`,
             `/balance - Check wallet balance`,
             `/positions - View LP positions`,
             `/status - Portfolio overview`,
             `/help - This message`,
             ``,
-            `_More commands coming soon!_`,
+            `🤝 *For Agents:*`,
+            `\`POST /onboard\` - Create wallet + webhook`,
+            ``,
+            `_Docs: api.mnm.ag_`,
           ].join('\n');
           break;
         default:
