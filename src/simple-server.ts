@@ -2457,11 +2457,27 @@ app.post('/telegram/webhook', async (c) => {
         case '/balance':
           response = await handleBalance(chatId);
           break;
-        case '/positions':
-          response = await handlePositions(chatId);
+        case '/positions': {
+          const posResult = await handlePositions(chatId);
+          if (posResult.buttons) {
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: posResult.text,
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: posResult.buttons },
+              }),
+            });
+            return c.json({ ok: true });
+          }
+          response = posResult.text;
           break;
+        }
         case '/status':
-          response = await handleStatus(chatId);
+          // Redirect to /positions for full overview
+          response = `ℹ️ Use /positions for full portfolio view, or /balance for wallet balance.`;
           break;
         case '/deposit':
           response = await handleDeposit(chatId);
@@ -2630,9 +2646,8 @@ app.post('/telegram/commands', async (c) => {
   
   const commands = [
     { command: 'start', description: '🚀 Create wallet or show existing' },
-    { command: 'balance', description: '💰 Check wallet balance' },
-    { command: 'positions', description: '📊 View LP positions' },
-    { command: 'status', description: '📈 Portfolio overview' },
+    { command: 'balance', description: '💰 Check wallet balance & tokens' },
+    { command: 'positions', description: '📊 View LP positions with details' },
     { command: 'deposit', description: '💳 Get deposit address' },
     { command: 'withdraw', description: '📤 Withdraw funds' },
     { command: 'settings', description: '⚙️ Alert preferences' },

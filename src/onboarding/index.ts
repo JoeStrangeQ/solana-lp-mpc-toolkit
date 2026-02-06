@@ -396,42 +396,113 @@ export async function onboardAgent(webhookUrl: string, webhookSecret?: string): 
 /**
  * Get all LP positions for a wallet
  */
-export async function getUserPositions(walletAddress: string): Promise<Array<{
+export interface PositionDetails {
   address: string;
   pool: string;
   poolAddress: string;
   inRange: boolean;
-  amounts?: { tokenX: string; tokenY: string };
-}>> {
+  priceRange: {
+    lower: number;
+    upper: number;
+    current: number;
+    display: string;
+  };
+  amounts: {
+    tokenX: { symbol: string; amount: number; formatted: string };
+    tokenY: { symbol: string; amount: number; formatted: string };
+  };
+  fees: {
+    tokenX: string;
+    tokenY: string;
+  };
+  solscanUrl: string;
+}
+
+export async function getUserPositions(walletAddress: string): Promise<PositionDetails[]> {
   try {
     const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
     const positions = await discoverAllPositions(connection, walletAddress);
     
-    return positions.map(p => ({
-      address: p.address,
-      pool: p.pool?.name || 'Unknown',
-      poolAddress: p.pool?.address || '',
-      inRange: p.inRange,
-      amounts: p.amounts,
-    }));
+    return positions.map(p => {
+      const tokenXSymbol = p.pool?.tokenX?.symbol || 'X';
+      const tokenYSymbol = p.pool?.tokenY?.symbol || 'Y';
+      const tokenXDecimals = p.pool?.tokenX?.decimals || 6;
+      const tokenYDecimals = p.pool?.tokenY?.decimals || 6;
+      
+      const tokenXAmount = parseInt(p.amounts?.tokenX || '0') / Math.pow(10, tokenXDecimals);
+      const tokenYAmount = parseInt(p.amounts?.tokenY || '0') / Math.pow(10, tokenYDecimals);
+      
+      return {
+        address: p.address,
+        pool: p.pool?.name || 'Unknown',
+        poolAddress: p.pool?.address || '',
+        inRange: p.inRange,
+        priceRange: {
+          lower: p.priceRange?.priceLower || 0,
+          upper: p.priceRange?.priceUpper || 0,
+          current: p.priceRange?.currentPrice || 0,
+          display: p.priceRange?.display || '',
+        },
+        amounts: {
+          tokenX: {
+            symbol: tokenXSymbol,
+            amount: tokenXAmount,
+            formatted: `${tokenXAmount.toFixed(4)} ${tokenXSymbol}`,
+          },
+          tokenY: {
+            symbol: tokenYSymbol,
+            amount: tokenYAmount,
+            formatted: `${tokenYAmount.toFixed(4)} ${tokenYSymbol}`,
+          },
+        },
+        fees: {
+          tokenX: p.fees?.tokenXFormatted || '0',
+          tokenY: p.fees?.tokenYFormatted || '0',
+        },
+        solscanUrl: p.solscanUrl || `https://solscan.io/account/${p.address}`,
+      };
+    });
   } catch (error: any) {
     console.error('[Onboarding] Position discovery failed:', error.message);
     return [];
   }
 }
 
+// Known token symbols
+const TOKEN_SYMBOLS: Record<string, string> = {
+  'So11111111111111111111111111111111111111112': 'SOL',
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v': 'USDC',
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB': 'USDT',
+  'METvsvVRapdj9cFLzq4Tr43xK4tAjQfwX76z3n6mWQL': 'MET',
+  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263': 'BONK',
+  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm': 'WIF',
+  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN': 'JUP',
+  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R': 'RAY',
+  'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So': 'mSOL',
+  'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL': 'JTO',
+  '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs': 'ETH',
+  'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3': 'PYTH',
+};
+
 /**
  * Get wallet balance
  */
 export async function getWalletBalance(walletAddress: string): Promise<{
   sol: number;
-  tokens: Array<{ mint: string; symbol: string; amount: number }>;
+  solUsd: number;
+  tokens: Array<{ mint: string; symbol: string; amount: number; usd?: number }>;
+  totalUsd: number;
 }> {
   try {
     const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
     const pubkey = new PublicKey(walletAddress);
     
     const solBalance = await connection.getBalance(pubkey);
+    const sol = solBalance / 1e9;
+    
+    // Get SOL price (approximate)
+    const solPrice = 105; // TODO: fetch from Jupiter
+    const solUsd = sol * solPrice;
     
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
       programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
@@ -440,18 +511,26 @@ export async function getWalletBalance(walletAddress: string): Promise<{
     const tokens = tokenAccounts.value
       .map(acc => {
         const info = acc.account.data.parsed.info;
-        return {
-          mint: info.mint,
-          symbol: info.mint.slice(0, 4) + '...',
-          amount: parseFloat(info.tokenAmount.uiAmountString || '0'),
-        };
+        const mint = info.mint;
+        const symbol = TOKEN_SYMBOLS[mint] || mint.slice(0, 6) + '...';
+        const amount = parseFloat(info.tokenAmount.uiAmountString || '0');
+        
+        // Rough USD estimate for stablecoins
+        let usd: number | undefined;
+        if (symbol === 'USDC' || symbol === 'USDT') {
+          usd = amount;
+        }
+        
+        return { mint, symbol, amount, usd };
       })
-      .filter(t => t.amount > 0);
+      .filter(t => t.amount > 0.0001);
     
-    return { sol: solBalance / 1e9, tokens };
+    const tokenUsd = tokens.reduce((sum, t) => sum + (t.usd || 0), 0);
+    
+    return { sol, solUsd, tokens, totalUsd: solUsd + tokenUsd };
   } catch (error: any) {
     console.error('[Onboarding] Balance check failed:', error.message);
-    return { sol: 0, tokens: [] };
+    return { sol: 0, solUsd: 0, tokens: [], totalUsd: 0 };
   }
 }
 
@@ -580,55 +659,108 @@ export async function handleBalance(chatId: number | string): Promise<string> {
   const balance = await getWalletBalance(user.walletAddress);
   
   const tokenLines = balance.tokens.length > 0
-    ? balance.tokens.map(t => `  • ${t.symbol}: ${t.amount.toFixed(4)}`).join('\n')
+    ? balance.tokens.map(t => {
+        const usdStr = t.usd ? ` (~$${t.usd.toFixed(2)})` : '';
+        return `  • *${t.symbol}:* ${t.amount.toFixed(4)}${usdStr}`;
+      }).join('\n')
     : '  _No tokens_';
   
   return [
     `💰 *Wallet Balance*`,
     ``,
-    `📍 \`${user.walletAddress.slice(0, 8)}...${user.walletAddress.slice(-4)}\``,
+    `💵 *Total:* ~$${balance.totalUsd.toFixed(2)}`,
     ``,
-    `*SOL:* ${balance.sol.toFixed(4)}`,
+    `⬤ *SOL:* ${balance.sol.toFixed(4)} (~$${balance.solUsd.toFixed(2)})`,
     ``,
-    `*Tokens:*`,
+    `🪙 *Tokens:*`,
     tokenLines,
+    ``,
+    `📍 \`${user.walletAddress.slice(0, 8)}...${user.walletAddress.slice(-6)}\``,
+    ``,
+    `[View on Solscan](https://solscan.io/account/${user.walletAddress})`,
   ].join('\n');
 }
 
 /**
- * Handle /positions
+ * Handle /positions - returns rich text with optional buttons
  */
-export async function handlePositions(chatId: number | string): Promise<string> {
+export async function handlePositions(chatId: number | string): Promise<{ text: string; buttons?: any[][] }> {
   const user = await getUserByChat(chatId);
   
   if (!user) {
-    return `❌ No wallet found. Use /start to create one.`;
+    return { text: `❌ No wallet found. Use /start to create one.` };
   }
   
   const positions = await getUserPositions(user.walletAddress);
   
   if (positions.length === 0) {
-    return [
-      `📊 *No LP Positions*`,
-      ``,
-      `You don't have any LP positions yet.`,
-      ``,
-      `Deposit SOL and create your first position!`,
-    ].join('\n');
+    return {
+      text: [
+        `📊 *No LP Positions*`,
+        ``,
+        `You don't have any LP positions yet.`,
+        ``,
+        `Deposit SOL first (/deposit), then create a position.`,
+      ].join('\n'),
+    };
   }
   
-  const posLines = positions.map(p => {
-    const status = p.inRange ? '✅' : '⚠️';
-    return `${status} *${p.pool}*\n   \`${p.address.slice(0, 12)}...\``;
-  }).join('\n\n');
+  const posLines = positions.map((p, i) => {
+    const status = p.inRange ? '🟢' : '🔴';
+    const rangeStatus = p.inRange ? 'IN RANGE ✅' : 'OUT OF RANGE ⚠️';
+    
+    // Format price nicely
+    const priceFmt = (n: number) => n < 1 ? n.toFixed(4) : n.toFixed(2);
+    
+    return [
+      `${status} *${p.pool}* — ${rangeStatus}`,
+      ``,
+      `📍 *Price:* $${priceFmt(p.priceRange.current)}`,
+      `📐 *Range:* $${priceFmt(p.priceRange.lower)} - $${priceFmt(p.priceRange.upper)}`,
+      ``,
+      `💰 *Position:*`,
+      `   ${p.amounts.tokenX.formatted}`,
+      `   ${p.amounts.tokenY.formatted}`,
+      ``,
+      `💎 *Fees Earned:*`,
+      `   ${p.fees.tokenX} + ${p.fees.tokenY}`,
+    ].join('\n');
+  }).join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n');
   
-  return [
-    `📊 *Your LP Positions*`,
-    ``,
-    posLines,
-    ``,
-    `_Last checked: just now_`,
-  ].join('\n');
+  // Build buttons for each position
+  const buttons: any[][] = [];
+  
+  // Solscan links
+  const solscanRow = positions.slice(0, 2).map(p => ({
+    text: `🔍 ${p.pool}`,
+    url: p.solscanUrl,
+  }));
+  if (solscanRow.length > 0) buttons.push(solscanRow);
+  
+  // Action buttons
+  buttons.push([
+    { text: '💸 Claim Fees', callback_data: `claim_fees:${user.walletId}` },
+    { text: '🔄 Rebalance', callback_data: `rebalance:${user.walletId}` },
+  ]);
+  buttons.push([
+    { text: '📉 Withdraw', callback_data: `withdraw_lp:${user.walletId}` },
+    { text: '🔄 Refresh', callback_data: `refresh_positions:${user.walletId}` },
+  ]);
+  
+  return {
+    text: [
+      `📊 *Your LP Positions* (${positions.length})`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      posLines,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `⏱ Monitoring: Every 5 min`,
+      `🔔 Alerts: Active`,
+    ].join('\n'),
+    buttons,
+  };
 }
 
 /**
