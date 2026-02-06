@@ -2270,8 +2270,8 @@ app.post('/notify/:walletId/positions', async (c) => {
     return c.json({ error: 'Wallet not found' }, 404);
   }
   
-  // Fetch positions
-  const positions = await fetchAllUserPositions(conn, user.walletAddress);
+  // Fetch positions using universal discovery
+  const positions = await discoverAllPositions(conn, user.walletAddress);
   
   if (positions.length === 0) {
     const text = [
@@ -2298,7 +2298,7 @@ app.post('/notify/:walletId/positions', async (c) => {
   }
   
   // Format positions message
-  const positionLines = positions.map((p, i) => {
+  const positionLines = positions.map((p: any) => {
     const status = p.inRange ? '🟢' : '🔴';
     const priceDisplay = p.priceRange?.currentPrice 
       ? `$${p.priceRange.currentPrice < 1 ? p.priceRange.currentPrice.toFixed(4) : p.priceRange.currentPrice.toFixed(2)}`
@@ -2331,7 +2331,7 @@ app.post('/notify/:walletId/positions', async (c) => {
   const buttons: Array<Array<{ text: string; url?: string; callback_data?: string }>> = [];
   
   // Add Solscan links for each position
-  const solscanRow = positions.slice(0, 2).map(p => ({
+  const solscanRow = positions.slice(0, 2).map((p: any) => ({
     text: `🔍 ${p.pool?.name || 'View'}`,
     url: `https://solscan.io/account/${p.address}`,
   }));
