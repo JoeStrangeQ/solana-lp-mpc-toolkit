@@ -14,6 +14,7 @@ import { resolveTokens, binIdToPrice, calculatePriceRange, calculateHumanPriceRa
 import { discoverAllPositions, getPositionBinRange, getPoolInfo } from './utils/position-discovery';
 import { buildAtomicLP } from './lp/atomic';
 import { buildAtomicWithdraw } from './lp/atomicWithdraw';
+import { buildAtomicRebalance } from './lp/atomicRebalance';
 import { sendBundle, waitForBundle, TipSpeed } from './jito';
 import {
   getPositionMonitor,
@@ -1522,8 +1523,8 @@ app.post('/lp/rebalance', async (c) => {
 /**
  * POST /lp/rebalance/execute
  *
- * Execute a full atomic rebalance (withdraw + re-enter in Jito bundle)
- * This signs and submits the transactions.
+ * Execute a TRULY atomic rebalance (withdraw + re-enter in ONE Jito bundle)
+ * All-or-nothing: either everything succeeds or nothing does.
  */
 app.post('/lp/rebalance/execute', async (c) => {
   try {
@@ -1532,8 +1533,8 @@ app.post('/lp/rebalance/execute', async (c) => {
       walletId,
       poolAddress,
       positionAddress,
-      newLowerBin,
-      newUpperBin,
+      newMinBinOffset = -5,
+      newMaxBinOffset = 5,
       strategy = 'concentrated',
       shape = 'spot',
       tipSpeed = 'fast',
@@ -1550,131 +1551,81 @@ app.post('/lp/rebalance/execute', async (c) => {
     const { client, wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
 
-    console.log(`[Rebalance Execute] Starting atomic rebalance...`);
+    console.log(`[Rebalance Execute] Building atomic rebalance bundle...`);
 
-    // Get pool info
-    const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
-    const pool = await DLMM.create(conn, new PublicKey(poolAddress));
-    const activeBin = await pool.getActiveBin();
-
-    // Build withdrawal bundle
-    const withdrawResult = await buildAtomicWithdraw({
+    // Build ALL transactions for a single atomic bundle
+    const rebalanceResult = await buildAtomicRebalance({
       walletAddress,
       poolAddress,
       positionAddress,
-      tipSpeed: tipSpeed as TipSpeed,
-    });
-
-    // Sign withdrawal transactions with Privy
-    const signedWithdrawTxs: string[] = [];
-    for (const unsignedTx of withdrawResult.unsignedTransactions) {
-      try {
-        const signedTx = await client.signTransaction(unsignedTx);
-        signedWithdrawTxs.push(signedTx);
-      } catch (signErr: any) {
-        console.error('[Rebalance] Sign error:', signErr);
-        // If signing fails, it might already be partially signed (position keypair)
-        signedWithdrawTxs.push(unsignedTx);
-      }
-    }
-
-    // Submit withdrawal bundle to Jito
-    console.log(`[Rebalance Execute] Submitting ${signedWithdrawTxs.length} withdrawal txs to Jito...`);
-    const { bundleId } = await sendBundle(signedWithdrawTxs);
-    console.log(`[Rebalance Execute] Withdrawal bundle submitted: ${bundleId}`);
-
-    // Wait for withdrawal to land
-    const withdrawStatus = await waitForBundle(bundleId, { timeoutMs: 60000 });
-
-    if (!withdrawStatus.landed) {
-      return c.json({
-        success: false,
-        error: 'Withdrawal bundle failed to land',
-        bundleId,
-        details: withdrawStatus.error,
-      }, 500);
-    }
-
-    console.log(`[Rebalance Execute] Withdrawal landed at slot ${withdrawStatus.slot}!`);
-
-    // Now build and execute re-entry
-    // Calculate new bin range
-    let targetLower = newLowerBin !== undefined ? activeBin.binId + newLowerBin : activeBin.binId - 5;
-    let targetUpper = newUpperBin !== undefined ? activeBin.binId + newUpperBin : activeBin.binId + 5;
-
-    if (strategy === 'wide') {
-      targetLower = activeBin.binId - 20;
-      targetUpper = activeBin.binId + 20;
-    }
-
-    // Get collateral info from position (estimate)
-    const tokenXMint = pool.tokenX.publicKey.toBase58();
-    const solMint = 'So11111111111111111111111111111111111111112';
-    const collateralMint = tokenXMint === solMint ? tokenXMint : pool.tokenY.publicKey.toBase58();
-
-    // Get wallet balance to determine re-entry amount
-    const balance = await conn.getBalance(new PublicKey(walletAddress));
-    const reentryAmount = Math.floor(balance * 0.9); // Use 90% of balance, keep some for fees
-
-    // Build re-entry LP transactions
-    const lpResult = await buildAtomicLP({
-      walletAddress,
-      poolAddress,
-      collateralMint,
-      collateralAmount: reentryAmount,
-      strategy: strategy as 'concentrated' | 'wide' | 'custom',
+      newMinBinOffset,
+      newMaxBinOffset,
+      strategy: strategy as 'concentrated' | 'wide',
       shape: shape as 'spot' | 'curve' | 'bidask',
-      minBinId: targetLower - activeBin.binId,
-      maxBinId: targetUpper - activeBin.binId,
       tipSpeed: tipSpeed as TipSpeed,
       slippageBps,
     });
 
-    // Sign LP transactions
-    const signedLpTxs: string[] = [];
-    for (const unsignedTx of lpResult.unsignedTransactions) {
+    console.log(`[Rebalance Execute] Built ${rebalanceResult.unsignedTransactions.length} txs for atomic bundle`);
+
+    // Sign all transactions with Privy (the new position keypair is already applied)
+    const signedTxs: string[] = [];
+    for (const unsignedTx of rebalanceResult.unsignedTransactions) {
       try {
         const signedTx = await client.signTransaction(unsignedTx);
-        signedLpTxs.push(signedTx);
+        signedTxs.push(signedTx);
       } catch (signErr: any) {
-        // Already partially signed with position keypair
-        signedLpTxs.push(unsignedTx);
+        console.error('[Rebalance] Sign error (may be pre-signed):', signErr.message);
+        // If signing fails, transaction may already be partially signed
+        signedTxs.push(unsignedTx);
       }
     }
 
-    // Submit LP bundle
-    console.log(`[Rebalance Execute] Submitting ${signedLpTxs.length} LP txs to Jito...`);
-    const lpBundle = await sendBundle(signedLpTxs);
-    console.log(`[Rebalance Execute] LP bundle submitted: ${lpBundle.bundleId}`);
+    // Submit as ONE atomic bundle to Jito
+    console.log(`[Rebalance Execute] Submitting ${signedTxs.length} txs as ONE Jito bundle...`);
+    const { bundleId } = await sendBundle(signedTxs);
+    console.log(`[Rebalance Execute] Bundle submitted: ${bundleId}`);
 
-    // Wait for LP to land
-    const lpStatus = await waitForBundle(lpBundle.bundleId, { timeoutMs: 60000 });
+    // Wait for bundle to land (all-or-nothing)
+    const bundleStatus = await waitForBundle(bundleId, { timeoutMs: 90000 });
 
     stats.actions.lpExecuted++;
 
+    if (!bundleStatus.landed) {
+      return c.json({
+        success: false,
+        error: 'Atomic rebalance bundle failed to land',
+        bundleId,
+        details: bundleStatus.error,
+        note: 'All-or-nothing: your original position is unchanged',
+      }, 500);
+    }
+
+    console.log(`[Rebalance Execute] ✅ Atomic rebalance landed at slot ${bundleStatus.slot}!`);
+
     return c.json({
-      success: lpStatus.landed,
-      message: lpStatus.landed ? 'Rebalance completed!' : 'Rebalance partial - LP may have failed',
+      success: true,
+      message: 'Atomic rebalance completed!',
       walletId,
       walletAddress,
-      withdraw: {
-        bundleId,
-        landed: withdrawStatus.landed,
-        slot: withdrawStatus.slot,
-      },
-      reentry: {
-        bundleId: lpBundle.bundleId,
-        landed: lpStatus.landed,
-        slot: lpStatus.slot,
-        positionAddress: lpResult.positionKeypair ? 'New position created' : undefined,
-        binRange: lpResult.binRange,
-        error: lpStatus.error,
-      },
+      bundleId,
+      slot: bundleStatus.slot,
+      oldPosition: rebalanceResult.oldPosition,
+      newPosition: rebalanceResult.newPosition,
+      fee: rebalanceResult.fee,
+      encryptedStrategy: rebalanceResult.encryptedStrategy?.ciphertext 
+        ? { ciphertext: rebalanceResult.encryptedStrategy.ciphertext.slice(0, 40) + '...' }
+        : undefined,
+      note: 'Atomic bundle: withdraw + re-enter executed as single all-or-nothing operation',
     });
   } catch (error: any) {
     console.error('[Rebalance Execute] Error:', error);
     stats.errors++;
-    return c.json({ error: 'Rebalance execution failed', details: error.message }, 500);
+    return c.json({ 
+      error: 'Rebalance execution failed', 
+      details: error.message,
+      note: 'No changes made - atomic bundle failed before submission',
+    }, 500);
   }
 });
 
