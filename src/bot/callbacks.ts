@@ -103,6 +103,17 @@ export async function handleCallback(ctx: BotContext) {
     return;
   }
 
+  // ---- Pool selection from /pools → enter LP wizard with pool pre-selected ----
+  if (data.startsWith('lp:pool:')) {
+    await ctx.answerCallbackQuery();
+    const poolIdx = parseInt(data.split(':')[2]);
+    if (!isNaN(poolIdx)) {
+      ctx.session.pendingPoolIndex = poolIdx;
+      await ctx.conversation.enter('lpWizard');
+    }
+    return;
+  }
+
   // ---- Dismiss ----
   if (data === 'dismiss') {
     await ctx.answerCallbackQuery('Dismissed');

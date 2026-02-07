@@ -64,6 +64,12 @@ export async function lpWizard(
   }
 
   // ---- Step 1: Pool Selection ----
+  // Check if a pool was pre-selected from /pools command
+  const pendingPoolIndex = ctx.session.pendingPoolIndex;
+  // Clear the pending state immediately
+  ctx.session.pendingPoolIndex = undefined;
+  ctx.session.pendingPools = undefined;
+
   const pools = await conversation.external(async () => {
     return fetchTopPools();
   });
@@ -73,73 +79,80 @@ export async function lpWizard(
     return;
   }
 
-  // Build pool keyboard
-  const { InlineKeyboard } = await import('grammy');
-  const poolKb = new InlineKeyboard();
-  for (let i = 0; i < pools.length; i++) {
-    const p = pools[i];
-    poolKb.text(`${p.name} (${p.apr.toFixed(1)}% APR)`, `lp:pool:${i}`).row();
-  }
-  poolKb.text('Enter pool address', 'lp:pool:custom').row();
-  poolKb.text('Cancel', 'cancel');
-
-  await ctx.reply('*Add Liquidity - Select Pool*\n\nChoose a pool:', {
-    parse_mode: 'Markdown',
-    reply_markup: poolKb,
-  });
-
-  // Wait for pool selection
-  const poolCtx = await conversation.waitForCallbackQuery(/^(lp:pool:\d+|lp:pool:custom|cancel)$/, {
-    otherwise: async (ctx) => {
-      await ctx.reply('Please tap a pool button above, or tap Cancel.');
-    },
-  });
-  await poolCtx.answerCallbackQuery();
-
-  const poolData = poolCtx.callbackQuery.data;
-  if (poolData === 'cancel') {
-    await poolCtx.reply('LP cancelled.');
-    return;
-  }
-
   let selectedPool: { name: string; address: string; binStep: number };
 
-  if (poolData === 'lp:pool:custom') {
-    await poolCtx.reply('Enter the pool address:');
-    const addrCtx = await conversation.waitFor('message:text', {
-      otherwise: async (ctx) => {
-        await ctx.reply('Please send the pool address as text.');
-      },
-    });
-    const addr = addrCtx.message.text.trim();
-    if (!validateSolanaAddress(addr)) {
-      await ctx.reply('Invalid Solana address format. LP cancelled.');
-      return;
+  if (pendingPoolIndex !== undefined && pools[pendingPoolIndex]) {
+    // Pool was pre-selected from /pools command — skip selection
+    const p = pools[pendingPoolIndex];
+    selectedPool = { name: p.name, address: p.address, binStep: p.binStep };
+    await ctx.reply(`*Add Liquidity*\n\nPool: *${selectedPool.name}*`, { parse_mode: 'Markdown' });
+  } else {
+    // Show pool selection keyboard
+    const { InlineKeyboard } = await import('grammy');
+    const poolKb = new InlineKeyboard();
+    for (let i = 0; i < pools.length; i++) {
+      const p = pools[i];
+      poolKb.text(`${p.name} (${p.apr.toFixed(1)}% APR)`, `lp:pool:${i}`).row();
     }
-    // Fetch pool info
-    const poolInfo = await conversation.external(async () => {
-      const resp = await fetch(`https://dlmm-api.meteora.ag/pair/${addr}`);
-      if (!resp.ok) return null;
-      return resp.json() as Promise<any>;
+    poolKb.text('Enter pool address', 'lp:pool:custom').row();
+    poolKb.text('Cancel', 'cancel');
+
+    await ctx.reply('*Add Liquidity - Select Pool*\n\nChoose a pool:', {
+      parse_mode: 'Markdown',
+      reply_markup: poolKb,
     });
 
-    if (!poolInfo) {
-      await ctx.reply('Pool not found. Please check the address and try again.');
+    // Wait for pool selection
+    const poolCtx = await conversation.waitForCallbackQuery(/^(lp:pool:\d+|lp:pool:custom|cancel)$/, {
+      otherwise: async (ctx) => {
+        await ctx.reply('Please tap a pool button above, or tap Cancel.');
+      },
+    });
+    await poolCtx.answerCallbackQuery();
+
+    const poolData = poolCtx.callbackQuery.data;
+    if (poolData === 'cancel') {
+      await poolCtx.reply('LP cancelled.');
       return;
     }
-    selectedPool = {
-      name: poolInfo.name || addr.slice(0, 8),
-      address: addr,
-      binStep: parseInt(poolInfo.bin_step || '10'),
-    };
-  } else {
-    const poolIdx = parseInt(poolData.split(':')[2]);
-    const p = pools[poolIdx];
-    if (!p) {
-      await ctx.reply('Invalid pool selection.');
-      return;
+
+    if (poolData === 'lp:pool:custom') {
+      await poolCtx.reply('Enter the pool address:');
+      const addrCtx = await conversation.waitFor('message:text', {
+        otherwise: async (ctx) => {
+          await ctx.reply('Please send the pool address as text.');
+        },
+      });
+      const addr = addrCtx.message.text.trim();
+      if (!validateSolanaAddress(addr)) {
+        await ctx.reply('Invalid Solana address format. LP cancelled.');
+        return;
+      }
+      // Fetch pool info
+      const poolInfo = await conversation.external(async () => {
+        const resp = await fetch(`https://dlmm-api.meteora.ag/pair/${addr}`);
+        if (!resp.ok) return null;
+        return resp.json() as Promise<any>;
+      });
+
+      if (!poolInfo) {
+        await ctx.reply('Pool not found. Please check the address and try again.');
+        return;
+      }
+      selectedPool = {
+        name: poolInfo.name || addr.slice(0, 8),
+        address: addr,
+        binStep: parseInt(poolInfo.bin_step || '10'),
+      };
+    } else {
+      const poolIdx = parseInt(poolData.split(':')[2]);
+      const p = pools[poolIdx];
+      if (!p) {
+        await ctx.reply('Invalid pool selection.');
+        return;
+      }
+      selectedPool = { name: p.name, address: p.address, binStep: p.binStep };
     }
-    selectedPool = { name: p.name, address: p.address, binStep: p.binStep };
   }
 
   // ---- Step 2: Amount Selection ----
