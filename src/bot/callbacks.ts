@@ -19,7 +19,7 @@ export async function handleCallback(ctx: BotContext) {
 
   // ---- Command shortcuts from main menu ----
   if (data.startsWith('cmd:')) {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     const cmd = data.slice(4);
     switch (cmd) {
       case 'balance':
@@ -45,7 +45,7 @@ export async function handleCallback(ctx: BotContext) {
 
   // ---- Settings toggles ----
   if (data.startsWith('set:')) {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     const parts = data.split(':');
     const setting = parts[1];
     const walletId = parts.slice(2).join(':');
@@ -105,7 +105,7 @@ export async function handleCallback(ctx: BotContext) {
 
   // ---- Pool selection from /pools → enter LP wizard with pool pre-selected ----
   if (data.startsWith('lp:pool:')) {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     const poolIdx = parseInt(data.split(':')[2]);
     if (!isNaN(poolIdx)) {
       ctx.session.pendingPoolIndex = poolIdx;
@@ -116,27 +116,27 @@ export async function handleCallback(ctx: BotContext) {
 
   // ---- Dismiss ----
   if (data === 'dismiss') {
-    await ctx.answerCallbackQuery('Dismissed');
+    await ctx.answerCallbackQuery('Dismissed').catch(() => {});
     return;
   }
 
   // ---- Cancel ----
   if (data === 'cancel') {
-    await ctx.answerCallbackQuery('Cancelled');
+    await ctx.answerCallbackQuery('Cancelled').catch(() => {});
     await ctx.reply('Cancelled.');
     return;
   }
 
   // ---- Snooze alert ----
   if (data.startsWith('snooze:')) {
-    await ctx.answerCallbackQuery('Snoozed for 1 hour');
+    await ctx.answerCallbackQuery('Snoozed for 1 hour').catch(() => {});
     await ctx.reply('Snoozed for 1 hour. I\'ll check again later.');
     return;
   }
 
   // ---- Position detail ----
   if (data.startsWith('pd:')) {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     const posIdx = parseInt(data.split(':')[1]);
 
     try {
@@ -185,7 +185,7 @@ export async function handleCallback(ctx: BotContext) {
 
   // ---- Solscan link ----
   if (data.startsWith('scan:')) {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     const posIdx = parseInt(data.split(':')[1]);
 
     try {
@@ -211,7 +211,7 @@ export async function handleCallback(ctx: BotContext) {
 
   // ---- Withdraw shortcut (from positions view) ----
   if (data.startsWith('wd:') && !data.startsWith('wd:sel:') && !data.startsWith('wd:cf:')) {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     // Enter withdraw wizard
     await ctx.conversation.enter('withdrawWizard');
     return;
@@ -219,13 +219,13 @@ export async function handleCallback(ctx: BotContext) {
 
   // ---- Rebalance shortcut ----
   if (data.startsWith('rb:') && !data.startsWith('rb:sel:') && !data.startsWith('rb:str:')) {
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     // Enter rebalance wizard
     await ctx.conversation.enter('rebalanceWizard');
     return;
   }
 
   // ---- Fallback ----
-  await ctx.answerCallbackQuery('Processing...');
+  await ctx.answerCallbackQuery('Processing...').catch(() => {});
   console.log(`[Bot] Unhandled callback: ${data}`);
 }
