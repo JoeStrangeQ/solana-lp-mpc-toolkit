@@ -244,7 +244,11 @@ export function isTransientError(error: any): boolean {
 }
 
 /**
- * Classify an error into a user-friendly message
+ * Classify an error into a user-friendly message.
+ * 
+ * NOTE: For API responses, prefer using formatErrorResponse from './errors.js'
+ * which returns structured error codes (E1000-E8xxx) for programmatic handling.
+ * This function is for human-readable messages in UIs and notifications.
  */
 export function friendlyErrorMessage(error: any): string {
   if (!error) return 'An unexpected error occurred. Please try again.';

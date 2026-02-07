@@ -37,6 +37,7 @@ import {
 import { Redis } from '@upstash/redis';
 import { assessPoolRisk, assessPositionRisk, getTokenVolatility, type PoolRiskAssessment, type PositionRiskAssessment } from './risk/index.js';
 import { withTimeout, PRIVY_SIGN_TIMEOUT_MS } from './utils/resilience.js';
+import { ErrorCode, createError, classifyError, getHttpStatus, getFriendlyMessage } from './utils/error-codes.js';
 
 // Redis client for cache invalidation
 let redis: Redis | null = null;
@@ -1698,8 +1699,12 @@ async function lpExecuteHandler(c: any) {
 
     if (!walletId) {
       return c.json({
-        error: 'Missing walletId',
-        hint: 'First call POST /wallet/create, store the walletId, then pass it here',
+        success: false,
+        error: createError(
+          ErrorCode.GENERAL_INVALID_INPUT,
+          'Missing walletId',
+          { hint: 'First call POST /wallet/create, store the walletId, then pass it here' }
+        ),
         example: {
           walletId: 'abc123',
           poolAddress: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7',
@@ -1712,8 +1717,12 @@ async function lpExecuteHandler(c: any) {
 
     if (!poolAddress) {
       return c.json({
-        error: 'Missing poolAddress',
-        hint: 'Use /pools/scan to find available pools',
+        success: false,
+        error: createError(
+          ErrorCode.GENERAL_INVALID_INPUT,
+          'Missing poolAddress',
+          { hint: 'Use /pools/scan to find available pools' }
+        ),
         example: {
           walletId: 'abc123',
           poolAddress: '9Q1njS4j8svdjCnGd2xJn7RAkqrJ2vqjaPs3sXRZ6UR7',
@@ -1774,10 +1783,12 @@ async function lpExecuteHandler(c: any) {
     if (!status.landed) {
       return c.json({
         success: false,
-        error: 'Bundle failed to land',
-        bundleId,
-        details: status.error,
-      }, 500);
+        error: createError(
+          ErrorCode.LP_BUNDLE_FAILED,
+          'Transaction bundle failed to land',
+          { bundleId, jitoError: status.error }
+        ),
+      }, getHttpStatus(ErrorCode.LP_BUNDLE_FAILED));
     }
 
     console.log(`[LP Execute] ✅ Position opened at slot ${status.slot}!`);
