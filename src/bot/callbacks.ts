@@ -5,6 +5,7 @@
  * Conversation wizards handle their own callbacks via waitForCallbackQuery().
  */
 import type { BotContext } from './types.js';
+import { setPendingPool } from './types.js';
 import {
   getRecipient,
   upsertRecipient,
@@ -107,8 +108,8 @@ export async function handleCallback(ctx: BotContext) {
   if (data.startsWith('lp:pool:')) {
     await ctx.answerCallbackQuery().catch(() => {});
     const poolIdx = parseInt(data.split(':')[2]);
-    if (!isNaN(poolIdx)) {
-      ctx.session.pendingPoolIndex = poolIdx;
+    if (!isNaN(poolIdx) && chatId) {
+      setPendingPool(chatId, poolIdx);
       await ctx.conversation.enter('lpWizard');
     }
     return;

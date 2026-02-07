@@ -53,9 +53,6 @@ export async function poolsCommand(ctx: BotContext) {
       apy: p.apr,
     }));
 
-    // Cache pools in session so LP wizard can use them when pool is tapped
-    ctx.session.pendingPools = pools;
-
     await ctx.reply(text, {
       parse_mode: 'Markdown',
       reply_markup: poolSelectionKeyboard(keyboardPools),

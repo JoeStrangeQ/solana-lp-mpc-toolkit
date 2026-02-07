@@ -20,6 +20,7 @@ import { executeLp, type LpExecuteParams } from '../../services/lp-service.js';
 import { loadWalletById, getWalletBalance } from '../../services/wallet-service.js';
 import { validateSolAmount, validateSolanaAddress, friendlyErrorMessage } from '../../utils/resilience.js';
 import { operationLock } from '../../utils/operation-lock.js';
+import { consumePendingPool } from '../types.js';
 
 interface PoolData {
   name: string;
@@ -65,10 +66,12 @@ export async function lpWizard(
 
   // ---- Step 1: Pool Selection ----
   // Check if a pool was pre-selected from /pools command
-  const pendingPoolIndex = ctx.session.pendingPoolIndex;
-  // Clear the pending state immediately
-  ctx.session.pendingPoolIndex = undefined;
-  ctx.session.pendingPools = undefined;
+  // Must use conversation.external() because ctx.session is not available in conversations
+  const pendingPoolIndex = await conversation.external(() => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return undefined;
+    return consumePendingPool(chatId);
+  });
 
   const pools = await conversation.external(async () => {
     return fetchTopPools();

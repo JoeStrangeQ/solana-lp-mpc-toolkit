@@ -7,16 +7,29 @@ import { ConversationFlavor } from '@grammyjs/conversations';
 export interface SessionData {
   walletId?: string;
   walletAddress?: string;
-  /** Pre-selected pool from /pools command (index-based, consumed by LP wizard) */
-  pendingPoolIndex?: number;
-  /** Pool list cached from /pools for the LP wizard to consume */
-  pendingPools?: Array<{ name: string; address: string; apr: number; tvl: number; binStep: number }>;
   /** Cached alert preferences for settings toggles */
   alertPrefs?: {
     alertOnOutOfRange: boolean;
     autoRebalance: boolean;
     dailySummary: boolean;
   };
+}
+
+/**
+ * Module-level state for passing data into conversations.
+ * grammY conversations have isolated context — ctx.session is not available
+ * inside conversation builder functions. Use conversation.external() to access this.
+ */
+const _pendingPoolSelections = new Map<number, number>(); // chatId -> poolIndex
+
+export function setPendingPool(chatId: number, poolIndex: number): void {
+  _pendingPoolSelections.set(chatId, poolIndex);
+}
+
+export function consumePendingPool(chatId: number): number | undefined {
+  const idx = _pendingPoolSelections.get(chatId);
+  _pendingPoolSelections.delete(chatId);
+  return idx;
 }
 
 type BaseContext = Context & SessionFlavor<SessionData>;
