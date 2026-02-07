@@ -553,20 +553,25 @@ async function processSwapQueue(): Promise<void> {
       
       if (result.success) {
         const swaps = result.swaps || [];
-        const swapLines = swaps.map((s: any) => `  • ${s.from} → ${s.to}: ${s.amount}`).join('\n');
+        const swapLines = swaps.map((s: any) => {
+          const sigStr = s.signature ? ` ✅` : '';
+          return `  • ${s.from} → ${s.amount} SOL${sigStr}`;
+        }).join('\n');
+        
+        const failedCount = (result.failed || []).length;
+        const successCount = result.swapsExecuted || swaps.length;
         
         message = [
           `✅ *Swap Complete!*`,
           ``,
-          `🔄 Swapped ${swaps.length} token(s) to SOL`,
+          `🔄 Swapped ${successCount} token(s) to SOL`,
           swapLines || '  _No tokens needed swapping_',
-          ``,
-          result.bundleId ? `📍 Bundle: \`${result.bundleId.slice(0, 16)}...\`` : '',
+          failedCount > 0 ? `\n⚠️ ${failedCount} swap(s) failed` : '',
           ``,
           `_Use /balance to see updated balance_`,
         ].filter(Boolean).join('\n');
         
-        await log('info', `Swap ${job.id} successful`, { bundleId: result.bundleId });
+        await log('info', `Swap ${job.id} successful`, { swapsExecuted: successCount, failed: failedCount });
       } else {
         message = [
           `❌ *Swap Failed*`,
