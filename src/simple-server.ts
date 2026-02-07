@@ -1137,6 +1137,7 @@ app.get('/wallet/:walletId/balance', async (c) => {
  */
 app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
   const walletId = c.req.param('walletId');
+  console.log(`[Swap] swap-all-to-sol v2 - build 20260206-1920`);
   
   try {
     const { client, wallet } = await loadWalletById(walletId);
