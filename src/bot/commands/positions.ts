@@ -2,6 +2,7 @@
  * /positions command handler - View LP positions
  */
 import type { BotContext } from '../types.js';
+import { setCachedPositions } from '../types.js';
 import { InlineKeyboard } from 'grammy';
 import { getUserByChat, getUserPositions } from '../../onboarding/index.js';
 
@@ -31,6 +32,15 @@ export async function positionsCommand(ctx: BotContext) {
       );
       return;
     }
+
+    // Cache position data for callback handlers (withdraw, rebalance)
+    setCachedPositions(chatId, positions.map(p => ({
+      address: p.address,
+      pool: p.pool,
+      poolAddress: p.poolAddress,
+      walletId: user.walletId,
+      walletAddress: user.walletAddress,
+    })));
 
     const priceFmt = (n: number) => (n < 1 ? n.toFixed(4) : n.toFixed(2));
 

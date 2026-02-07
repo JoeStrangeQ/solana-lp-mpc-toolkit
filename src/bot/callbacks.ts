@@ -4,8 +4,9 @@
  * Handles callbacks that are NOT part of a conversation wizard.
  * Conversation wizards handle their own callbacks via waitForCallbackQuery().
  */
+import { InlineKeyboard } from 'grammy';
 import type { BotContext } from './types.js';
-import { setPendingPool } from './types.js';
+import { setPendingPool, getCachedPosition } from './types.js';
 import {
   getRecipient,
   upsertRecipient,
@@ -210,11 +211,94 @@ export async function handleCallback(ctx: BotContext) {
     return;
   }
 
-  // ---- Withdraw shortcut (from positions view) ----
+  // ---- Withdraw confirm (wdc:N) — execute position close directly ----
+  if (data.startsWith('wdc:')) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    const posIdx = parseInt(data.split(':')[1]);
+    const cached = getCachedPosition(chatId, posIdx);
+
+    if (!cached) {
+      await ctx.reply('Position data expired. Use /positions to refresh, then tap Withdraw.');
+      return;
+    }
+
+    await ctx.reply(
+      `Closing *${cached.pool}* position...\n\nEncrypting with Arcium...\nBuilding Jito bundle...\n\nThis may take 30-60 seconds.`,
+      { parse_mode: 'Markdown' },
+    );
+
+    // Execute in background to avoid webhook timeout
+    (async () => {
+      try {
+        const { loadWalletById } = await import('../services/wallet-service.js');
+        const { buildAtomicWithdraw } = await import('../lp/atomicWithdraw.js');
+        const { sendBundle, waitForBundle } = await import('../jito/index.js');
+        const { invalidatePositionCache } = await import('../services/lp-service.js');
+
+        const { client } = await loadWalletById(cached.walletId);
+
+        const result = await buildAtomicWithdraw({
+          walletAddress: cached.walletAddress,
+          poolAddress: cached.poolAddress,
+          positionAddress: cached.address,
+          convertToSol: true,
+          tipSpeed: 'fast',
+        });
+
+        const signedTxs: string[] = [];
+        for (const unsignedTx of result.unsignedTransactions) {
+          const signedTx = await client.signTransaction(unsignedTx);
+          signedTxs.push(signedTx);
+        }
+
+        const { bundleId } = await sendBundle(signedTxs);
+        console.log(`[Bot] Withdraw bundle submitted: ${bundleId}`);
+
+        const status = await waitForBundle(bundleId, { timeoutMs: 60000 });
+        await invalidatePositionCache(cached.walletId);
+
+        if (status.landed) {
+          await ctx.reply(
+            `*Position Closed!*\n\nPool: *${cached.pool}*\nBundle: \`${bundleId.slice(0, 16)}...\`\n\nTokens converted to SOL and returned to your wallet.\n\nUse /balance to check.`,
+            { parse_mode: 'Markdown' },
+          );
+        } else {
+          await ctx.reply(
+            `*Withdrawal sent but unconfirmed*\n\nBundle: \`${bundleId.slice(0, 16)}...\`\nStatus: ${status.error || 'pending'}\n\nCheck /positions in 1-2 minutes.`,
+            { parse_mode: 'Markdown' },
+          );
+        }
+      } catch (error: any) {
+        console.error('[Bot] Direct withdraw error:', error);
+        const { friendlyErrorMessage } = await import('../utils/resilience.js');
+        await ctx.reply(
+          `*Withdrawal Failed*\n\n${friendlyErrorMessage(error)}\n\nYour tokens are safe. Try again from /positions.`,
+          { parse_mode: 'Markdown' },
+        );
+      }
+    })();
+    return;
+  }
+
+  // ---- Withdraw from positions view (wd:N) — show confirmation ----
   if (data.startsWith('wd:') && !data.startsWith('wd:sel:') && !data.startsWith('wd:cf:')) {
     await ctx.answerCallbackQuery().catch(() => {});
-    // Enter withdraw wizard
-    await ctx.conversation.enter('withdrawWizard');
+    const posIdx = parseInt(data.split(':')[1]);
+    const cached = getCachedPosition(chatId, posIdx);
+
+    if (!cached) {
+      await ctx.reply('Position data expired. Use /positions to refresh.');
+      return;
+    }
+
+    const kb = new InlineKeyboard()
+      .text('Confirm Close', `wdc:${posIdx}`)
+      .text('Cancel', 'cancel');
+
+    await ctx.reply(
+      `*Close Position?*\n\nPool: *${cached.pool}*\nPosition: \`${cached.address.slice(0, 8)}...\`\n\nThis will withdraw all liquidity, claim fees, and convert to SOL.`,
+      { parse_mode: 'Markdown', reply_markup: kb },
+    );
     return;
   }
 
