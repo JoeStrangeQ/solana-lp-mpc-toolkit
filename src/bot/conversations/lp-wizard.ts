@@ -388,7 +388,7 @@ export async function lpWizard(
     await ctx.reply(text, { parse_mode: 'Markdown' });
   } else {
     await ctx.reply(
-      `*LP Failed*\n\n${result.error}\n\nYour tokens are safe in your wallet. Try again with /lp.`,
+      `*LP Failed*\n\n${result.error}\n\nYour tokens are safe in your wallet. Try again with /pools.`,
       { parse_mode: 'Markdown' },
     );
   }
