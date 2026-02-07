@@ -1,6 +1,7 @@
 /**
  * /balance command handler
  */
+import { InlineKeyboard } from 'grammy';
 import type { BotContext } from '../types.js';
 import { getUserByChat, getWalletBalance } from '../../onboarding/index.js';
 
@@ -46,7 +47,16 @@ export async function balanceCommand(ctx: BotContext) {
       `Address: \`${addrShort}\``,
     ].join('\n');
 
-    await ctx.reply(text, { parse_mode: 'Markdown' });
+    const kb = new InlineKeyboard()
+      .text('Refresh', 'cmd:balance')
+      .text('Positions', 'cmd:positions')
+      .row();
+
+    if (balance.tokens.length > 0) {
+      kb.text('Convert All to SOL', 'swap:all:sol');
+    }
+
+    await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: kb });
   } catch (error: any) {
     console.error('[Bot] /balance error:', error);
     await ctx.reply('Failed to fetch balance. Please try again.');

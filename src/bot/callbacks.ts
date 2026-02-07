@@ -132,6 +132,94 @@ export async function handleCallback(ctx: BotContext) {
     return;
   }
 
+  // ---- Convert all tokens to SOL ----
+  if (data === 'swap:all:sol') {
+    await ctx.answerCallbackQuery().catch(() => {});
+
+    await ctx.reply('Converting all tokens to SOL...\n\nThis may take a moment.');
+
+    (async () => {
+      try {
+        const { getUserByChat } = await import('../onboarding/index.js');
+        const { loadWalletById, getConnection } = await import('../services/wallet-service.js');
+
+        const user = await getUserByChat(chatId);
+        if (!user) {
+          await ctx.reply('No wallet found. Use /start first.');
+          return;
+        }
+
+        const connection = getConnection();
+        const userPubkey = new PublicKey(user.walletAddress);
+        const solMint = 'So11111111111111111111111111111111111111112';
+
+        // Fetch all SPL token accounts with raw amounts
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(userPubkey, {
+          programId: new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA'),
+        });
+
+        const nonSolTokens = tokenAccounts.value
+          .map(acc => {
+            const info = acc.account.data.parsed.info;
+            return {
+              mint: info.mint as string,
+              amount: parseFloat(info.tokenAmount.uiAmountString || '0'),
+              rawAmount: parseInt(info.tokenAmount.amount || '0'),
+              symbol: info.mint.slice(0, 6) + '...',
+            };
+          })
+          .filter(t => t.rawAmount > 0 && t.mint !== solMint);
+
+        if (nonSolTokens.length === 0) {
+          await ctx.reply('No tokens to convert. All funds are already in SOL.');
+          return;
+        }
+
+        const { client } = await loadWalletById(user.walletId);
+        const { jupiterClient } = await import('../swap/jupiter.js');
+
+        let converted = 0;
+        const results: string[] = [];
+
+        for (const token of nonSolTokens) {
+          try {
+            console.log(`[Bot] Swap: converting ${token.amount} (${token.mint}) to SOL`);
+            const { quote, swap } = await jupiterClient.getSwapTransaction(
+              token.mint,
+              solMint,
+              token.rawAmount,
+              user.walletAddress,
+              150, // 1.5% slippage
+            );
+
+            const txHash = await client.signAndSendTransaction(swap.swapTransaction);
+            console.log(`[Bot] Swap → SOL tx: ${txHash}`);
+            results.push(`\`${token.mint.slice(0, 8)}...\`: ${token.amount.toFixed(4)} → SOL`);
+            converted++;
+          } catch (swapErr: any) {
+            console.error(`[Bot] Swap ${token.mint.slice(0, 8)} failed:`, swapErr?.message);
+            results.push(`\`${token.mint.slice(0, 8)}...\`: failed`);
+          }
+        }
+
+        const text = [
+          `*Token Conversion Complete*`,
+          ``,
+          `Converted ${converted}/${nonSolTokens.length} tokens:`,
+          ...results,
+          ``,
+          `Use /balance to check.`,
+        ].join('\n');
+
+        await ctx.reply(text, { parse_mode: 'Markdown' });
+      } catch (error: any) {
+        console.error('[Bot] Swap all to SOL error:', error);
+        await ctx.reply(`Failed to convert tokens: ${error?.message?.slice(0, 100) || 'unknown error'}`);
+      }
+    })();
+    return;
+  }
+
   // ---- Snooze alert ----
   if (data.startsWith('snooze:')) {
     await ctx.answerCallbackQuery('Snoozed for 1 hour').catch(() => {});
