@@ -40,6 +40,7 @@ import {
 import skillRoutes from './routes/skill.js';
 import oracleRoutes from './routes/oracle.js';
 import ultraSwapRoutes from './routes/ultra-swap.js';
+import actionsRoutes from './routes/actions.js';
 
 // Import bot
 import { createBot, initBot, getBot, getBotWebhookHandler } from './bot/index.js';
@@ -131,6 +132,9 @@ app.route('/skill.md', skillRoutes);
 // Oracle & Ultra Swap routes
 app.route('/oracle', oracleRoutes);
 app.route('/ultra', ultraSwapRoutes);
+
+// Solana Actions & Blinks
+app.route('/', actionsRoutes);
 
 // Debug Jupiter test
 app.get('/debug/jupiter-test', async (c) => {
