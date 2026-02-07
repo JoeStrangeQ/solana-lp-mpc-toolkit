@@ -202,7 +202,7 @@ export async function rebalanceWizard(
 
   const result = await conversation.external(async () => {
     try {
-      const { wallet } = await loadWalletById(user.walletId);
+      const { client } = await loadWalletById(user.walletId);
 
       const params: RebalanceParams = {
         walletId: user.walletId,
@@ -216,8 +216,7 @@ export async function rebalanceWizard(
         tipSpeed: 'fast',
         slippageBps: 300,
         signTransaction: async (tx: string) => {
-          const signed = await wallet.signTransaction({ transaction: tx });
-          return signed.signedTransaction;
+          return client.signTransaction(tx);
         },
       };
 

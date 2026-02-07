@@ -78,12 +78,8 @@ export async function executeLp(params: LpExecuteParams) {
 
   const signedTxs: string[] = [];
   for (const unsignedTx of lpResult.unsignedTransactions) {
-    try {
-      const signedTx = await signTransaction(unsignedTx);
-      signedTxs.push(signedTx);
-    } catch {
-      signedTxs.push(unsignedTx);
-    }
+    const signedTx = await signTransaction(unsignedTx);
+    signedTxs.push(signedTx);
   }
 
   const { bundleId } = await withRetry(
