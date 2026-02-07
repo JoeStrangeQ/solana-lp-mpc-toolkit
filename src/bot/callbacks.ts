@@ -212,6 +212,8 @@ export async function handleCallback(ctx: BotContext) {
   }
 
   // ---- Withdraw confirm (wdc:N) — execute position close directly ----
+  // Uses signAndSendTransaction (RPC) instead of Jito bundles for reliability.
+  // Simpler flow: withdraw liquidity + claim fees + close position.
   if (data.startsWith('wdc:')) {
     await ctx.answerCallbackQuery().catch(() => {});
     const posIdx = parseInt(data.split(':')[1]);
@@ -223,50 +225,101 @@ export async function handleCallback(ctx: BotContext) {
     }
 
     await ctx.reply(
-      `Closing *${cached.pool}* position...\n\nEncrypting with Arcium...\nBuilding Jito bundle...\n\nThis may take 30-60 seconds.`,
+      `Closing *${cached.pool}* position...\n\nThis may take 30-60 seconds.`,
       { parse_mode: 'Markdown' },
     );
 
     // Execute in background to avoid webhook timeout
     (async () => {
       try {
-        const { loadWalletById } = await import('../services/wallet-service.js');
-        const { buildAtomicWithdraw } = await import('../lp/atomicWithdraw.js');
-        const { sendBundle, waitForBundle } = await import('../jito/index.js');
+        const { loadWalletById, getConnection } = await import('../services/wallet-service.js');
         const { invalidatePositionCache } = await import('../services/lp-service.js');
+        const { PublicKey, VersionedTransaction, TransactionMessage } = await import('@solana/web3.js');
+        const bnModule = await import('bn.js');
+        const BN = bnModule.default || bnModule;
+        const dlmmModule = await import('@meteora-ag/dlmm');
+        const DLMM: any = dlmmModule.default || dlmmModule;
 
+        const connection = getConnection();
         const { client } = await loadWalletById(cached.walletId);
+        const userPubkey = new PublicKey(cached.walletAddress);
 
-        const result = await buildAtomicWithdraw({
-          walletAddress: cached.walletAddress,
-          poolAddress: cached.poolAddress,
-          positionAddress: cached.address,
-          convertToSol: true,
-          tipSpeed: 'fast',
-        });
+        // 1. Get pool and position on-chain
+        console.log(`[Bot] Withdraw: loading pool ${cached.poolAddress.slice(0, 8)}...`);
+        const pool = await DLMM.create(connection, new PublicKey(cached.poolAddress));
+        const userPositions = await pool.getPositionsByUserAndLbPair(userPubkey);
 
-        const signedTxs: string[] = [];
-        for (const unsignedTx of result.unsignedTransactions) {
-          const signedTx = await client.signTransaction(unsignedTx);
-          signedTxs.push(signedTx);
+        const position = userPositions.userPositions.find(
+          (p: any) => p.publicKey.toBase58() === cached.address
+        );
+
+        if (!position) {
+          await ctx.reply('Position not found on-chain. It may already be closed.\n\nUse /positions to refresh.');
+          return;
         }
 
-        const { bundleId } = await sendBundle(signedTxs);
-        console.log(`[Bot] Withdraw bundle submitted: ${bundleId}`);
+        // 2. Build remove liquidity transactions (withdraw all + claim fees + close)
+        const positionData = position.positionData;
+        const withdrawTx = await pool.removeLiquidity({
+          position: position.publicKey,
+          user: userPubkey,
+          fromBinId: positionData.lowerBinId,
+          toBinId: positionData.upperBinId,
+          bps: new BN(10000), // 100% of liquidity
+          shouldClaimAndClose: true,
+        });
 
-        const status = await waitForBundle(bundleId, { timeoutMs: 60000 });
+        const withdrawTxArray = Array.isArray(withdrawTx) ? withdrawTx : [withdrawTx];
+        const { blockhash } = await connection.getLatestBlockhash('confirmed');
+
+        console.log(`[Bot] Withdraw: ${withdrawTxArray.length} tx(s) for position ${cached.address.slice(0, 8)}`);
+
+        // 3. Sign and send each transaction individually via Privy RPC
+        const txHashes: string[] = [];
+        for (let i = 0; i < withdrawTxArray.length; i++) {
+          const tx = withdrawTxArray[i];
+          let serialized: string;
+
+          if ('recentBlockhash' in tx) {
+            // Legacy Transaction
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = userPubkey;
+            serialized = tx.serialize({ requireAllSignatures: false }).toString('base64');
+          } else if ('instructions' in tx) {
+            // Instructions — build VersionedTransaction
+            const msg = new TransactionMessage({
+              payerKey: userPubkey,
+              recentBlockhash: blockhash,
+              instructions: tx.instructions,
+            }).compileToV0Message();
+            const vtx = new VersionedTransaction(msg);
+            serialized = Buffer.from(vtx.serialize()).toString('base64');
+          } else {
+            console.warn(`[Bot] Withdraw: unexpected tx format at index ${i}, skipping`);
+            continue;
+          }
+
+          console.log(`[Bot] Withdraw: signing+sending tx ${i + 1}/${withdrawTxArray.length}...`);
+          const txHash = await client.signAndSendTransaction(serialized);
+          console.log(`[Bot] Withdraw tx ${i + 1}/${withdrawTxArray.length} confirmed: ${txHash}`);
+          txHashes.push(txHash);
+
+          // Wait between transactions for state to propagate on-chain
+          if (i < withdrawTxArray.length - 1) {
+            await new Promise(r => setTimeout(r, 3000));
+          }
+        }
+
         await invalidatePositionCache(cached.walletId);
 
-        if (status.landed) {
+        if (txHashes.length > 0) {
+          const lastHash = txHashes[txHashes.length - 1];
           await ctx.reply(
-            `*Position Closed!*\n\nPool: *${cached.pool}*\nBundle: \`${bundleId.slice(0, 16)}...\`\n\nTokens converted to SOL and returned to your wallet.\n\nUse /balance to check.`,
+            `*Position Closed!*\n\nPool: *${cached.pool}*\nTransactions: ${txHashes.length}\nTx: \`${lastHash.slice(0, 16)}...\`\n\nTokens returned to your wallet.\nUse /balance to check.`,
             { parse_mode: 'Markdown' },
           );
         } else {
-          await ctx.reply(
-            `*Withdrawal sent but unconfirmed*\n\nBundle: \`${bundleId.slice(0, 16)}...\`\nStatus: ${status.error || 'pending'}\n\nCheck /positions in 1-2 minutes.`,
-            { parse_mode: 'Markdown' },
-          );
+          await ctx.reply('No transactions were sent. The position may already be closed.');
         }
       } catch (error: any) {
         console.error('[Bot] Direct withdraw error:', error);
