@@ -174,7 +174,13 @@ app.post('/bot/webhook', async (c) => {
   if (!handler) {
     return c.json({ error: 'Bot not initialized' }, 503);
   }
-  return handler(c);
+  try {
+    return await handler(c);
+  } catch (err: any) {
+    console.error('[Bot Webhook] Handler error:', err?.message || err);
+    console.error('[Bot Webhook] Stack:', err?.stack);
+    return c.json({ ok: true });
+  }
 });
 
 // ============ Initialize & Start ============
