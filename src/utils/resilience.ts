@@ -5,6 +5,60 @@
  * Does NOT modify underlying modules (dex, jito, mpc, swap).
  */
 
+// ---- Timeout wrapper ----
+
+export interface TimeoutOptions {
+  timeoutMs: number;
+  errorMessage?: string;
+}
+
+/**
+ * Wrap a promise with a timeout. Rejects with TimeoutError if exceeded.
+ * Useful for Privy signing operations that can hang indefinitely.
+ */
+export async function withTimeout<T>(
+  fn: () => Promise<T>,
+  options: TimeoutOptions,
+): Promise<T> {
+  const { timeoutMs, errorMessage } = options;
+  
+  return new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(errorMessage || `Operation timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    
+    fn()
+      .then((result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
+/**
+ * Default timeout for Privy signing operations (30 seconds)
+ */
+export const PRIVY_SIGN_TIMEOUT_MS = 30_000;
+
+/**
+ * Wrap a Privy signing function with timeout handling
+ */
+export function wrapSigningWithTimeout(
+  signFn: (tx: string) => Promise<string>,
+  timeoutMs: number = PRIVY_SIGN_TIMEOUT_MS,
+): (tx: string) => Promise<string> {
+  return async (tx: string) => {
+    return withTimeout(
+      () => signFn(tx),
+      { timeoutMs, errorMessage: `Wallet signing timed out after ${timeoutMs / 1000}s. Please try again.` }
+    );
+  };
+}
+
 // ---- Retry with exponential backoff ----
 
 export interface RetryOptions {

@@ -8,6 +8,7 @@ import { loadWalletById } from '../services/wallet-service.js';
 import { executeRebalanceOperation, invalidatePositionCache } from '../services/lp-service.js';
 import { stats } from '../services/stats.js';
 import { config } from '../config/index.js';
+import { withTimeout, PRIVY_SIGN_TIMEOUT_MS } from '../utils/resilience.js';
 import { resolveTokens, calculateHumanPriceRange, formatPriceRange, formatPrice } from '../utils/token-metadata.js';
 import { buildAtomicWithdraw } from '../lp/atomicWithdraw.js';
 import type { TipSpeed } from '../jito/index.js';
@@ -196,7 +197,10 @@ app.post('/execute', async (c) => {
       tipSpeed: tipSpeed as TipSpeed,
       slippageBps,
       signTransaction: async (tx: string) => {
-        return client.signTransaction(tx);
+        return withTimeout(
+          () => client.signTransaction(tx),
+          { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+        );
       },
     });
 
