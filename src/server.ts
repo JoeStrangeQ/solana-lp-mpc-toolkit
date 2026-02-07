@@ -202,7 +202,9 @@ app.post('/bot/webhook', async (c) => {
 async function start() {
   // Initialize monitoring system
   await initializeMonitoring();
-  startMonitoringInterval();
+  // DISABLED: Worker in monitoring/worker.ts handles monitoring with unified notifications
+  // startMonitoringInterval() only supports webhook delivery - worker supports Telegram + webhook
+  // startMonitoringInterval();
 
   // Initialize grammY bot (creates instance, fetches botInfo from Telegram API)
   createBot();
