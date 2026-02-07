@@ -177,7 +177,7 @@ async function lpExecuteHandler(c: any) {
 
     console.log(`[LP Execute] Opening position: ${amountSol} SOL in pool ${poolAddress}`);
 
-    const { lpResult, bundleId, status } = await executeLp({
+    const result = await executeLp({
       walletId,
       walletAddress,
       poolAddress,
@@ -192,6 +192,23 @@ async function lpExecuteHandler(c: any) {
         return client.signTransaction(tx);
       },
     });
+
+    const { lpResult, bundleId, status } = result;
+
+    if (typeof status === 'string') {
+      // Direct RPC path (no Jito bundle)
+      stats.actions.lpExecuted++;
+      return c.json({
+        success: true,
+        message: `LP position opened with ${amountSol} SOL`,
+        walletId,
+        walletAddress,
+        poolAddress,
+        binRange: lpResult.binRange,
+        txHashes: result.txHashes,
+        encryptedStrategy: lpResult.encryptedStrategy,
+      });
+    }
 
     if (!status.landed) {
       return c.json({

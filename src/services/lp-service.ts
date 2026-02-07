@@ -51,17 +51,21 @@ export interface LpExecuteParams {
   tipSpeed: TipSpeed;
   slippageBps: number;
   signTransaction: (tx: string) => Promise<string>;
+  signAndSendTransaction?: (tx: string) => Promise<string>;
 }
 
 export async function executeLp(params: LpExecuteParams) {
   const {
     walletId, walletAddress, poolAddress, amountSol,
     minBinId, maxBinId, strategy, shape, tipSpeed, slippageBps,
-    signTransaction,
+    signTransaction, signAndSendTransaction,
   } = params;
 
   const lamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
   const solMint = 'So11111111111111111111111111111111111111112';
+
+  // Use direct RPC when signAndSendTransaction is available (bypasses Jito bundles)
+  const useDirectRpc = !!signAndSendTransaction;
 
   const lpResult = await buildAtomicLP({
     walletAddress,
@@ -74,8 +78,29 @@ export async function executeLp(params: LpExecuteParams) {
     maxBinId,
     tipSpeed,
     slippageBps,
+    skipTip: useDirectRpc,
   });
 
+  if (useDirectRpc) {
+    // Send each transaction individually via Privy RPC (more reliable than Jito bundles)
+    const txHashes: string[] = [];
+    for (let i = 0; i < lpResult.unsignedTransactions.length; i++) {
+      console.log(`[LP Service] Signing+sending tx ${i + 1}/${lpResult.unsignedTransactions.length}...`);
+      const txHash = await signAndSendTransaction(lpResult.unsignedTransactions[i]);
+      console.log(`[LP Service] Tx ${i + 1} confirmed: ${txHash}`);
+      txHashes.push(txHash);
+
+      // Wait between transactions for state to propagate on-chain
+      if (i < lpResult.unsignedTransactions.length - 1) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+
+    await invalidatePositionCache(walletId);
+    return { lpResult, txHashes, status: 'sent' };
+  }
+
+  // Fallback: Jito bundle path (for API routes or non-Privy contexts)
   const signedTxs: string[] = [];
   for (const unsignedTx of lpResult.unsignedTransactions) {
     const signedTx = await signTransaction(unsignedTx);

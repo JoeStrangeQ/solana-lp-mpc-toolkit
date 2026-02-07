@@ -31,6 +31,7 @@ export interface AtomicLPParams {
   maxBinId?: number;
   tipSpeed?: TipSpeed;
   slippageBps?: number; // Slippage in basis points (default: 300 = 3%)
+  skipTip?: boolean; // Skip Jito tip tx (for direct RPC send)
 }
 
 export interface BuiltAtomicLP {
@@ -98,7 +99,7 @@ async function getSwapTransaction(params: {
  * Main function to build the atomic LP bundle
  */
 export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomicLP> {
-  const { walletAddress, poolAddress, collateralMint, collateralAmount, strategy, shape, minBinId, maxBinId, tipSpeed, slippageBps = 300 } = params;
+  const { walletAddress, poolAddress, collateralMint, collateralAmount, strategy, shape, minBinId, maxBinId, tipSpeed, slippageBps = 300, skipTip = false } = params;
   const connection = new Connection(config.solana.rpc);
   
   // Convert bps to percentage for Meteora (300 bps = 3%)
@@ -113,7 +114,7 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
   const [decimalsX, decimalsY] = [pool.tokenX.mint.decimals, pool.tokenY.mint.decimals];
   const halfCollateral = Math.floor(collateralAmount / 2);
 
-  const { blockhash } = await connection.getLatestBlockhash('confirmed');
+  const { blockhash } = await connection.getLatestBlockhash('finalized');
   const unsignedTransactions: VersionedTransaction[] = [];
 
   // 3. Build swap transactions
@@ -174,9 +175,11 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
   lpTx.sign([positionKeypair]); 
   unsignedTransactions.push(lpTx);
 
-  // 5. Build Tip transaction
-  const { transaction: tipTx } = buildTipTransaction({ payerAddress: walletAddress, recentBlockhash: blockhash, speed: tipSpeed });
-  unsignedTransactions.push(tipTx);
+  // 5. Build Tip transaction (skip when sending directly via RPC)
+  if (!skipTip) {
+    const { transaction: tipTx } = buildTipTransaction({ payerAddress: walletAddress, recentBlockhash: blockhash, speed: tipSpeed });
+    unsignedTransactions.push(tipTx);
+  }
 
   return {
     unsignedTransactions: unsignedTransactions.map(tx => Buffer.from(tx.serialize()).toString('base64')),

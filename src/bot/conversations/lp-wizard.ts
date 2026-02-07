@@ -332,7 +332,7 @@ export async function lpWizard(
   }
 
   await ctx.reply(
-    `Executing LP position...\n\nEncrypting strategy with Arcium...\nBuilding Jito bundle...\n\nThis may take 30-60 seconds.`,
+    `Executing LP position...\n\nEncrypting strategy with Arcium...\nBuilding transactions...\n\nThis may take 30-60 seconds.`,
   );
 
   const result = await conversation.external(async () => {
@@ -353,10 +353,13 @@ export async function lpWizard(
         signTransaction: async (tx: string) => {
           return client.signTransaction(tx);
         },
+        signAndSendTransaction: async (tx: string) => {
+          return client.signAndSendTransaction(tx);
+        },
       };
 
       const res = await executeLp(params);
-      return { success: true as const, bundleId: res.bundleId, status: res.status };
+      return { success: true as const, txHashes: res.txHashes, bundleId: res.bundleId, status: res.status };
     } catch (error: any) {
       console.error('[LP Wizard] Execution error:', error);
       return { success: false as const, error: friendlyErrorMessage(error) };
@@ -366,6 +369,9 @@ export async function lpWizard(
   });
 
   if (result.success) {
+    const txRef = result.txHashes?.length
+      ? `Tx: \`${result.txHashes[result.txHashes.length - 1]?.slice(0, 16)}...\``
+      : `Bundle: \`${result.bundleId?.slice(0, 16) || 'N/A'}...\``;
     const text = [
       `*LP Position Created!*`,
       ``,
@@ -374,8 +380,7 @@ export async function lpWizard(
       `Strategy: ${strategy} (${shape})`,
       ``,
       `Encrypted with Arcium`,
-      `Bundled via Jito`,
-      `Bundle: \`${result.bundleId?.slice(0, 16) || 'N/A'}...\``,
+      txRef,
       ``,
       `Use /positions to view your LP.`,
     ].join('\n');
