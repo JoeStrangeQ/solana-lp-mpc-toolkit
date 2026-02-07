@@ -1181,11 +1181,12 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
           symbol,
         });
         
-      } catch (e) {
-        const errMsg = (e as Error).message;
-        console.warn(`[Swap] Exception for ${symbol}:`, errMsg);
-        errors.push(`${symbol}: ${errMsg}`);
-        swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: '0', mint, symbol, error: errMsg });
+      } catch (e: any) {
+        const errMsg = e?.cause?.message || e?.message || String(e);
+        const errCode = e?.cause?.code || e?.code || 'unknown';
+        console.warn(`[Swap] Exception for ${symbol}:`, errMsg, 'code:', errCode, 'full:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+        errors.push(`${symbol}: ${errMsg} (${errCode})`);
+        swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: '0', mint, symbol, error: `${errMsg} (${errCode})` });
       }
     }
     
