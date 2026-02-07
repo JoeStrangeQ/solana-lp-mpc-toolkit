@@ -32,5 +32,27 @@ export function consumePendingPool(chatId: number): number | undefined {
   return idx;
 }
 
+/**
+ * Module-level cache for position data from /positions command.
+ * Used by callback handlers to look up position details by index.
+ */
+export interface CachedPosition {
+  address: string;
+  pool: string;
+  poolAddress: string;
+  walletId: string;
+  walletAddress: string;
+}
+
+const _cachedPositions = new Map<number, CachedPosition[]>(); // chatId -> positions
+
+export function setCachedPositions(chatId: number, positions: CachedPosition[]): void {
+  _cachedPositions.set(chatId, positions);
+}
+
+export function getCachedPosition(chatId: number, index: number): CachedPosition | undefined {
+  return _cachedPositions.get(chatId)?.[index];
+}
+
 type BaseContext = Context & SessionFlavor<SessionData>;
 export type BotContext = BaseContext & ConversationFlavor<BaseContext>;
