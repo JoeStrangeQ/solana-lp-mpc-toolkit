@@ -4,7 +4,8 @@
  * Categories:
  * - Trending: sorted by 24h volume (highest activity)
  * - High TVL: sorted by total value locked
- * - xStocks: liquid staking / restaking token pairs
+ * - LSTs: liquid staking token pairs (mSOL, jitoSOL, etc.)
+ * - xStocks: tokenized equities from xstocks.fi (AAPLx, TSLAx, etc.)
  * - Paste CA: look up any pool by contract address
  */
 import { InlineKeyboard } from 'grammy';
@@ -21,7 +22,7 @@ export interface PoolInfo {
   binStep: number;
 }
 
-export type PoolCategory = 'trending' | 'hightvl' | 'xstocks';
+export type PoolCategory = 'trending' | 'hightvl' | 'lst' | 'xstocks';
 
 function formatTvl(tvl: number): string {
   if (tvl >= 1_000_000) return `$${(tvl / 1_000_000).toFixed(1)}M`;
@@ -46,9 +47,10 @@ export async function poolsCommand(ctx: BotContext) {
     .text('Trending', 'pools:trending')
     .text('High TVL', 'pools:hightvl')
     .row()
+    .text('LSTs', 'pools:lst')
     .text('xStocks', 'pools:xstocks')
-    .text('Paste CA', 'pools:ca')
     .row()
+    .text('Paste CA', 'pools:ca')
     .text('All (Top APR)', 'pools:all');
 
   await ctx.reply('*Browse LP Pools*\n\nSelect a category:', {
@@ -64,7 +66,8 @@ export async function showPoolCategory(ctx: BotContext, category: PoolCategory |
   const titles: Record<string, string> = {
     trending: 'Trending Pools (by 24h Volume)',
     hightvl: 'High TVL Pools',
-    xstocks: 'xStocks / Liquid Staking Pools',
+    lst: 'Liquid Staking Token Pools',
+    xstocks: 'xStocks - Tokenized Equities',
     all: 'Top Pools (by APR)',
   };
 
@@ -72,7 +75,10 @@ export async function showPoolCategory(ctx: BotContext, category: PoolCategory |
     const pools = await fetchPoolsByCategory(category);
 
     if (pools.length === 0) {
-      await ctx.reply(`No ${titles[category] || ''} found. Try another category.`);
+      const hint = category === 'xstocks'
+        ? '\n\nxStocks pools may not be listed on Meteora DLMM yet. Try Paste CA with a specific pool address.'
+        : '';
+      await ctx.reply(`No ${titles[category] || 'pools'} found.${hint}\n\nTry another category.`);
       return;
     }
 
@@ -158,13 +164,32 @@ export async function lookupPoolByAddress(ctx: BotContext, address: string) {
   }
 }
 
-// ============ Pool fetching by category ============
+// ============ Token sets for category filtering ============
 
-const XSTOCKS_TOKENS = new Set([
-  'mSOL', 'bSOL', 'jSOL', 'jitoSOL', 'lfSOL', 'hSOL', 'cgntSOL',
-  'INF', 'jupSOL', 'vSOL', 'stSOL', 'scnSOL', 'dSOL', 'laineSOL',
-  'edgeSOL', 'compassSOL', 'LST', 'JitoSOL',
+/** Liquid Staking Tokens */
+const LST_TOKENS = new Set([
+  'mSOL', 'bSOL', 'jSOL', 'jitoSOL', 'JitoSOL', 'lfSOL', 'hSOL',
+  'cgntSOL', 'INF', 'jupSOL', 'vSOL', 'stSOL', 'scnSOL', 'dSOL',
+  'laineSOL', 'edgeSOL', 'compassSOL', 'LST', 'bonkSOL', 'hubSOL',
+  'picoSOL', 'pathSOL', 'clockSOL', 'fpSOL', 'jucySOL',
 ]);
+
+/** xStocks — Tokenized equities from xstocks.fi
+ *  Tickers end with 'x' (AAPLx, TSLAx, NVDAx, etc.)
+ */
+const XSTOCKS_TICKERS = new Set([
+  'ABTx', 'ABBVx', 'ACNx', 'GOOGLx', 'AMZNx', 'AMBRx', 'AAPLx',
+  'APPx', 'AZNx', 'BACx', 'BRK.Bx', 'AVGOx', 'CVXx', 'CRCLx',
+  'CSCOx', 'KOx', 'COINx', 'CMCSAx', 'CRWDx', 'DHRx', 'DFDVx',
+  'LLYx', 'XOMx', 'GMEx', 'GLDx', 'GSx', 'HDx', 'HONx', 'INTCx',
+  'IBMx', 'JNJx', 'JPMx', 'LINx', 'MRVLx', 'MAx', 'MCDx', 'MDTx',
+  'MRKx', 'METAx', 'MSFTx', 'MSTRx', 'QQQx', 'NFLXx', 'NVOx',
+  'NVDAx', 'OPENx', 'ORCLx', 'PLTRx', 'PEPx', 'PFEx', 'PMx',
+  'PGx', 'HOODx', 'CRMx', 'SPYx', 'STRCx', 'TBLLx', 'TSLAx',
+  'TMOx', 'TONXx', 'TQQQx', 'UNHx', 'VTIx', 'Vx', 'WMTx',
+]);
+
+// ============ Pool cache & fetching ============
 
 let _poolCache: { data: any[]; fetchedAt: number } | null = null;
 const CACHE_TTL_MS = 60_000; // 1 minute
@@ -180,6 +205,19 @@ async function fetchAllPools(): Promise<any[]> {
   const data = (await resp.json()) as any[];
   _poolCache = { data, fetchedAt: Date.now() };
   return data;
+}
+
+function isXstocksPool(name: string): boolean {
+  const parts = (name || '').split('-');
+  // Match exact ticker or match the "x" suffix pattern
+  return parts.some((t: string) =>
+    XSTOCKS_TICKERS.has(t) || /^[A-Z]{2,5}x$/.test(t)
+  );
+}
+
+function isLstPool(name: string): boolean {
+  const parts = (name || '').split('-');
+  return parts.some((t: string) => LST_TOKENS.has(t));
 }
 
 async function fetchPoolsByCategory(category: PoolCategory | 'all'): Promise<PoolInfo[]> {
@@ -208,11 +246,15 @@ async function fetchPoolsByCategory(category: PoolCategory | 'all'): Promise<Poo
         .slice(0, 8);
       break;
 
+    case 'lst':
+      filtered = valid.filter((p) => isLstPool(p.name));
+      sorted = filtered
+        .sort((a: any, b: any) => parseFloat(b.liquidity) - parseFloat(a.liquidity))
+        .slice(0, 8);
+      break;
+
     case 'xstocks':
-      filtered = valid.filter((p) => {
-        const parts = (p.name || '').split('-');
-        return parts.some((t: string) => XSTOCKS_TOKENS.has(t));
-      });
+      filtered = valid.filter((p) => isXstocksPool(p.name));
       sorted = filtered
         .sort((a: any, b: any) => parseFloat(b.liquidity) - parseFloat(a.liquidity))
         .slice(0, 8);
@@ -220,7 +262,6 @@ async function fetchPoolsByCategory(category: PoolCategory | 'all'): Promise<Poo
 
     case 'all':
     default:
-      // Original behavior: high TVL, popular tokens, sorted by APR
       filtered = valid.filter((p) => parseFloat(p.liquidity) > 100_000);
       sorted = filtered
         .sort((a: any, b: any) => (b.apr || 0) - (a.apr || 0))
