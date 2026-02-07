@@ -98,12 +98,13 @@ app.post('/open', async (c) => {
       },
     });
   } catch (error: any) {
-    console.error('LP open error:', error);
+    const requestId = c.get('requestId') as string | undefined;
+    console.error(`[${requestId}] LP open error:`, error);
     const code = classifyError(error);
     const status = getHttpStatus(code);
     return c.json({
       success: false,
-      error: createError(code, getFriendlyMessage(code), { originalError: error.message }),
+      error: createError(code, getFriendlyMessage(code), { originalError: error.message }, requestId),
     }, status);
   }
 });
@@ -133,12 +134,13 @@ app.post('/close', async (c) => {
       note: 'Demo - production would withdraw from Meteora DLMM',
     });
   } catch (error: any) {
-    console.error('LP close error:', error);
+    const requestId = c.get('requestId') as string | undefined;
+    console.error(`[${requestId}] LP close error:`, error);
     const code = classifyError(error);
     const status = getHttpStatus(code);
     return c.json({
       success: false,
-      error: createError(code, getFriendlyMessage(code), { originalError: error.message }),
+      error: createError(code, getFriendlyMessage(code), { originalError: error.message }, requestId),
     }, status);
   }
 });

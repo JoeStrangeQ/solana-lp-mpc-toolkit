@@ -55,6 +55,15 @@ const app = new Hono();
 // Global middleware
 app.use('*', cors());
 
+// Request ID middleware - generates unique ID for each request
+app.use('*', async (c, next) => {
+  const requestId = c.req.header('x-request-id') || 
+    `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  c.set('requestId', requestId);
+  c.header('X-Request-Id', requestId);
+  await next();
+});
+
 // Stats tracking middleware
 app.use('*', async (c, next) => {
   const path = new URL(c.req.url).pathname;
