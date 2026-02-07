@@ -268,7 +268,7 @@ export async function handleCallback(ctx: BotContext) {
         });
 
         const withdrawTxArray = Array.isArray(withdrawTx) ? withdrawTx : [withdrawTx];
-        const { blockhash } = await connection.getLatestBlockhash('confirmed');
+        const { blockhash } = await connection.getLatestBlockhash('finalized');
 
         console.log(`[Bot] Withdraw: ${withdrawTxArray.length} tx(s) for position ${cached.address.slice(0, 8)}`);
 
