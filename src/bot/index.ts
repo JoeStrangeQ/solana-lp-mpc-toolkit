@@ -156,4 +156,85 @@ export async function stopBot() {
   await bot.stop();
 }
 
+/**
+ * Health check for Telegram bot connectivity.
+ * Verifies:
+ * - Bot is initialized
+ * - Can reach Telegram API (getMe)
+ * - Webhook status (if configured)
+ */
+export interface BotHealthCheck {
+  healthy: boolean;
+  initialized: boolean;
+  username?: string;
+  webhook?: {
+    url: string;
+    pending_update_count: number;
+    last_error_date?: number;
+    last_error_message?: string;
+    has_custom_certificate: boolean;
+  };
+  error?: string;
+  latencyMs?: number;
+}
+
+export async function checkBotHealth(): Promise<BotHealthCheck> {
+  if (!bot) {
+    return { healthy: false, initialized: false, error: 'Bot not created (TELEGRAM_BOT_TOKEN not set)' };
+  }
+
+  if (!bot.botInfo) {
+    return { healthy: false, initialized: false, error: 'Bot not initialized (bot.init() not called)' };
+  }
+
+  const start = Date.now();
+  
+  try {
+    // Verify API connectivity by calling getMe
+    const me = await bot.api.getMe();
+    const latencyMs = Date.now() - start;
+    
+    // Get webhook info
+    const webhookInfo = await bot.api.getWebhookInfo();
+    
+    const result: BotHealthCheck = {
+      healthy: true,
+      initialized: true,
+      username: me.username,
+      latencyMs,
+    };
+
+    // Only include webhook info if configured
+    if (webhookInfo.url) {
+      result.webhook = {
+        url: webhookInfo.url,
+        pending_update_count: webhookInfo.pending_update_count,
+        last_error_date: webhookInfo.last_error_date,
+        last_error_message: webhookInfo.last_error_message,
+        has_custom_certificate: webhookInfo.has_custom_certificate || false,
+      };
+
+      // Mark as unhealthy if webhook has recent errors
+      if (webhookInfo.last_error_date && webhookInfo.last_error_message) {
+        const errorAge = Date.now() / 1000 - webhookInfo.last_error_date;
+        // Error in last 5 minutes = unhealthy
+        if (errorAge < 300) {
+          result.healthy = false;
+          result.error = `Webhook error (${Math.round(errorAge)}s ago): ${webhookInfo.last_error_message}`;
+        }
+      }
+    }
+
+    return result;
+  } catch (e) {
+    return {
+      healthy: false,
+      initialized: true,
+      username: bot.botInfo.username,
+      error: `Telegram API error: ${(e as Error).message}`,
+      latencyMs: Date.now() - start,
+    };
+  }
+}
+
 export type { BotContext, SessionData } from './types.js';
