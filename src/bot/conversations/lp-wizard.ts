@@ -312,7 +312,7 @@ export async function lpWizard(
 
   const result = await conversation.external(async () => {
     try {
-      const { wallet } = await loadWalletById(user.walletId);
+      const { client } = await loadWalletById(user.walletId);
 
       const params: LpExecuteParams = {
         walletId: user.walletId,
@@ -326,8 +326,7 @@ export async function lpWizard(
         tipSpeed: 'fast',
         slippageBps: 300,
         signTransaction: async (tx: string) => {
-          const signed = await wallet.signTransaction({ transaction: tx });
-          return signed.signedTransaction;
+          return client.signTransaction(tx);
         },
       };
 

@@ -166,12 +166,8 @@ app.post('/execute', async (c) => {
 
         const signedTxs: string[] = [];
         for (const unsignedTx of result.unsignedTransactions) {
-          try {
-            const signedTx = await client.signTransaction(unsignedTx);
-            signedTxs.push(signedTx);
-          } catch {
-            signedTxs.push(unsignedTx);
-          }
+          const signedTx = await client.signTransaction(unsignedTx);
+          signedTxs.push(signedTx);
         }
 
         const { bundleId } = await sendBundle(signedTxs);
@@ -249,12 +245,8 @@ app.post('/execute/sync', async (c) => {
 
     const signedTxs: string[] = [];
     for (const unsignedTx of result.unsignedTransactions) {
-      try {
-        const signedTx = await client.signTransaction(unsignedTx);
-        signedTxs.push(signedTx);
-      } catch {
-        signedTxs.push(unsignedTx);
-      }
+      const signedTx = await client.signTransaction(unsignedTx);
+      signedTxs.push(signedTx);
     }
 
     const { bundleId } = await sendBundle(signedTxs);

@@ -196,11 +196,7 @@ app.post('/execute', async (c) => {
       tipSpeed: tipSpeed as TipSpeed,
       slippageBps,
       signTransaction: async (tx: string) => {
-        try {
-          return await client.signTransaction(tx);
-        } catch {
-          return tx;
-        }
+        return client.signTransaction(tx);
       },
     });
 
