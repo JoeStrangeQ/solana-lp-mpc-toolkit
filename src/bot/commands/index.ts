@@ -1,0 +1,8 @@
+export { startCommand } from './start.js';
+export { balanceCommand } from './balance.js';
+export { poolsCommand } from './pools.js';
+export { positionsCommand } from './positions.js';
+export { depositCommand } from './deposit.js';
+export { withdrawCommand } from './withdraw.js';
+export { settingsCommand } from './settings.js';
+export { helpCommand } from './help.js';

@@ -8,6 +8,10 @@
 
 import { Connection, PublicKey } from '@solana/web3.js';
 import DLMM from '@meteora-ag/dlmm';
+import { debounceAlert } from '../utils/resilience.js';
+
+// Minimum 15 minutes between out-of-range alerts for the same position
+const ALERT_COOLDOWN_MS = 15 * 60 * 1000;
 
 export interface MonitoredPosition {
   positionAddress: string;
@@ -87,18 +91,21 @@ export class PositionMonitor {
         
         if (!inRange) {
           const direction = currentActiveBin < position.binRange.min ? 'below' : 'above';
-          alerts.push({
-            type: 'out_of_range',
-            positionAddress,
-            message: `🚨 Position OUT OF RANGE! Active bin ${currentActiveBin} is ${direction} your range [${position.binRange.min}, ${position.binRange.max}]`,
-            data: {
-              activeBin: currentActiveBin,
-              binRange: position.binRange,
-              direction,
-              pool: position.poolAddress,
-            },
-            timestamp: now,
-          });
+          // Debounce: only alert once every 15 minutes per position
+          if (debounceAlert(`oor:${positionAddress}`, ALERT_COOLDOWN_MS)) {
+            alerts.push({
+              type: 'out_of_range',
+              positionAddress,
+              message: `🚨 Position OUT OF RANGE! Active bin ${currentActiveBin} is ${direction} your range [${position.binRange.min}, ${position.binRange.max}]`,
+              data: {
+                activeBin: currentActiveBin,
+                binRange: position.binRange,
+                direction,
+                pool: position.poolAddress,
+              },
+              timestamp: now,
+            });
+          }
         }
       }
 
@@ -110,18 +117,20 @@ export class PositionMonitor {
         const movePercent = (binDelta / binRange) * 100;
 
         if (movePercent >= position.alertsEnabled.valueChange) {
-          alerts.push({
-            type: 'value_change',
-            positionAddress,
-            message: `📊 Significant move detected! Price moved ~${movePercent.toFixed(1)}% (${binDelta} bins)`,
-            data: {
-              previousBin: position.lastActiveBin,
-              currentBin: currentActiveBin,
-              binDelta,
-              movePercent,
-            },
-            timestamp: now,
-          });
+          if (debounceAlert(`vc:${positionAddress}`, ALERT_COOLDOWN_MS)) {
+            alerts.push({
+              type: 'value_change',
+              positionAddress,
+              message: `📊 Significant move detected! Price moved ~${movePercent.toFixed(1)}% (${binDelta} bins)`,
+              data: {
+                previousBin: position.lastActiveBin,
+                currentBin: currentActiveBin,
+                binDelta,
+                movePercent,
+              },
+              timestamp: now,
+            });
+          }
         }
       }
 
