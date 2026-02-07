@@ -31,6 +31,7 @@
     "ai-agent"
   ],
   "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
     "@grammyjs/conversations": "^2.1.1",
     "@hono/node-server": "^1.19.9",
     "@meteora-ag/dlmm": "^1.9.3",
