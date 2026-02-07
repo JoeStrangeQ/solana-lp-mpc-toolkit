@@ -39,6 +39,41 @@ const CACHE_TTL_MS = 10_000;
 const DIVERGENCE_THRESHOLD = 0.005; // 0.5%
 const HERMES_BASE = 'https://hermes.pyth.network';
 const FETCH_TIMEOUT_MS = 5_000;
+const MAX_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 500;
+
+// ---------------------------------------------------------------------------
+// Retry helper with exponential backoff
+// ---------------------------------------------------------------------------
+
+async function withRetry<T>(
+  fn: () => Promise<T | null>,
+  label: string,
+  maxRetries: number = MAX_RETRIES
+): Promise<T | null> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await fn();
+      if (result !== null) return result;
+      // If null but no error, don't retry (e.g., token not found)
+      if (attempt === 0) return null;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < maxRetries) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+        console.warn(`[Oracle] ${label} attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  if (lastError) {
+    console.warn(`[Oracle] ${label} failed after ${maxRetries + 1} attempts:`, lastError.message);
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Cache
@@ -243,15 +278,29 @@ export async function getAggregatedPrice(mint: string): Promise<AggregatedPrice>
     return cached.result;
   }
 
-  const [pyth, jupiter] = await Promise.all([
-    fetchPythPrice(mint),
-    fetchJupiterPrice(mint),
-  ]);
+  // Fetch with retry logic when both sources fail
+  const fetchWithRetry = async (attempt: number): Promise<OraclePrice[]> => {
+    const [pyth, jupiter] = await Promise.all([
+      fetchPythPrice(mint),
+      fetchJupiterPrice(mint),
+    ]);
 
-  const sources: OraclePrice[] = [];
-  if (pyth) sources.push(pyth);
-  if (jupiter) sources.push(jupiter);
+    const sources: OraclePrice[] = [];
+    if (pyth) sources.push(pyth);
+    if (jupiter) sources.push(jupiter);
 
+    // If no sources and we have retries left, wait and retry
+    if (sources.length === 0 && attempt < MAX_RETRIES) {
+      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+      console.warn(`[Oracle] No sources for ${mint.slice(0, 8)}..., retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return fetchWithRetry(attempt + 1);
+    }
+
+    return sources;
+  };
+
+  const sources = await fetchWithRetry(0);
   const result = aggregate(sources);
   cache.set(mint, { result, timestamp: now });
   return result;
