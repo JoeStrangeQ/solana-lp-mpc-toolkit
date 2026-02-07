@@ -9,6 +9,8 @@ import {
   getStorageInfo,
 } from '../monitoring/index.js';
 import { stats } from '../services/stats.js';
+import { getBot } from '../bot/index.js';
+import { getCircuitBreakerStatus } from '../services/ultra-swap.js';
 
 const app = new Hono();
 
@@ -72,10 +74,25 @@ app.get('/', (c) => c.json({
   ],
 }));
 
-app.get('/health', (c) => {
+app.get('/health', async (c) => {
   const positions = monitor.getPositions();
   const webhookConfigured = getWebhookConfig() !== null;
   const storageInfo = getStorageInfo();
+  const circuitBreaker = getCircuitBreakerStatus();
+  
+  // Check Telegram bot connectivity
+  let telegramStatus: { connected: boolean; username?: string; error?: string } = { connected: false };
+  try {
+    const bot = getBot();
+    if (bot) {
+      const me = await bot.api.getMe();
+      telegramStatus = { connected: true, username: me.username };
+    } else {
+      telegramStatus = { connected: false, error: 'Bot not initialized' };
+    }
+  } catch (err) {
+    telegramStatus = { connected: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
 
   return c.json({
     status: 'ok',
@@ -90,6 +107,10 @@ app.get('/health', (c) => {
     storage: {
       type: storageInfo.type,
       redisAvailable: storageInfo.available,
+    },
+    telegram: telegramStatus,
+    circuitBreakers: {
+      jupiterUltra: circuitBreaker,
     },
   });
 });
@@ -115,6 +136,45 @@ app.get('/stats', (c) => {
     actions: stats.actions,
     errors: stats.errors,
     lastRequest: stats.lastRequest,
+  });
+});
+
+// Quick Telegram bot health check
+app.get('/health/telegram', async (c) => {
+  try {
+    const bot = getBot();
+    if (!bot) {
+      return c.json({ status: 'error', error: 'Bot not initialized' }, 503);
+    }
+    
+    const startTime = Date.now();
+    const me = await bot.api.getMe();
+    const latencyMs = Date.now() - startTime;
+    
+    return c.json({
+      status: 'ok',
+      bot: {
+        id: me.id,
+        username: me.username,
+        firstName: me.first_name,
+      },
+      latencyMs,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    return c.json({
+      status: 'error',
+      error: err instanceof Error ? err.message : 'Unknown error',
+      timestamp: new Date().toISOString(),
+    }, 503);
+  }
+});
+
+// Circuit breaker status
+app.get('/health/circuit-breakers', (c) => {
+  return c.json({
+    jupiterUltra: getCircuitBreakerStatus(),
+    timestamp: new Date().toISOString(),
   });
 });
 
