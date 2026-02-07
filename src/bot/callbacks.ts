@@ -13,6 +13,9 @@ import {
   getWalletByChatId,
 } from '../notifications/index.js';
 import { getUserByChat, getUserPositions, type PositionDetails } from '../onboarding/index.js';
+import { Connection, PublicKey, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
+import DLMM from '@meteora-ag/dlmm';
+import BN from 'bn.js';
 
 export async function handleCallback(ctx: BotContext) {
   const data = ctx.callbackQuery?.data;
@@ -234,11 +237,6 @@ export async function handleCallback(ctx: BotContext) {
       try {
         const { loadWalletById, getConnection } = await import('../services/wallet-service.js');
         const { invalidatePositionCache } = await import('../services/lp-service.js');
-        const { PublicKey, VersionedTransaction, TransactionMessage } = await import('@solana/web3.js');
-        const bnModule = await import('bn.js');
-        const BN = bnModule.default || bnModule;
-        const dlmmModule = await import('@meteora-ag/dlmm');
-        const DLMM: any = dlmmModule.default || dlmmModule;
 
         const connection = getConnection();
         const { client } = await loadWalletById(cached.walletId);
