@@ -182,12 +182,14 @@ async function runMonitoringCheck(): Promise<AlertResult[]> {
 initializeMonitoring();
 
 // Background polling setup
-const MONITOR_INTERVAL_MS = parseInt(process.env.MONITOR_INTERVAL_MS || '300000'); // Default 5 min
+// DISABLED: Worker in monitoring/worker.ts handles this with unified notifications (Telegram + webhook)
+// The old runMonitoringCheck() only supports webhook delivery - worker supports both
+const MONITOR_INTERVAL_MS = 0; // Disabled - worker handles monitoring
 if (MONITOR_INTERVAL_MS > 0) {
   console.log(`✅ Background monitoring enabled (interval: ${MONITOR_INTERVAL_MS}ms)`);
   monitoringState.intervalId = setInterval(runMonitoringCheck, MONITOR_INTERVAL_MS);
 } else {
-  console.log('ℹ️ Background monitoring disabled (MONITOR_INTERVAL_MS=0)');
+  console.log('ℹ️ Legacy monitoring disabled (worker handles this)');
   monitoringState.enabled = false;
 }
 
@@ -1306,9 +1308,9 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
     const failedSwaps = swaps.filter(s => s.error);
     
     // Invalidate position cache since balances changed
-    const client = getRedis();
-    if (client) {
-      await client.del(`positions:${walletId}`);
+    const redisClient = getRedis();
+    if (redisClient) {
+      await redisClient.del(`positions:${walletId}`);
     }
     
     return c.json({
