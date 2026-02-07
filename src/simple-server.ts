@@ -1150,7 +1150,7 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
     
     console.log(`[Swap] Found ${tokenAccounts.value.length} token accounts for ${walletAddress}`);
     
-    const swaps: Array<{ from: string; to: string; amount: string; mint: string; symbol?: string; error?: string }> = [];
+    const swaps: Array<{ from: string; to: string; amount: string; mint: string; symbol?: string; error?: string; signature?: string; success?: boolean }> = [];
     const errors: string[] = [];
     
     // SOL mint for reference
@@ -1215,37 +1215,109 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
         const outAmountSol = (quote.outAmount / LAMPORTS_PER_SOL).toFixed(6);
         console.log(`[Swap] Quote for ${symbol}: ${amount} → ${outAmountSol} SOL`);
         
+        // Get swap transaction from Jupiter
+        console.log(`[Swap] Getting swap transaction for ${symbol}...`);
+        const swapResp = await fetch('https://api.jup.ag/swap/v1/swap', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(jupiterApiKey ? { 'x-api-key': jupiterApiKey } : {}),
+          },
+          body: JSON.stringify({
+            quoteResponse: quote,
+            userPublicKey: walletAddress,
+            wrapAndUnwrapSol: true,
+            dynamicComputeUnitLimit: true,
+            prioritizationFeeLamports: 'auto',
+          }),
+        });
+        
+        if (!swapResp.ok) {
+          const errText = await swapResp.text();
+          console.warn(`[Swap] Swap tx failed for ${symbol}: ${swapResp.status} - ${errText}`);
+          errors.push(`${symbol}: Swap tx failed (${swapResp.status})`);
+          swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: outAmountSol, mint, symbol, error: `Swap tx failed: ${swapResp.status}` });
+          continue;
+        }
+        
+        const swapData = await swapResp.json() as any;
+        const swapTxBase64 = swapData.swapTransaction;
+        
+        if (!swapTxBase64) {
+          console.warn(`[Swap] No swap transaction returned for ${symbol}`);
+          errors.push(`${symbol}: No swap transaction`);
+          swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: outAmountSol, mint, symbol, error: 'No swap transaction' });
+          continue;
+        }
+        
+        // Decode and sign with Privy
+        console.log(`[Swap] Signing transaction for ${symbol}...`);
+        const txBuffer = Buffer.from(swapTxBase64, 'base64');
+        const versionedTx = VersionedTransaction.deserialize(txBuffer);
+        
+        // Sign with Privy wallet
+        const signedTx = await wallet.signTransaction({ transaction: versionedTx });
+        
+        // Submit to Solana
+        console.log(`[Swap] Submitting transaction for ${symbol}...`);
+        const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+          skipPreflight: true,
+          maxRetries: 3,
+        });
+        
+        console.log(`[Swap] Transaction submitted for ${symbol}: ${signature}`);
+        
+        // Wait for confirmation
+        const confirmation = await connection.confirmTransaction(signature, 'confirmed');
+        
+        if (confirmation.value.err) {
+          console.warn(`[Swap] Transaction failed for ${symbol}:`, confirmation.value.err);
+          errors.push(`${symbol}: Tx failed on chain`);
+          swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: outAmountSol, mint, symbol, error: 'Transaction failed', signature });
+          continue;
+        }
+        
+        console.log(`[Swap] ✅ Swap confirmed for ${symbol}: ${signature}`);
+        
         swaps.push({
           from: `${amount} ${symbol}`,
           to: 'SOL',
           amount: outAmountSol,
           mint,
           symbol,
+          signature,
+          success: true,
         });
         
       } catch (e: any) {
         const errMsg = e?.cause?.message || e?.message || String(e);
         const errCode = e?.cause?.code || e?.code || 'unknown';
-        console.warn(`[Swap] Exception for ${symbol}:`, errMsg, 'code:', errCode, 'full:', JSON.stringify(e, Object.getOwnPropertyNames(e)));
+        console.warn(`[Swap] Exception for ${symbol}:`, errMsg, 'code:', errCode);
         errors.push(`${symbol}: ${errMsg} (${errCode})`);
         swaps.push({ from: `${amount} ${symbol}`, to: 'SOL', amount: '0', mint, symbol, error: `${errMsg} (${errCode})` });
       }
     }
     
     // Return detailed response
-    const successfulSwaps = swaps.filter(s => !s.error);
+    const successfulSwaps = swaps.filter(s => (s as any).success);
     const failedSwaps = swaps.filter(s => s.error);
     
+    // Invalidate position cache since balances changed
+    const client = getRedis();
+    if (client) {
+      await client.del(`positions:${walletId}`);
+    }
+    
     return c.json({
-      success: true,
+      success: successfulSwaps.length > 0,
       message: successfulSwaps.length > 0 
-        ? `Found ${successfulSwaps.length} token(s) to swap` 
-        : 'No swappable tokens found',
+        ? `Swapped ${successfulSwaps.length} token(s) to SOL` 
+        : 'No swaps executed',
       tokensFound: tokenAccounts.value.length,
+      swapsExecuted: successfulSwaps.length,
       swaps: successfulSwaps,
       failed: failedSwaps,
       errors: errors.length > 0 ? errors : undefined,
-      note: 'Swap execution via Jito coming soon - this shows what would be swapped',
     });
     
   } catch (error: any) {
