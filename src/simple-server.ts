@@ -1139,7 +1139,7 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
   const walletId = c.req.param('walletId');
   
   try {
-    const { wallet } = await loadWalletById(walletId);
+    const { client, wallet } = await loadWalletById(walletId);
     const walletAddress = wallet.address;
     
     // Get all token accounts
@@ -1255,12 +1255,14 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
         const txBuffer = Buffer.from(swapTxBase64, 'base64');
         const versionedTx = VersionedTransaction.deserialize(txBuffer);
         
-        // Sign with Privy wallet
-        const signedTx = await wallet.signTransaction({ transaction: versionedTx });
+        // Sign with Privy client (base64 in, base64 out)
+        console.log(`[Swap] Signing with Privy...`);
+        const signedTxBase64 = await client.signTransaction(swapTxBase64);
+        const signedTxBuffer = Buffer.from(signedTxBase64, 'base64');
         
         // Submit to Solana
         console.log(`[Swap] Submitting transaction for ${symbol}...`);
-        const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+        const signature = await connection.sendRawTransaction(signedTxBuffer, {
           skipPreflight: true,
           maxRetries: 3,
         });
