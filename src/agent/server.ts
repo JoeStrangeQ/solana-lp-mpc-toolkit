@@ -31,6 +31,7 @@ import { parseIntent, describeIntent } from './intent.js';
 import { createFeeBreakdown, FEE_CONFIG } from '../fees/index.js';
 import type { AgentResponse, LPIntent, PoolOpportunity } from './types.js';
 import { unsignedApi } from './unsigned.js';
+import { wrapSigningWithTimeout, withTimeout, PRIVY_SIGN_TIMEOUT_MS } from '../utils/resilience.js';
 
 // Static imports for LP and Swap modules
 import { lpPipeline as lpPipelineImport, METEORA_POOLS as meteoraPoolsImport } from '../lp/index.js';
@@ -887,7 +888,11 @@ app.post('/wallet/transfer', async (c) => {
     const unsignedTx = tx.serialize({ requireAllSignatures: false }).toString('base64');
     
     // Sign transaction (not sign+send, so we can broadcast with fresh blockhash)
-    const signedTx = await walletClient.signTransaction(unsignedTx);
+    // Wrapped with timeout to prevent indefinite hangs
+    const signedTx = await withTimeout(
+      () => walletClient.signTransaction(unsignedTx),
+      { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+    );
     
     // Broadcast locally to ensure blockhash is fresh
     const txBuffer = Buffer.from(signedTx, 'base64');
@@ -1262,7 +1267,11 @@ app.post('/lp/execute', async (c) => {
     const walletAddress = walletClient.getAddress();
     // Use signTransaction ONLY (not signAndSendTransaction) - we'll broadcast ourselves
     // This allows us to add the position keypair signature before broadcasting
-    const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
+    // Wrapped with timeout to prevent indefinite hangs on MPC operations
+    const signTransaction = wrapSigningWithTimeout(
+      (tx: string) => walletClient.signTransaction(tx),
+      PRIVY_SIGN_TIMEOUT_MS
+    );
 
     const result = await lp.execute(
       walletAddress, 
@@ -1358,11 +1367,14 @@ app.post('/lp/atomic', async (c) => {
           slippageBps,
         });
 
-        // 2. Sign all transactions with the wallet
+        // 2. Sign all transactions with the wallet (with timeout per signature)
         console.log(`[AtomicLP] Signing ${built.unsignedTransactions.length} transactions...`);
         const signedTransactions: string[] = [];
         for (const unsignedTx of built.unsignedTransactions) {
-          const signedTx = await walletClient.signTransaction(unsignedTx);
+          const signedTx = await withTimeout(
+            () => walletClient.signTransaction(unsignedTx),
+            { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+          );
           signedTransactions.push(signedTx);
         }
 
@@ -1461,8 +1473,11 @@ app.post('/lp/withdraw', async (c) => {
       userPublicKey: walletAddress,
     });
 
-    // Sign and send
-    const signedTx = await walletClient.signTransaction(result.transaction);
+    // Sign and send (with timeout)
+    const signedTx = await withTimeout(
+      () => walletClient.signTransaction(result.transaction),
+      { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+    );
     const txBuffer = Buffer.from(signedTx, 'base64');
     const txid = await connection.sendRawTransaction(txBuffer);
     await connection.confirmTransaction(txid, 'confirmed');
@@ -1520,11 +1535,14 @@ app.post('/lp/withdraw/atomic', async (c) => {
       tipSpeed: tipSpeed || 'fast',
     });
 
-    // 2. Sign all transactions with the wallet
+    // 2. Sign all transactions with the wallet (with timeout per signature)
     console.log(`[AtomicWithdraw] Signing ${built.unsignedTransactions.length} transactions...`);
     const signedTransactions: string[] = [];
     for (const unsignedTx of built.unsignedTransactions) {
-      const signedTx = await walletClient.signTransaction(unsignedTx);
+      const signedTx = await withTimeout(
+        () => walletClient.signTransaction(unsignedTx),
+        { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+      );
       signedTransactions.push(signedTx);
     }
 
@@ -1569,7 +1587,10 @@ app.post('/lp/withdraw/atomic', async (c) => {
             console.log(`[AtomicWithdraw] Swapping ${uiAmount} ${tokenInfo.mint.slice(0,8)}... to ${targetToken}`);
             const quote = await jup.getQuote(tokenInfo.mint, targetMint, parseInt(tokenInfo.amount));
             const swapResult = await jup.swap(quote, walletAddress);
-            const signedSwap = await walletClient.signTransaction(swapResult.swapTransaction);
+            const signedSwap = await withTimeout(
+              () => walletClient.signTransaction(swapResult.swapTransaction),
+              { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+            );
             const swapBuffer = Buffer.from(signedSwap, 'base64');
             const swapTxid = await connection.sendRawTransaction(swapBuffer, { skipPreflight: false });
             await connection.confirmTransaction(swapTxid, 'confirmed');
@@ -1724,7 +1745,11 @@ async function handleLp(intent: LPIntent): Promise<AgentResponse> {
     }
 
     // Execute the full pipeline (swap if needed + LP)
-    const signTransaction = async (tx: string) => walletClient.signTransaction(tx);
+    // Wrapped with timeout to prevent indefinite hangs on MPC operations
+    const signTransaction = wrapSigningWithTimeout(
+      (tx: string) => walletClient.signTransaction(tx),
+      PRIVY_SIGN_TIMEOUT_MS
+    );
     const result = await lp.execute(walletAddress, tokenA, tokenB, intent.amount, signTransaction);
 
     // Calculate 1% protocol fee
@@ -1934,8 +1959,11 @@ async function handleSwap(intent: LPIntent): Promise<AgentResponse> {
     // Build swap transaction
     const swapResult = await jup.swap(quote, userPublicKey);
 
-    // Sign the transaction
-    const signedTx = await walletClient.signTransaction(swapResult.swapTransaction);
+    // Sign the transaction (with timeout)
+    const signedTx = await withTimeout(
+      () => walletClient.signTransaction(swapResult.swapTransaction),
+      { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+    );
 
     // Broadcast
     const txid = await broadcastTransaction(signedTx);
@@ -2040,8 +2068,11 @@ async function handleOpenPosition(intent: LPIntent): Promise<AgentResponse> {
       tokenBAmount: intent.amount / 2,
     });
 
-    // Sign with wallet client (Privy or MPC)
-    const signedTx = await walletClient.signTransaction(result.transaction);
+    // Sign with wallet client (Privy or MPC) - with timeout
+    const signedTx = await withTimeout(
+      () => walletClient.signTransaction(result.transaction),
+      { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+    );
 
     // Broadcast
     const txid = await broadcastTransaction(signedTx);

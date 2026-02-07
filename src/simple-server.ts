@@ -36,6 +36,7 @@ import {
 } from './monitoring/index.js';
 import { Redis } from '@upstash/redis';
 import { assessPoolRisk, assessPositionRisk, getTokenVolatility, type PoolRiskAssessment, type PositionRiskAssessment } from './risk/index.js';
+import { withTimeout, PRIVY_SIGN_TIMEOUT_MS } from './utils/resilience.js';
 
 // Redis client for cache invalidation
 let redis: Redis | null = null;
@@ -1258,9 +1259,12 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
         const txBuffer = Buffer.from(swapTxBase64, 'base64');
         const versionedTx = VersionedTransaction.deserialize(txBuffer);
         
-        // Sign with Privy client (base64 in, base64 out)
+        // Sign with Privy client (base64 in, base64 out) - with timeout
         console.log(`[Swap] Signing with Privy...`);
-        const signedTxBase64 = await client.signTransaction(swapTxBase64);
+        const signedTxBase64 = await withTimeout(
+          () => client.signTransaction(swapTxBase64),
+          { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+        );
         const signedTxBuffer = Buffer.from(signedTxBase64, 'base64');
         
         // Submit to Solana
@@ -1383,9 +1387,12 @@ app.post('/lp/open', async (c) => {
     tx.recentBlockhash = blockhash;
     tx.feePayer = walletPubkey;
 
-    // Sign with Privy (stateless - wallet loaded fresh)
+    // Sign with Privy (stateless - wallet loaded fresh) - with timeout
     const txBase64 = Buffer.from(tx.serialize({ requireAllSignatures: false })).toString('base64');
-    const signedTxBase64 = await client.signTransaction(txBase64);
+    const signedTxBase64 = await withTimeout(
+      () => client.signTransaction(txBase64),
+      { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+    );
 
     const fee = (amountA * FEE_CONFIG.FEE_BPS) / 10000;
 
@@ -1741,11 +1748,14 @@ async function lpExecuteHandler(c: any) {
 
     console.log(`[LP Execute] Built ${lpResult.unsignedTransactions.length} transactions, signing...`);
 
-    // Sign all transactions with Privy
+    // Sign all transactions with Privy (with timeout per signature)
     const signedTxs: string[] = [];
     for (const unsignedTx of lpResult.unsignedTransactions) {
       try {
-        const signedTx = await client.signTransaction(unsignedTx);
+        const signedTx = await withTimeout(
+          () => client.signTransaction(unsignedTx),
+          { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+        );
         signedTxs.push(signedTx);
       } catch (signErr: any) {
         // Already partially signed with position keypair
@@ -2089,9 +2099,13 @@ app.post('/lp/rebalance/execute', async (c) => {
       slippageBps,
       signTransaction: async (tx: string) => {
         try {
-          return await client.signTransaction(tx);
+          return await withTimeout(
+            () => client.signTransaction(tx),
+            { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+          );
         } catch (e) {
-          // May already be signed with position keypair
+          // May already be signed with position keypair, or timeout
+          if ((e as Error).message?.includes('timed out')) throw e;
           return tx;
         }
       },
@@ -2319,13 +2333,17 @@ app.post('/lp/withdraw/execute', async (c) => {
 
         console.log(`[Withdraw ${jobId}] Signing ${result.unsignedTransactions.length} transactions...`);
 
-        // Sign all transactions with Privy
+        // Sign all transactions with Privy (with timeout per signature)
         const signedTxs: string[] = [];
         for (const unsignedTx of result.unsignedTransactions) {
           try {
-            const signedTx = await client.signTransaction(unsignedTx);
+            const signedTx = await withTimeout(
+              () => client.signTransaction(unsignedTx),
+              { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+            );
             signedTxs.push(signedTx);
           } catch (signErr: any) {
+            if ((signErr as Error).message?.includes('timed out')) throw signErr;
             signedTxs.push(unsignedTx);
           }
         }
@@ -2425,14 +2443,18 @@ app.post('/lp/withdraw/execute/sync', async (c) => {
 
     console.log(`[Withdraw Execute] Built ${result.unsignedTransactions.length} transactions, signing...`);
 
-    // Sign all transactions with Privy
+    // Sign all transactions with Privy (with timeout per signature)
     const signedTxs: string[] = [];
     for (const unsignedTx of result.unsignedTransactions) {
       try {
-        const signedTx = await client.signTransaction(unsignedTx);
+        const signedTx = await withTimeout(
+          () => client.signTransaction(unsignedTx),
+          { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out. Please try again.' }
+        );
         signedTxs.push(signedTx);
       } catch (signErr: any) {
-        // Already partially signed
+        // Already partially signed (but re-throw timeouts)
+        if ((signErr as Error).message?.includes('timed out')) throw signErr;
         signedTxs.push(unsignedTx);
       }
     }
