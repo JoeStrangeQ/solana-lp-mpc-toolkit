@@ -2,6 +2,7 @@
  * Usage Stats - In-memory request and action tracking
  */
 export const stats = {
+  version: '2.5.0-orca',
   startedAt: new Date().toISOString(),
   requests: {
     total: 0,
