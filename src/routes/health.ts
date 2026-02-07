@@ -20,7 +20,7 @@ app.get('/', (c) => c.json({
   status: 'running',
   docs: 'https://mnm-web-seven.vercel.app',
   github: 'https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit',
-  features: ['MPC Custody', 'Arcium Privacy', 'Stateless API', 'Multi-DEX LP', 'Position Monitoring', 'Webhook Alerts', 'Redis Persistence'],
+  features: ['MPC Custody', 'Arcium Privacy', 'Stateless API', 'Multi-DEX LP', 'Position Monitoring', 'Webhook Alerts', 'Redis Persistence', 'Multi-Oracle Pricing', 'MEV-Protected Swaps', 'MCP Server', 'Dynamic Priority Fees'],
   design: 'STATELESS - pass walletId on every request',
   flow: [
     '1. POST /wallet/create -> get walletId',
@@ -63,6 +63,12 @@ app.get('/', (c) => c.json({
     'POST /monitor/webhook/test           -> send test alert to webhook',
     'DELETE /monitor/webhook              -> remove webhook',
     'POST /monitor/check                  -> manually trigger check',
+    '--- Oracle ---',
+    'GET  /oracle/price?mint=<address>    -> aggregated price (Pyth + Jupiter)',
+    'POST /oracle/prices { mints: [...] } -> batch prices',
+    '--- Ultra Swap (MEV-Protected) ---',
+    'POST /ultra/order { inputToken, outputToken, amount, walletAddress } -> create MEV-protected order',
+    'POST /ultra/execute { requestId, signedTransaction } -> execute signed order',
   ],
 }));
 

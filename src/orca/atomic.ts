@@ -21,6 +21,7 @@ import { Percentage } from '@orca-so/common-sdk';
 import BN from 'bn.js';
 import { config } from '../config/index.js';
 import { buildTipTransaction, type TipSpeed } from '../jito/index.js';
+import { optimizeComputeBudget, buildComputeBudgetInstructions } from '../utils/priority-fees.js';
 
 const JUPITER_API = 'https://api.jup.ag/swap/v1';
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
@@ -199,22 +200,49 @@ export async function buildOrcaAtomicLP(params: OrcaAtomicLPParams): Promise<Bui
   // Open position + add liquidity
   const openPayload = await openPosTxBuilder.build();
   const openTx = openPayload.transaction;
-  // Sign with any SDK-generated signers (position mint keypair)
-  if (openPayload.signers.length > 0) {
-    if (openTx instanceof VersionedTransaction) {
-      openTx.sign(openPayload.signers);
-    } else {
-      openTx.partialSign(...openPayload.signers);
-    }
-  }
 
+  // Optimize compute budget via simulation + dynamic priority fees
   if (openTx instanceof VersionedTransaction) {
+    // Simulate and estimate optimal CU + priority fee
+    const budget = await optimizeComputeBudget(connection, openTx, 'high');
+    const budgetIxs = buildComputeBudgetInstructions(budget);
+    // Decompose the message to rebuild with optimized compute budget
+    const decompiledMsg = TransactionMessage.decompile(openTx.message);
+    const filteredIxs = decompiledMsg.instructions.filter(
+      (ix) => !ix.programId.equals(ComputeBudgetProgram.programId),
+    );
+    const newMsg = new TransactionMessage({
+      payerKey: decompiledMsg.payerKey,
+      recentBlockhash: decompiledMsg.recentBlockhash,
+      instructions: [...budgetIxs, ...filteredIxs],
+    }).compileToV0Message();
+    const newTx = new VersionedTransaction(newMsg);
+    if (openPayload.signers.length > 0) {
+      newTx.sign(openPayload.signers);
+    }
     unsignedTransactions.push(
-      Buffer.from(openTx.serialize()).toString('base64'),
+      Buffer.from(newTx.serialize()).toString('base64'),
     );
   } else {
+    // Legacy Transaction: convert to versioned for simulation, then apply budget
+    const tempVersioned = new VersionedTransaction(
+      new TransactionMessage({
+        payerKey: new PublicKey(walletAddress),
+        recentBlockhash: blockhash,
+        instructions: openTx.instructions,
+      }).compileToV0Message(),
+    );
+    const budget = await optimizeComputeBudget(connection, tempVersioned, 'high');
+    const budgetIxs = buildComputeBudgetInstructions(budget);
+    const filtered = openTx.instructions.filter(
+      (ix) => !ix.programId.equals(ComputeBudgetProgram.programId),
+    );
+    openTx.instructions = [...budgetIxs, ...filtered];
     openTx.recentBlockhash = blockhash;
     openTx.feePayer = new PublicKey(walletAddress);
+    if (openPayload.signers.length > 0) {
+      openTx.partialSign(...openPayload.signers);
+    }
     const serialized = openTx.serialize({ requireAllSignatures: false });
     unsignedTransactions.push(serialized.toString('base64'));
   }

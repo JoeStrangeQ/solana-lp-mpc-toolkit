@@ -38,6 +38,8 @@ import {
   startMonitoringInterval,
 } from './routes/index.js';
 import skillRoutes from './routes/skill.js';
+import oracleRoutes from './routes/oracle.js';
+import ultraSwapRoutes from './routes/ultra-swap.js';
 
 // Import bot
 import { createBot, initBot, getBot, getBotWebhookHandler } from './bot/index.js';
@@ -125,6 +127,10 @@ app.route('/chat', chatRoutes);
 
 // Skill file
 app.route('/skill.md', skillRoutes);
+
+// Oracle & Ultra Swap routes
+app.route('/oracle', oracleRoutes);
+app.route('/ultra', ultraSwapRoutes);
 
 // Debug Jupiter test
 app.get('/debug/jupiter-test', async (c) => {

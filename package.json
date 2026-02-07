@@ -19,7 +19,8 @@
     "test": "jest",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "tsx scripts/e2e-test.ts"
+    "test:e2e": "tsx scripts/e2e-test.ts",
+    "mcp": "node dist/mcp-server/index.js"
   },
   "keywords": [
     "solana",
@@ -33,6 +34,7 @@
     "@grammyjs/conversations": "^2.1.1",
     "@hono/node-server": "^1.19.9",
     "@meteora-ag/dlmm": "^1.9.3",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@orca-so/common-sdk": "^0.7.0",
     "@orca-so/whirlpools-sdk": "^0.19.0",
     "@privy-io/node": "^0.8.0",
@@ -43,7 +45,8 @@
     "bn.js": "^5.2.2",
     "bs58": "^6.0.0",
     "grammy": "^1.39.3",
-    "hono": "^4.11.7"
+    "hono": "^4.11.7",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.6",

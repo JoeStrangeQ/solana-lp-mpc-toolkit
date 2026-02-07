@@ -4,9 +4,9 @@
  * Executes swap + LP in a single atomic transaction bundle.
  */
 
-import { 
-  Connection, 
-  PublicKey, 
+import {
+  Connection,
+  PublicKey,
   Keypair,
   TransactionMessage,
   VersionedTransaction,
@@ -17,6 +17,7 @@ import BN from 'bn.js';
 import { config } from '../config/index.js';
 import { arciumPrivacy } from '../privacy/index.js';
 import { buildTipTransaction, TipSpeed } from '../jito/index.js';
+import { optimizeComputeBudget, buildComputeBudgetInstructions } from '../utils/priority-fees.js';
 
 const JUPITER_API = 'https://api.jup.ag/swap/v1';
 
@@ -164,17 +165,32 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
     slippage: meteoraSlippage, // Pass slippage to Meteora (e.g., 3 = 3%)
   });
   
-  const lpMsg = new TransactionMessage({
+  // Build initial tx with default CU to simulate, then optimize
+  const lpInstructions = lpTxPayload.instructions.filter(
+    (ix) => !ix.programId.equals(ComputeBudgetProgram.programId),
+  );
+  const defaultMsg = new TransactionMessage({
     payerKey: new PublicKey(walletAddress),
     recentBlockhash: blockhash,
     instructions: [
       ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
-      ...lpTxPayload.instructions.filter(ix => !ix.programId.equals(ComputeBudgetProgram.programId))
+      ...lpInstructions,
     ],
+  }).compileToV0Message();
+  const tempTx = new VersionedTransaction(defaultMsg);
+
+  // Simulate and estimate priority fees
+  const budget = await optimizeComputeBudget(connection, tempTx, 'high');
+  const budgetIxs = buildComputeBudgetInstructions(budget);
+
+  const lpMsg = new TransactionMessage({
+    payerKey: new PublicKey(walletAddress),
+    recentBlockhash: blockhash,
+    instructions: [...budgetIxs, ...lpInstructions],
   }).compileToV0Message();
   const lpTx = new VersionedTransaction(lpMsg);
   // PRE-SIGN with the position keypair, user will sign after
-  lpTx.sign([positionKeypair]); 
+  lpTx.sign([positionKeypair]);
   unsignedTransactions.push(lpTx);
 
   // 5. Build Tip transaction (skip when sending directly via RPC)
