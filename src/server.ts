@@ -172,10 +172,32 @@ app.get('/debug/jupiter-test', async (c) => {
 app.post('/bot/webhook', async (c) => {
   const handler = getBotWebhookHandler();
   if (!handler) {
+    console.error('[Bot Webhook] Bot not initialized');
     return c.json({ error: 'Bot not initialized' }, 503);
   }
   try {
-    return await handler(c);
+    const body = await c.req.json();
+    const msgText = body?.message?.text || body?.callback_query?.data || 'unknown';
+    const chatId = body?.message?.chat?.id || body?.callback_query?.message?.chat?.id || 'unknown';
+    console.log(`[Bot Webhook] Received update: chat=${chatId} text="${msgText}"`);
+
+    // Re-create the request since we consumed the body
+    const newReq = new Request(c.req.url, {
+      method: 'POST',
+      headers: c.req.raw.headers,
+      body: JSON.stringify(body),
+    });
+    const newCtx = c.env ? c : c;
+    // Use the raw handler approach with the parsed body
+    const { getBot } = await import('./bot/index.js');
+    const bot = getBot();
+    if (!bot) {
+      console.error('[Bot Webhook] Bot instance is null');
+      return c.json({ ok: true });
+    }
+    await bot.handleUpdate(body);
+    console.log(`[Bot Webhook] Update processed successfully`);
+    return c.json({ ok: true });
   } catch (err: any) {
     console.error('[Bot Webhook] Handler error:', err?.message || err);
     console.error('[Bot Webhook] Stack:', err?.stack);
