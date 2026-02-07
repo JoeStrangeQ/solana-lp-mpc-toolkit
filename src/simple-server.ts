@@ -979,6 +979,47 @@ app.get('/risk/volatility/:symbol', async (c) => {
   });
 });
 
+// ============ Debug / Test Endpoints ============
+
+// Test Jupiter API connectivity
+app.get('/debug/jupiter-test', async (c) => {
+  const jupiterApiKey = process.env.JUPITER_API_KEY;
+  const testUrl = 'https://quote-api.jup.ag/v6/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=So11111111111111111111111111111111111111112&amount=1000000&slippageBps=100';
+  
+  const headers: Record<string, string> = { 'Accept': 'application/json' };
+  if (jupiterApiKey) {
+    headers['x-api-key'] = jupiterApiKey;
+  }
+  
+  try {
+    const startTime = Date.now();
+    const response = await fetch(testUrl, { 
+      headers,
+      signal: AbortSignal.timeout(10000), // 10 sec timeout
+    });
+    const elapsed = Date.now() - startTime;
+    
+    const body = await response.text();
+    
+    return c.json({
+      success: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      elapsedMs: elapsed,
+      apiKeyPresent: !!jupiterApiKey,
+      responsePreview: body.slice(0, 500),
+    });
+  } catch (e: any) {
+    return c.json({
+      success: false,
+      error: e?.message || String(e),
+      errorCode: e?.cause?.code || e?.code,
+      errorCause: e?.cause?.message,
+      apiKeyPresent: !!jupiterApiKey,
+    });
+  }
+});
+
 // ============ Arcium Encryption ============
 
 app.get('/encrypt/info', async (c) => {
