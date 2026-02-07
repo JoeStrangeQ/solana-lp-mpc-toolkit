@@ -8,6 +8,7 @@ import { FEE_CONFIG, SAMPLE_POOLS } from '../services/pool-service.js';
 import { executeLp, invalidatePositionCache } from '../services/lp-service.js';
 import { stats } from '../services/stats.js';
 import { withTimeout, PRIVY_SIGN_TIMEOUT_MS } from '../utils/resilience.js';
+import { ErrorCode, createError, classifyError, getHttpStatus, getFriendlyMessage } from '../utils/error-codes.js';
 import { arciumPrivacy } from '../privacy/index.js';
 import { buildAtomicLP } from '../lp/atomic.js';
 import { sendBundle, waitForBundle, type TipSpeed } from '../jito/index.js';
@@ -98,7 +99,12 @@ app.post('/open', async (c) => {
     });
   } catch (error: any) {
     console.error('LP open error:', error);
-    return c.json({ error: 'LP position failed', details: error.message }, 500);
+    const code = classifyError(error);
+    const status = getHttpStatus(code);
+    return c.json({
+      success: false,
+      error: createError(code, getFriendlyMessage(code), { originalError: error.message }),
+    }, status);
   }
 });
 
@@ -127,7 +133,13 @@ app.post('/close', async (c) => {
       note: 'Demo - production would withdraw from Meteora DLMM',
     });
   } catch (error: any) {
-    return c.json({ error: 'LP close failed', details: error.message }, 500);
+    console.error('LP close error:', error);
+    const code = classifyError(error);
+    const status = getHttpStatus(code);
+    return c.json({
+      success: false,
+      error: createError(code, getFriendlyMessage(code), { originalError: error.message }),
+    }, status);
   }
 });
 
