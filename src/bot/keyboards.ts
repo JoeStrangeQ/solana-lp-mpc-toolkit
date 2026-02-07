@@ -78,6 +78,8 @@ export function positionActionsKeyboard(posIndex: number): InlineKeyboard {
     .text('Withdraw', `wd:${posIndex}`)
     .text('Rebalance', `rb:${posIndex}`)
     .row()
+    .text('Claim Fees', `fee:${posIndex}`)
+    .row()
     .text('View on Solscan', `scan:${posIndex}`);
 }
 

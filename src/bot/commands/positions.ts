@@ -25,7 +25,18 @@ export async function positionsCommand(ctx: BotContext) {
 
     const positions = await getUserPositions(user.walletAddress);
 
-    if (positions.length === 0) {
+    // Fetch Orca positions (non-blocking)
+    let orcaPositions: any[] = [];
+    try {
+      const { getOrcaPositionsForWallet } = await import('../../services/orca-service.js');
+      orcaPositions = await getOrcaPositionsForWallet(user.walletAddress);
+    } catch (err) {
+      console.warn('[Bot] Orca position discovery failed (non-blocking):', err);
+    }
+
+    const totalCount = positions.length + orcaPositions.length;
+
+    if (totalCount === 0) {
       await ctx.reply(
         '*No LP Positions*\n\nYou don\'t have any LP positions yet.\nDeposit SOL first (/deposit), then use /pools to find a pool.',
         { parse_mode: 'Markdown' },
@@ -33,38 +44,65 @@ export async function positionsCommand(ctx: BotContext) {
       return;
     }
 
-    // Cache position data for callback handlers (withdraw, rebalance)
-    setCachedPositions(chatId, positions.map(p => ({
-      address: p.address,
-      pool: p.pool,
-      poolAddress: p.poolAddress,
-      walletId: user.walletId,
-      walletAddress: user.walletAddress,
-    })));
+    // Build unified cached positions list
+    const allCached = [
+      ...positions.map(p => ({
+        address: p.address,
+        pool: p.pool,
+        poolAddress: p.poolAddress,
+        walletId: user.walletId,
+        walletAddress: user.walletAddress,
+        dex: 'meteora' as const,
+      })),
+      ...orcaPositions.map(p => ({
+        address: p.address,
+        pool: p.poolName,
+        poolAddress: p.poolAddress,
+        walletId: user.walletId,
+        walletAddress: user.walletAddress,
+        dex: 'orca' as const,
+        positionMintAddress: p.mintAddress,
+      })),
+    ];
+
+    setCachedPositions(chatId, allCached);
 
     const priceFmt = (n: number) => (n < 1 ? n.toFixed(4) : n.toFixed(2));
 
-    const posLines = positions
-      .map((p, i) => {
-        const status = p.inRange ? 'IN RANGE' : 'OUT OF RANGE';
-        const icon = p.inRange ? '🟢' : '🔴';
+    // Format Meteora positions
+    const meteoraLines = positions.map((p, i) => {
+      const status = p.inRange ? 'IN RANGE' : 'OUT OF RANGE';
+      const icon = p.inRange ? '🟢' : '🔴';
+      return [
+        `${icon} *${p.pool}* (Meteora) - ${status}`,
+        `  Price: $${priceFmt(p.priceRange.current)}`,
+        `  Range: $${priceFmt(p.priceRange.lower)} - $${priceFmt(p.priceRange.upper)}`,
+        `  ${p.amounts.tokenX.formatted} + ${p.amounts.tokenY.formatted}`,
+        `  Fees: ${p.fees.tokenX} + ${p.fees.tokenY}`,
+      ].join('\n');
+    });
 
-        return [
-          `${icon} *${p.pool}* - ${status}`,
-          `  Price: $${priceFmt(p.priceRange.current)}`,
-          `  Range: $${priceFmt(p.priceRange.lower)} - $${priceFmt(p.priceRange.upper)}`,
-          `  ${p.amounts.tokenX.formatted} + ${p.amounts.tokenY.formatted}`,
-          `  Fees: ${p.fees.tokenX} + ${p.fees.tokenY}`,
-        ].join('\n');
-      })
-      .join('\n\n');
+    // Format Orca positions
+    const orcaLines = orcaPositions.map((p: any) => {
+      const status = p.inRange ? 'IN RANGE' : 'OUT OF RANGE';
+      const icon = p.inRange ? '🟢' : '🔴';
+      return [
+        `${icon} *${p.poolName}* (Orca) - ${status}`,
+        `  Price: $${priceFmt(p.priceCurrent)}`,
+        `  Range: $${priceFmt(p.priceLower)} - $${priceFmt(p.priceUpper)}`,
+        `  ${p.tokenA.symbol}: ${p.tokenA.amount} + ${p.tokenB.symbol}: ${p.tokenB.amount}`,
+        `  Fees: ${p.fees.tokenA} + ${p.fees.tokenB}`,
+      ].join('\n');
+    });
+
+    const posLines = [...meteoraLines, ...orcaLines].join('\n\n');
 
     const kb = new InlineKeyboard();
 
-    for (let i = 0; i < Math.min(positions.length, 8); i++) {
-      const p = positions[i];
-      const icon = p.inRange ? '🟢' : '🔴';
-      kb.text(`${icon} ${p.pool}`, `pd:${i}`)
+    for (let i = 0; i < Math.min(allCached.length, 8); i++) {
+      const c = allCached[i];
+      const dexTag = c.dex === 'orca' ? 'Orca' : 'Met';
+      kb.text(`${c.pool} [${dexTag}]`, `pd:${i}`)
         .text('Withdraw', `wd:${i}`)
         .row();
     }
@@ -72,7 +110,7 @@ export async function positionsCommand(ctx: BotContext) {
     kb.text('Rebalance All', `rb:all`).text('Refresh', 'cmd:positions');
 
     const text = [
-      `*Your LP Positions* (${positions.length})`,
+      `*Your LP Positions* (${totalCount})`,
       ``,
       posLines,
     ].join('\n');

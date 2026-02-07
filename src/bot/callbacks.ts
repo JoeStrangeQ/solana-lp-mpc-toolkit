@@ -6,7 +6,7 @@
  */
 import { InlineKeyboard } from 'grammy';
 import type { BotContext } from './types.js';
-import { setPendingPool, getCachedPosition, setWaitingForCA, setPendingPoolAddress, getDisplayedPool } from './types.js';
+import { setPendingPool, getCachedPosition, setWaitingForCA, setPendingPoolAddress, getDisplayedPool, setPendingLpPool } from './types.js';
 import {
   getRecipient,
   upsertRecipient,
@@ -16,6 +16,8 @@ import { getUserByChat, getUserPositions, type PositionDetails } from '../onboar
 import { Connection, PublicKey, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
 import DLMM from '@meteora-ag/dlmm';
 import BN from 'bn.js';
+import { assessPositionRisk } from '../risk/index.js';
+import { discoverAllPositions } from '../utils/position-discovery.js';
 
 export async function handleCallback(ctx: BotContext) {
   const data = ctx.callbackQuery?.data;
@@ -57,6 +59,12 @@ export async function handleCallback(ctx: BotContext) {
       // Paste CA flow: ask user to send the pool address as text
       if (chatId) setWaitingForCA(chatId);
       await ctx.reply('Paste the pool contract address (CA):');
+      return;
+    }
+
+    if (category === 'orca') {
+      const { showOrcaPools } = await import('./commands/pools.js');
+      await showOrcaPools(ctx);
       return;
     }
 
@@ -142,13 +150,25 @@ export async function handleCallback(ctx: BotContext) {
       // Look up actual pool address from the displayed pools cache
       const displayed = getDisplayedPool(chatId, poolIdx);
       if (displayed) {
-        // Store the address so the LP wizard gets the correct pool
-        setPendingPoolAddress(chatId, displayed.address);
+        if (displayed.dex === 'orca') {
+          // Route to Orca LP wizard
+          setPendingLpPool(chatId, {
+            address: displayed.address,
+            dex: 'orca',
+            name: displayed.name,
+            tickSpacing: displayed.tickSpacing,
+          });
+          await ctx.conversation.enter('orcaLpWizard');
+        } else {
+          // Default: Meteora LP wizard
+          setPendingPoolAddress(chatId, displayed.address);
+          await ctx.conversation.enter('lpWizard');
+        }
       } else {
         // Fallback: store index for backward compat with LP wizard's own fetch
         setPendingPool(chatId, poolIdx);
+        await ctx.conversation.enter('lpWizard');
       }
-      await ctx.conversation.enter('lpWizard');
     }
     return;
   }
@@ -283,6 +303,47 @@ export async function handleCallback(ctx: BotContext) {
 
       const priceFmt = (n: number) => (n < 1 ? n.toFixed(4) : n.toFixed(2));
 
+      // Fetch raw position data for risk assessment (includes bin IDs)
+      let riskLines: string[] = [];
+      try {
+        const { getConnection } = await import('../services/wallet-service.js');
+        const connection = getConnection();
+        const rawPositions = await discoverAllPositions(connection, user.walletAddress);
+        const rawPos = rawPositions.find(p => p.address === pos.address);
+
+        if (rawPos) {
+          const risk = await assessPositionRisk(
+            rawPos.address,
+            rawPos.pool.address,
+            rawPos.pool.name || pos.pool,
+            rawPos.activeBinId,
+            rawPos.binRange.lower,
+            rawPos.binRange.upper,
+            pos.inRange ? undefined : new Date().toISOString(),
+            rawPos.pool.tokenX?.symbol,
+            rawPos.pool.tokenY?.symbol,
+          );
+
+          const urgencyIndicator =
+            risk.urgency === 'critical' ? '!!!' :
+            risk.urgency === 'high' ? '!!' :
+            risk.urgency === 'medium' ? '!' : '';
+
+          riskLines = [
+            ``,
+            `Risk Assessment: ${urgencyIndicator}`,
+            `  Health: ${risk.healthScore}/100`,
+            `  Action: ${risk.action.toUpperCase()} - ${risk.actionReason}`,
+          ];
+
+          if (risk.ilCurrent > 0) {
+            riskLines.push(`  Est. IL: ${risk.ilCurrent}%`);
+          }
+        }
+      } catch (riskErr: any) {
+        console.error('[Bot] Risk assessment failed (non-blocking):', riskErr?.message);
+      }
+
       const text = [
         `*${pos.pool}* - ${pos.inRange ? 'IN RANGE' : 'OUT OF RANGE'}`,
         ``,
@@ -296,6 +357,7 @@ export async function handleCallback(ctx: BotContext) {
         ``,
         `Fees Earned:`,
         `  ${pos.fees.tokenX} + ${pos.fees.tokenY}`,
+        ...riskLines,
       ].join('\n');
 
       const { positionActionsKeyboard } = await import('./keyboards.js');
@@ -360,8 +422,36 @@ export async function handleCallback(ctx: BotContext) {
         const { loadWalletById, getConnection } = await import('../services/wallet-service.js');
         const { invalidatePositionCache } = await import('../services/lp-service.js');
 
-        const connection = getConnection();
         const { client } = await loadWalletById(cached.walletId);
+
+        // ---- Orca Whirlpool withdraw path ----
+        if (cached.dex === 'orca' && cached.positionMintAddress) {
+          const { executeOrcaWithdraw } = await import('../services/orca-service.js');
+          const result = await executeOrcaWithdraw({
+            walletId: cached.walletId,
+            walletAddress: cached.walletAddress,
+            poolAddress: cached.poolAddress,
+            positionMintAddress: cached.positionMintAddress,
+            slippageBps: 300,
+            signTransaction: async (tx) => client.signTransaction(tx),
+            signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
+          });
+
+          const txHashes = result.txHashes || [];
+          if (txHashes.length > 0) {
+            const lastHash = txHashes[txHashes.length - 1];
+            await ctx.reply(
+              `*Orca Position Closed!*\n\nPool: *${cached.pool}*\nTransactions: ${txHashes.length}\nTx: \`${lastHash.slice(0, 16)}...\`\n\nTokens returned to your wallet.\nUse /balance to check.`,
+              { parse_mode: 'Markdown' },
+            );
+          } else {
+            await ctx.reply('No transactions were sent. The position may already be closed.');
+          }
+          return;
+        }
+
+        // ---- Meteora DLMM withdraw path ----
+        const connection = getConnection();
         const userPubkey = new PublicKey(cached.walletAddress);
 
         // 1. Get pool and position on-chain
@@ -480,6 +570,133 @@ export async function handleCallback(ctx: BotContext) {
     await ctx.answerCallbackQuery().catch(() => {});
     // Enter rebalance wizard
     await ctx.conversation.enter('rebalanceWizard');
+    return;
+  }
+
+  // ---- Fee claim ----
+  if (data.startsWith('fee:') && !data.startsWith('fee:sel:') && !data.startsWith('fee:cf:')) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    const posIdx = parseInt(data.split(':')[1]);
+    const cached = getCachedPosition(chatId, posIdx);
+
+    if (!cached) {
+      await ctx.reply('Position data expired. Use /positions to refresh.');
+      return;
+    }
+
+    await ctx.reply(
+      `Claiming fees from *${cached.pool}*...\n\nThis may take 30 seconds.`,
+      { parse_mode: 'Markdown' },
+    );
+
+    // Execute in background to avoid webhook timeout
+    (async () => {
+      try {
+        const { loadWalletById, getConnection } = await import('../services/wallet-service.js');
+        const { client } = await loadWalletById(cached.walletId);
+
+        // ---- Orca Whirlpool fee claim path ----
+        if (cached.dex === 'orca' && cached.positionMintAddress) {
+          const { executeOrcaFeeClaim } = await import('../services/orca-service.js');
+          const result = await executeOrcaFeeClaim({
+            walletId: cached.walletId,
+            walletAddress: cached.walletAddress,
+            positionMintAddress: cached.positionMintAddress,
+            signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
+          });
+
+          if (result.txHashes.length > 0) {
+            await ctx.reply(
+              `*Orca Fees Claimed!*\n\nPool: *${cached.pool}*\nTx: \`${result.txHashes[result.txHashes.length - 1].slice(0, 16)}...\`\n\nUse /balance to check.`,
+              { parse_mode: 'Markdown' },
+            );
+          } else {
+            await ctx.reply('No fees to claim yet.');
+          }
+          return;
+        }
+
+        // ---- Meteora DLMM fee claim path ----
+        const connection = getConnection();
+        const userPubkey = new PublicKey(cached.walletAddress);
+
+        // Load pool and find position
+        const pool = await DLMM.create(connection, new PublicKey(cached.poolAddress));
+        const userPositions = await pool.getPositionsByUserAndLbPair(userPubkey);
+        const position = userPositions.userPositions.find(
+          (p: any) => p.publicKey.toBase58() === cached.address
+        );
+
+        if (!position) {
+          await ctx.reply('Position not found on-chain. It may have been closed.\n\nUse /positions to refresh.');
+          return;
+        }
+
+        // Check if there are fees to claim
+        const posData = position.positionData;
+        const feeX = posData.feeX?.toString() || '0';
+        const feeY = posData.feeY?.toString() || '0';
+
+        if (feeX === '0' && feeY === '0') {
+          await ctx.reply('No fees to claim yet. Fees accumulate when trades go through your price range.');
+          return;
+        }
+
+        // Build claim transaction
+        const claimTx = await pool.claimSwapFee({
+          owner: userPubkey,
+          position: position,
+        });
+
+        const txArray = Array.isArray(claimTx) ? claimTx : [claimTx];
+        const { blockhash } = await connection.getLatestBlockhash('finalized');
+
+        const txHashes: string[] = [];
+        for (let i = 0; i < txArray.length; i++) {
+          const tx = txArray[i];
+          let serialized: string;
+
+          if ('recentBlockhash' in tx) {
+            tx.recentBlockhash = blockhash;
+            tx.feePayer = userPubkey;
+            serialized = tx.serialize({ requireAllSignatures: false }).toString('base64');
+          } else if ('instructions' in tx) {
+            const msg = new TransactionMessage({
+              payerKey: userPubkey,
+              recentBlockhash: blockhash,
+              instructions: tx.instructions,
+            }).compileToV0Message();
+            const vtx = new VersionedTransaction(msg);
+            serialized = Buffer.from(vtx.serialize()).toString('base64');
+          } else {
+            continue;
+          }
+
+          const txHash = await client.signAndSendTransaction(serialized);
+          txHashes.push(txHash);
+
+          if (i < txArray.length - 1) {
+            await new Promise(r => setTimeout(r, 3000));
+          }
+        }
+
+        if (txHashes.length > 0) {
+          await ctx.reply(
+            `*Fees Claimed!*\n\nPool: *${cached.pool}*\nFees: ${feeX} tokenX + ${feeY} tokenY\nTx: \`${txHashes[txHashes.length - 1].slice(0, 16)}...\`\n\nUse /balance to check.`,
+            { parse_mode: 'Markdown' },
+          );
+        } else {
+          await ctx.reply('No transactions were sent. Fees may have already been claimed.');
+        }
+      } catch (error: any) {
+        console.error('[Bot] Fee claim error:', error);
+        const { friendlyErrorMessage } = await import('../utils/resilience.js');
+        await ctx.reply(
+          `*Fee Claim Failed*\n\n${friendlyErrorMessage(error)}\n\nTry again from /positions.`,
+          { parse_mode: 'Markdown' },
+        );
+      }
+    })();
     return;
   }
 

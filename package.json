@@ -33,6 +33,8 @@
     "@grammyjs/conversations": "^2.1.1",
     "@hono/node-server": "^1.19.9",
     "@meteora-ag/dlmm": "^1.9.3",
+    "@orca-so/common-sdk": "^0.7.0",
+    "@orca-so/whirlpools-sdk": "^0.19.0",
     "@privy-io/node": "^0.8.0",
     "@raydium-io/raydium-sdk-v2": "0.2.32-alpha",
     "@solana/spl-token": "^0.4.14",

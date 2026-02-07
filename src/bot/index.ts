@@ -28,6 +28,7 @@ import { handleCallback } from './callbacks.js';
 import { lpWizard } from './conversations/lp-wizard.js';
 import { withdrawWizard } from './conversations/withdraw-wizard.js';
 import { rebalanceWizard } from './conversations/rebalance-wizard.js';
+import { orcaLpWizard } from './conversations/orca-lp-wizard.js';
 
 let bot: Bot<BotContext> | null = null;
 
@@ -51,6 +52,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.use(createConversation(lpWizard));
   bot.use(createConversation(withdrawWizard));
   bot.use(createConversation(rebalanceWizard));
+  bot.use(createConversation(orcaLpWizard));
 
   // Register command handlers
   bot.command('start', startCommand);

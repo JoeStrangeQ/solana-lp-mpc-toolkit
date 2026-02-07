@@ -50,7 +50,9 @@ export async function poolsCommand(ctx: BotContext) {
     .text('LSTs', 'pools:lst')
     .text('xStocks', 'pools:xstocks')
     .row()
+    .text('Orca Whirlpools', 'pools:orca')
     .text('Paste CA', 'pools:ca')
+    .row()
     .text('All (Top APR)', 'pools:all');
 
   await ctx.reply('*Browse LP Pools*\n\nSelect a category:', {
@@ -167,6 +169,57 @@ export async function lookupPoolByAddress(ctx: BotContext, address: string) {
   } catch (error: any) {
     console.error('[Bot] Pool lookup error:', error);
     await ctx.reply('Failed to look up pool. Please check the address and try again.');
+  }
+}
+
+/**
+ * Display Orca Whirlpool pools (called from callback handler)
+ */
+export async function showOrcaPools(ctx: BotContext) {
+  try {
+    const { fetchOrcaPools } = await import('../../orca/pools.js');
+    const pools = await fetchOrcaPools(8, 'tvl');
+
+    if (pools.length === 0) {
+      await ctx.reply('No Orca pools found. Try again later.');
+      return;
+    }
+
+    const poolLines = pools.map((p, i) => {
+      const fmtTvl = p.tvl >= 1_000_000 ? `$${(p.tvl / 1_000_000).toFixed(1)}M` : p.tvl >= 1_000 ? `$${(p.tvl / 1_000).toFixed(0)}K` : `$${p.tvl.toFixed(0)}`;
+      return `${i + 1}. *${p.name}* (${p.feeRate / 100}% fee)\n   TVL: ${fmtTvl} | Tick: ${p.tickSpacing}`;
+    }).join('\n\n');
+
+    const text = [
+      `*Orca Whirlpool Pools*`,
+      ``,
+      poolLines,
+      ``,
+      `Tap a pool to add liquidity.`,
+    ].join('\n');
+
+    // Cache displayed pools with orca dex tag
+    const chatId = ctx.chat?.id;
+    if (chatId) {
+      setDisplayedPools(chatId, pools.map(p => ({
+        address: p.address,
+        name: p.name,
+        dex: 'orca' as const,
+        tickSpacing: p.tickSpacing,
+      })));
+    }
+
+    // Build selection keyboard
+    const kb = new InlineKeyboard();
+    for (let i = 0; i < pools.length; i++) {
+      kb.text(`${pools[i].name}`, `lp:pool:${i}`).row();
+    }
+    kb.text('Back to Categories', 'cmd:pools');
+
+    await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: kb });
+  } catch (error: any) {
+    console.error('[Bot] /pools orca error:', error);
+    await ctx.reply('Failed to fetch Orca pools. Please try again.');
   }
 }
 

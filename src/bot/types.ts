@@ -66,6 +66,30 @@ export function consumeWaitingForCA(chatId: number): boolean {
 }
 
 /**
+ * DEX-aware pool selection for LP wizard routing.
+ * When a user selects an Orca pool from /pools, we store the dex tag
+ * so the callback handler routes to the correct wizard.
+ */
+export interface PendingLpPool {
+  address: string;
+  dex: 'meteora' | 'orca';
+  name?: string;
+  tickSpacing?: number; // Orca only
+}
+
+const _pendingLpPools = new Map<number, PendingLpPool>();
+
+export function setPendingLpPool(chatId: number, pool: PendingLpPool): void {
+  _pendingLpPools.set(chatId, pool);
+}
+
+export function consumePendingLpPool(chatId: number): PendingLpPool | undefined {
+  const pool = _pendingLpPools.get(chatId);
+  _pendingLpPools.delete(chatId);
+  return pool;
+}
+
+/**
  * Module-level cache for position data from /positions command.
  * Used by callback handlers to look up position details by index.
  */
@@ -75,6 +99,8 @@ export interface CachedPosition {
   poolAddress: string;
   walletId: string;
   walletAddress: string;
+  dex?: 'meteora' | 'orca';
+  positionMintAddress?: string; // Orca positions need this for withdraw
 }
 
 const _cachedPositions = new Map<number, CachedPosition[]>(); // chatId -> positions
@@ -95,6 +121,8 @@ export function getCachedPosition(chatId: number, index: number): CachedPosition
 export interface DisplayedPool {
   address: string;
   name: string;
+  dex?: 'meteora' | 'orca';
+  tickSpacing?: number;
 }
 
 const _displayedPools = new Map<number, DisplayedPool[]>(); // chatId -> pools shown
