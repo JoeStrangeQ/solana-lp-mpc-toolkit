@@ -11,7 +11,7 @@
 import { InlineKeyboard } from 'grammy';
 import type { BotContext } from '../types.js';
 import { poolSelectionKeyboard } from '../keyboards.js';
-import { setPendingPoolAddress } from '../types.js';
+import { setPendingPoolAddress, setDisplayedPools } from '../types.js';
 
 export interface PoolInfo {
   name: string;
@@ -102,6 +102,12 @@ export async function showPoolCategory(ctx: BotContext, category: PoolCategory |
       name: p.name,
       apy: p.apr,
     }));
+
+    // Cache displayed pools so callback handler can resolve index → address
+    const chatId = ctx.chat?.id;
+    if (chatId) {
+      setDisplayedPools(chatId, pools.map(p => ({ address: p.address, name: p.name })));
+    }
 
     await ctx.reply(text, {
       parse_mode: 'Markdown',

@@ -6,7 +6,7 @@
  */
 import { InlineKeyboard } from 'grammy';
 import type { BotContext } from './types.js';
-import { setPendingPool, getCachedPosition, setWaitingForCA, setPendingPoolAddress } from './types.js';
+import { setPendingPool, getCachedPosition, setWaitingForCA, setPendingPoolAddress, getDisplayedPool } from './types.js';
 import {
   getRecipient,
   upsertRecipient,
@@ -63,13 +63,6 @@ export async function handleCallback(ctx: BotContext) {
     // Load and display pools by category
     const { showPoolCategory } = await import('./commands/pools.js');
     await showPoolCategory(ctx, category as any);
-    return;
-  }
-
-  // ---- LP via pasted CA ----
-  if (data === 'lp:pool:ca') {
-    await ctx.answerCallbackQuery().catch(() => {});
-    await ctx.conversation.enter('lpWizard');
     return;
   }
 
@@ -136,9 +129,25 @@ export async function handleCallback(ctx: BotContext) {
   // ---- Pool selection from /pools → enter LP wizard with pool pre-selected ----
   if (data.startsWith('lp:pool:')) {
     await ctx.answerCallbackQuery().catch(() => {});
-    const poolIdx = parseInt(data.split(':')[2]);
+    const poolIdPart = data.split(':')[2];
+
+    if (poolIdPart === 'ca') {
+      // CA flow: address was already stored via setPendingPoolAddress
+      await ctx.conversation.enter('lpWizard');
+      return;
+    }
+
+    const poolIdx = parseInt(poolIdPart);
     if (!isNaN(poolIdx) && chatId) {
-      setPendingPool(chatId, poolIdx);
+      // Look up actual pool address from the displayed pools cache
+      const displayed = getDisplayedPool(chatId, poolIdx);
+      if (displayed) {
+        // Store the address so the LP wizard gets the correct pool
+        setPendingPoolAddress(chatId, displayed.address);
+      } else {
+        // Fallback: store index for backward compat with LP wizard's own fetch
+        setPendingPool(chatId, poolIdx);
+      }
       await ctx.conversation.enter('lpWizard');
     }
     return;

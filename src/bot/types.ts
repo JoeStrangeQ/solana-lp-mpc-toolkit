@@ -87,5 +87,25 @@ export function getCachedPosition(chatId: number, index: number): CachedPosition
   return _cachedPositions.get(chatId)?.[index];
 }
 
+/**
+ * Module-level cache for the pool list displayed by /pools command.
+ * When the user taps a pool button (lp:pool:N), we look up the actual
+ * pool address from this cache so the LP wizard gets the right pool.
+ */
+export interface DisplayedPool {
+  address: string;
+  name: string;
+}
+
+const _displayedPools = new Map<number, DisplayedPool[]>(); // chatId -> pools shown
+
+export function setDisplayedPools(chatId: number, pools: DisplayedPool[]): void {
+  _displayedPools.set(chatId, pools);
+}
+
+export function getDisplayedPool(chatId: number, index: number): DisplayedPool | undefined {
+  return _displayedPools.get(chatId)?.[index];
+}
+
 type BaseContext = Context & SessionFlavor<SessionData>;
 export type BotContext = BaseContext & ConversationFlavor<BaseContext>;
