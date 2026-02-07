@@ -33,6 +33,39 @@ export function consumePendingPool(chatId: number): number | undefined {
 }
 
 /**
+ * Module-level state for pool address lookup (Paste CA flow).
+ * When a user pastes a pool address, we store it here so the LP wizard can pick it up.
+ */
+const _pendingPoolAddresses = new Map<number, string>(); // chatId -> poolAddress
+
+export function setPendingPoolAddress(chatId: number, address: string): void {
+  _pendingPoolAddresses.set(chatId, address);
+}
+
+export function consumePendingPoolAddress(chatId: number): string | undefined {
+  const addr = _pendingPoolAddresses.get(chatId);
+  _pendingPoolAddresses.delete(chatId);
+  return addr;
+}
+
+/**
+ * Module-level flag for "waiting for CA input" state.
+ * When user taps "Paste CA", we set this so the text handler knows to treat
+ * the next message as a pool address.
+ */
+const _waitingForCA = new Set<number>(); // chatId
+
+export function setWaitingForCA(chatId: number): void {
+  _waitingForCA.add(chatId);
+}
+
+export function consumeWaitingForCA(chatId: number): boolean {
+  const was = _waitingForCA.has(chatId);
+  _waitingForCA.delete(chatId);
+  return was;
+}
+
+/**
  * Module-level cache for position data from /positions command.
  * Used by callback handlers to look up position details by index.
  */

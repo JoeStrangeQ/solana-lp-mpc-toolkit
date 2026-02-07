@@ -6,7 +6,7 @@
  */
 import { InlineKeyboard } from 'grammy';
 import type { BotContext } from './types.js';
-import { setPendingPool, getCachedPosition } from './types.js';
+import { setPendingPool, getCachedPosition, setWaitingForCA, setPendingPoolAddress } from './types.js';
 import {
   getRecipient,
   upsertRecipient,
@@ -46,6 +46,31 @@ export async function handleCallback(ctx: BotContext) {
         await ctx.reply(`Unknown command: ${cmd}`);
         return;
     }
+  }
+
+  // ---- Pool category selection ----
+  if (data.startsWith('pools:')) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    const category = data.split(':')[1];
+
+    if (category === 'ca') {
+      // Paste CA flow: ask user to send the pool address as text
+      if (chatId) setWaitingForCA(chatId);
+      await ctx.reply('Paste the pool contract address (CA):');
+      return;
+    }
+
+    // Load and display pools by category
+    const { showPoolCategory } = await import('./commands/pools.js');
+    await showPoolCategory(ctx, category as any);
+    return;
+  }
+
+  // ---- LP via pasted CA ----
+  if (data === 'lp:pool:ca') {
+    await ctx.answerCallbackQuery().catch(() => {});
+    await ctx.conversation.enter('lpWizard');
+    return;
   }
 
   // ---- Settings toggles ----

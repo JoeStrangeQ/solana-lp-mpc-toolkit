@@ -20,7 +20,7 @@ import { executeLp, type LpExecuteParams } from '../../services/lp-service.js';
 import { loadWalletById, getWalletBalance } from '../../services/wallet-service.js';
 import { validateSolAmount, validateSolanaAddress, friendlyErrorMessage } from '../../utils/resilience.js';
 import { operationLock } from '../../utils/operation-lock.js';
-import { consumePendingPool } from '../types.js';
+import { consumePendingPool, consumePendingPoolAddress } from '../types.js';
 
 interface PoolData {
   name: string;
@@ -73,18 +73,43 @@ export async function lpWizard(
     return consumePendingPool(chatId);
   });
 
+  // Check for pending pool address (from Paste CA flow)
+  const pendingPoolAddress = await conversation.external(() => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return undefined;
+    return consumePendingPoolAddress(chatId);
+  });
+
   const pools = await conversation.external(async () => {
     return fetchTopPools();
   });
 
-  if (pools.length === 0) {
+  if (pools.length === 0 && !pendingPoolAddress) {
     await ctx.reply('Could not fetch pools. Please try again later.');
     return;
   }
 
   let selectedPool: { name: string; address: string; binStep: number };
 
-  if (pendingPoolIndex !== undefined && pools[pendingPoolIndex]) {
+  if (pendingPoolAddress) {
+    // Pool address was pasted via CA flow — fetch its info
+    const poolInfo = await conversation.external(async () => {
+      const resp = await fetch(`https://dlmm-api.meteora.ag/pair/${pendingPoolAddress}`);
+      if (!resp.ok) return null;
+      return resp.json() as Promise<any>;
+    });
+
+    if (!poolInfo) {
+      await ctx.reply('Pool not found for that address. Use /pools to browse.');
+      return;
+    }
+    selectedPool = {
+      name: poolInfo.name || pendingPoolAddress.slice(0, 8),
+      address: pendingPoolAddress,
+      binStep: parseInt(poolInfo.bin_step || '10'),
+    };
+    await ctx.reply(`*Add Liquidity*\n\nPool: *${selectedPool.name}*`, { parse_mode: 'Markdown' });
+  } else if (pendingPoolIndex !== undefined && pools[pendingPoolIndex]) {
     // Pool was pre-selected from /pools command — skip selection
     const p = pools[pendingPoolIndex];
     selectedPool = { name: p.name, address: p.address, binStep: p.binStep };
@@ -106,7 +131,7 @@ export async function lpWizard(
     });
 
     // Wait for pool selection
-    const poolCtx = await conversation.waitForCallbackQuery(/^(lp:pool:\d+|lp:pool:custom|cancel)$/, {
+    const poolCtx = await conversation.waitForCallbackQuery(/^(lp:pool:\d+|lp:pool:custom|lp:pool:ca|cancel)$/, {
       otherwise: async (ctx) => {
         await ctx.reply('Please tap a pool button above, or tap Cancel.');
       },

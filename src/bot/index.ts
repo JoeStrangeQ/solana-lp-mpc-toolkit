@@ -74,6 +74,24 @@ export function createBot(token?: string): Bot<BotContext> | null {
   // conversation callbacks are intercepted by the conversations plugin)
   bot.on('callback_query:data', handleCallback);
 
+  // Text handler for pasted pool addresses (CA lookup)
+  bot.on('message:text', async (ctx) => {
+    const { consumeWaitingForCA } = await import('./types.js');
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    if (consumeWaitingForCA(chatId)) {
+      const text = ctx.message.text.trim();
+      // Basic Solana address validation (32-44 base58 chars)
+      if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(text)) {
+        const { lookupPoolByAddress } = await import('./commands/pools.js');
+        await lookupPoolByAddress(ctx, text);
+      } else {
+        await ctx.reply('Invalid address format. Please paste a valid Solana pool address, or use /pools to browse.');
+      }
+    }
+  });
+
   // Error handler - never show raw errors to users
   bot.catch((err) => {
     const ctx = err.ctx;
@@ -92,8 +110,18 @@ export function createBot(token?: string): Bot<BotContext> | null {
     }
   });
 
-  console.log('grammY bot initialized');
+  console.log('grammY bot created');
   return bot;
+}
+
+/**
+ * Initialize the bot (fetch bot info from Telegram API).
+ * Must be called before handleUpdate() can process webhook updates.
+ */
+export async function initBot(): Promise<void> {
+  if (!bot) return;
+  await bot.init();
+  console.log(`grammY bot initialized: @${bot.botInfo.username}`);
 }
 
 export function getBot(): Bot<BotContext> | null {
