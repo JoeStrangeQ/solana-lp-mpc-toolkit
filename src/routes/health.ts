@@ -9,7 +9,7 @@ import {
   getStorageInfo,
 } from '../monitoring/index.js';
 import { stats } from '../services/stats.js';
-import { getBot } from '../bot/index.js';
+import { getBot, checkBotHealth } from '../bot/index.js';
 import { getCircuitBreakerStatus } from '../services/ultra-swap.js';
 
 const app = new Hono();
@@ -80,20 +80,9 @@ app.get('/health', async (c) => {
   const storageInfo = getStorageInfo();
   const circuitBreaker = getCircuitBreakerStatus();
   
-  // Check Telegram bot connectivity
-  let telegramStatus: { connected: boolean; username?: string; error?: string } = { connected: false };
-  try {
-    const bot = getBot();
-    if (bot) {
-      const me = await bot.api.getMe();
-      telegramStatus = { connected: true, username: me.username };
-    } else {
-      telegramStatus = { connected: false, error: 'Bot not initialized' };
-    }
-  } catch (err) {
-    telegramStatus = { connected: false, error: err instanceof Error ? err.message : 'Unknown error' };
-  }
-
+  // Check Telegram bot connectivity using new health check
+  const telegramHealth = await checkBotHealth();
+  
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -108,11 +97,28 @@ app.get('/health', async (c) => {
       type: storageInfo.type,
       redisAvailable: storageInfo.available,
     },
-    telegram: telegramStatus,
+    telegram: {
+      connected: telegramHealth.healthy,
+      initialized: telegramHealth.initialized,
+      username: telegramHealth.username,
+      latencyMs: telegramHealth.latencyMs,
+      error: telegramHealth.error,
+      webhookConfigured: !!telegramHealth.webhook?.url,
+      webhookPendingUpdates: telegramHealth.webhook?.pending_update_count,
+    },
     circuitBreakers: {
       jupiterUltra: circuitBreaker,
     },
   });
+});
+
+/**
+ * Detailed Telegram bot health check
+ * Returns comprehensive webhook status and error history
+ */
+app.get('/health/telegram', async (c) => {
+  const health = await checkBotHealth();
+  return c.json(health, health.healthy ? 200 : 503);
 });
 
 app.get('/stats', (c) => {
