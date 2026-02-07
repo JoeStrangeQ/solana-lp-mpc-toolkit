@@ -984,7 +984,8 @@ app.get('/risk/volatility/:symbol', async (c) => {
 // Test Jupiter API connectivity
 app.get('/debug/jupiter-test', async (c) => {
   const jupiterApiKey = process.env.JUPITER_API_KEY;
-  const testUrl = 'https://quote-api.jup.ag/v6/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=So11111111111111111111111111111111111111112&amount=1000000&slippageBps=100';
+  // Try alternative Jupiter API endpoint (public proxy)
+  const testUrl = 'https://api.jup.ag/quote/v6?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=So11111111111111111111111111111111111111112&amount=1000000&slippageBps=100';
   
   const headers: Record<string, string> = { 'Accept': 'application/json' };
   if (jupiterApiKey) {
@@ -1181,10 +1182,10 @@ app.post('/wallet/:walletId/swap-all-to-sol', async (c) => {
         continue;
       }
       
-      // Get swap quote from Jupiter (requires API key)
+      // Get swap quote from Jupiter (use api.jup.ag instead of quote-api.jup.ag for DNS reliability)
       try {
         const jupiterApiKey = process.env.JUPITER_API_KEY;
-        const quoteUrl = `https://quote-api.jup.ag/v6/quote?inputMint=${mint}&outputMint=${SOL_MINT}&amount=${info.tokenAmount.amount}&slippageBps=300`;
+        const quoteUrl = `https://api.jup.ag/quote/v6?inputMint=${mint}&outputMint=${SOL_MINT}&amount=${info.tokenAmount.amount}&slippageBps=300`;
         console.log(`[Swap] Getting quote for ${symbol}... (API key: ${jupiterApiKey ? 'present' : 'MISSING'})`);
         
         const headers: Record<string, string> = { 'Accept': 'application/json' };
