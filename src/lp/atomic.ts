@@ -126,7 +126,8 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
     const quoteX = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenXMint, amount: halfCollateral, slippageBps });
     const swapTxX_b64 = await getSwapTransaction({ quoteResponse: quoteX, userPublicKey: walletAddress });
     unsignedTransactions.push(VersionedTransaction.deserialize(Buffer.from(swapTxX_b64, 'base64')));
-    amountXToLP = new BN(quoteX.outAmount);
+    // Use minimum guaranteed output (after slippage) for LP amounts to avoid insufficient funds
+    amountXToLP = new BN(quoteX.otherAmountThreshold || quoteX.outAmount);
   } else {
     amountXToLP = new BN(halfCollateral);
   }
@@ -136,7 +137,8 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
     const quoteY = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenYMint, amount: halfCollateral, slippageBps });
     const swapTxY_b64 = await getSwapTransaction({ quoteResponse: quoteY, userPublicKey: walletAddress });
     unsignedTransactions.push(VersionedTransaction.deserialize(Buffer.from(swapTxY_b64, 'base64')));
-    amountYToLP = new BN(quoteY.outAmount);
+    // Use minimum guaranteed output (after slippage) for LP amounts to avoid insufficient funds
+    amountYToLP = new BN(quoteY.otherAmountThreshold || quoteY.outAmount);
   } else {
     amountYToLP = new BN(halfCollateral);
   }
