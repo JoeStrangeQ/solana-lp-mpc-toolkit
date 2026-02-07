@@ -40,7 +40,7 @@ import {
 import skillRoutes from './routes/skill.js';
 
 // Import bot
-import { createBot, getBotWebhookHandler } from './bot/index.js';
+import { createBot, initBot, getBot, getBotWebhookHandler } from './bot/index.js';
 
 // Import worker
 import { startWorker, isWorkerRunning } from './monitoring/index.js';
@@ -170,37 +170,19 @@ app.get('/debug/jupiter-test', async (c) => {
 // This replaces the legacy /telegram/webhook route with native grammY handling.
 // The bot must be created first (in start()), so the handler is mounted lazily.
 app.post('/bot/webhook', async (c) => {
-  const handler = getBotWebhookHandler();
-  if (!handler) {
-    console.error('[Bot Webhook] Bot not initialized');
+  const bot = getBot();
+  if (!bot) {
     return c.json({ error: 'Bot not initialized' }, 503);
   }
   try {
     const body = await c.req.json();
     const msgText = body?.message?.text || body?.callback_query?.data || 'unknown';
     const chatId = body?.message?.chat?.id || body?.callback_query?.message?.chat?.id || 'unknown';
-    console.log(`[Bot Webhook] Received update: chat=${chatId} text="${msgText}"`);
-
-    // Re-create the request since we consumed the body
-    const newReq = new Request(c.req.url, {
-      method: 'POST',
-      headers: c.req.raw.headers,
-      body: JSON.stringify(body),
-    });
-    const newCtx = c.env ? c : c;
-    // Use the raw handler approach with the parsed body
-    const { getBot } = await import('./bot/index.js');
-    const bot = getBot();
-    if (!bot) {
-      console.error('[Bot Webhook] Bot instance is null');
-      return c.json({ ok: true });
-    }
+    console.log(`[Bot Webhook] update: chat=${chatId} "${msgText}"`);
     await bot.handleUpdate(body);
-    console.log(`[Bot Webhook] Update processed successfully`);
     return c.json({ ok: true });
   } catch (err: any) {
-    console.error('[Bot Webhook] Handler error:', err?.message || err);
-    console.error('[Bot Webhook] Stack:', err?.stack);
+    console.error('[Bot Webhook] Error:', err?.message || err);
     return c.json({ ok: true });
   }
 });
@@ -212,8 +194,9 @@ async function start() {
   await initializeMonitoring();
   startMonitoringInterval();
 
-  // Initialize grammY bot (creates instance but doesn't start polling)
+  // Initialize grammY bot (creates instance, fetches botInfo from Telegram API)
   createBot();
+  await initBot();
 
   // Keep-alive self-ping for Railway
   const KEEPALIVE_INTERVAL_MS = 4 * 60 * 1000;
