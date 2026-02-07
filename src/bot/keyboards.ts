@@ -42,7 +42,8 @@ export function amountKeyboard(): InlineKeyboard {
     .text('1 SOL', 'lp:amt:1')
     .text('5 SOL', 'lp:amt:5')
     .row()
-    .text('Custom Amount', 'lp:amt:custom')
+    .text('Max', 'lp:amt:max')
+    .text('Custom', 'lp:amt:custom')
     .row()
     .text('Cancel', 'cancel');
 }

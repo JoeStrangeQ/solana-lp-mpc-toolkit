@@ -64,8 +64,27 @@ export async function orcaLpWizard(
   const amtData = amtCtx.callbackQuery.data;
   if (amtData === 'cancel') { await amtCtx.reply('LP cancelled.'); return; }
 
+  // Fee reserve: covers tx fees (~0.005/tx × 3), rent for ATAs + position (~0.01)
+  const FEE_RESERVE = 0.05;
+
+  // Fetch balance early (needed for max and validation)
+  const balanceCheck = await conversation.external(async () => {
+    try { return (await getWalletBalance(user.walletAddress)).sol; } catch { return null; }
+  });
+
   let amount: number;
-  if (amtData === 'lp:amt:custom') {
+  if (amtData === 'lp:amt:max') {
+    if (balanceCheck === null || balanceCheck <= FEE_RESERVE) {
+      await ctx.reply(`Could not determine balance or balance too low. LP cancelled.`);
+      return;
+    }
+    amount = Math.floor((balanceCheck - FEE_RESERVE) * 100) / 100;
+    if (amount <= 0) {
+      await ctx.reply(`Balance too low for LP (need >${FEE_RESERVE} SOL for fees). LP cancelled.`);
+      return;
+    }
+    await ctx.reply(`Using max: *${amount} SOL* (keeping ${FEE_RESERVE} SOL for fees)`, { parse_mode: 'Markdown' });
+  } else if (amtData === 'lp:amt:custom') {
     await ctx.reply('Enter the amount in SOL (e.g., 2.5):');
     const customCtx = await conversation.waitFor('message:text', {
       otherwise: async (ctx) => { await ctx.reply('Please send a number.'); },
@@ -82,11 +101,11 @@ export async function orcaLpWizard(
   }
 
   // Balance check
-  const balanceCheck = await conversation.external(async () => {
-    try { return (await getWalletBalance(user.walletAddress)).sol; } catch { return null; }
-  });
-  if (balanceCheck !== null && amount > balanceCheck - 0.01) {
-    await ctx.reply(`Insufficient SOL. You have ${balanceCheck.toFixed(4)} SOL. LP cancelled.`);
+  if (balanceCheck !== null && amount > balanceCheck - FEE_RESERVE) {
+    await ctx.reply(
+      `Not enough SOL. You have *${balanceCheck.toFixed(4)} SOL* but need *${amount} SOL* + ~${FEE_RESERVE} SOL for tx fees & rent.\n\nTry a smaller amount or tap *Max*.`,
+      { parse_mode: 'Markdown' },
+    );
     return;
   }
 
