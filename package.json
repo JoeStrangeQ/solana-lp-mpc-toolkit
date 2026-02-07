@@ -30,6 +30,7 @@
     "ai-agent"
   ],
   "dependencies": {
+    "@grammyjs/conversations": "^2.1.1",
     "@hono/node-server": "^1.19.9",
     "@meteora-ag/dlmm": "^1.9.3",
     "@privy-io/node": "^0.8.0",
@@ -39,6 +40,7 @@
     "@upstash/redis": "^1.36.2",
     "bn.js": "^5.2.2",
     "bs58": "^6.0.0",
+    "grammy": "^1.39.3",
     "hono": "^4.11.7"
   },
   "devDependencies": {

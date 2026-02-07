@@ -163,6 +163,12 @@ Configure via `/settings` or webhook for your agent.
 
 ---
 
+## 🛠 Built With
+
+Hono, [grammY](https://grammy.dev), Meteora DLMM, Jupiter, Jito, Privy MPC, Arcium, Upstash Redis — all TypeScript.
+
+---
+
 ## 🔐 Security Architecture
 
 ```
