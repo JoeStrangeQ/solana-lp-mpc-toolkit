@@ -240,17 +240,24 @@ export async function getCachedBinData(
   const pool = await getCachedDLMM(connection, poolAddress);
   
   const activeBin = await pool.getActiveBin();
-  const binsAroundActive = await pool.getBinsBetweenLowerAndUpperBound(
+  
+  // getBinsBetweenLowerAndUpperBound may return object with bins array or direct array
+  const binsResult = await pool.getBinsBetweenLowerAndUpperBound(
     activeBin.binId - 10,
     activeBin.binId + 10
   );
   
+  // Handle both response formats: direct array or { bins: [...] }
+  const binsArray = Array.isArray(binsResult) 
+    ? binsResult 
+    : (binsResult?.bins || binsResult?.activeBin ? [binsResult.activeBin] : []);
+  
   const binData: CachedBinData = {
     activeBinId: activeBin.binId,
     activePrice: parseFloat(activeBin.price),
-    bins: binsAroundActive.map((bin: any) => ({
+    bins: binsArray.map((bin: any) => ({
       binId: bin.binId,
-      price: parseFloat(bin.price),
+      price: parseFloat(bin.price || '0'),
       liquidityX: parseInt(bin.xAmount?.toString() || '0'),
       liquidityY: parseInt(bin.yAmount?.toString() || '0'),
     })),

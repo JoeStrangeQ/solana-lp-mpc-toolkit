@@ -12,7 +12,6 @@
  */
 
 import { STABLECOINS } from '../risk/index.js';
-import type { RaydiumPoolInfo } from '../raydium/types.js';
 
 // ============ Types ============
 
