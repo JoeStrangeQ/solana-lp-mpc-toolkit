@@ -128,13 +128,44 @@ export async function discoverAllPositions(
     // Resolve all tokens in batch
     const tokenMetadata = await resolveTokens(Array.from(mintsToResolve));
     
-    // Process each pool's positions
+    // Pre-load all pool instances in parallel (uses cache)
+    const poolAddresses = Array.from(positionsMap.keys());
+    console.log(`[PositionDiscovery] Loading ${poolAddresses.length} pools in parallel...`);
+    
+    const poolPromises = poolAddresses.map(addr => getCachedDLMM(connection, addr).catch(e => {
+      console.warn(`[PositionDiscovery] Failed to load pool ${addr.slice(0, 8)}...: ${(e as Error).message}`);
+      return null;
+    }));
+    const poolInstances = await Promise.all(poolPromises);
+    const poolMap = new Map<string, any>();
+    poolAddresses.forEach((addr, i) => {
+      if (poolInstances[i]) poolMap.set(addr, poolInstances[i]);
+    });
+    
+    // Get active bins for all pools in parallel
+    const activeBinPromises = Array.from(poolMap.entries()).map(async ([addr, pool]) => {
+      try {
+        const activeBin = await pool.getActiveBin();
+        return { addr, binStep: Number(pool.lbPair.binStep), activeBin };
+      } catch (e) {
+        console.warn(`[PositionDiscovery] Failed to get active bin for ${addr.slice(0, 8)}...`);
+        return null;
+      }
+    });
+    const activeBins = await Promise.all(activeBinPromises);
+    const binDataMap = new Map<string, { binStep: number; activeBin: any }>();
+    activeBins.filter(Boolean).forEach(data => {
+      if (data) binDataMap.set(data.addr, { binStep: data.binStep, activeBin: data.activeBin });
+    });
+    
+    // Process each pool's positions (now using pre-loaded data)
     for (const [poolAddress, positionInfo] of positionsMap) {
       try {
-        // Get pool details
-        const pool = await DLMM.create(connection, new PublicKey(poolAddress));
-        const binStep = Number(pool.lbPair.binStep);
-        const activeBin = await pool.getActiveBin();
+        // Get pre-loaded pool details
+        const binData = binDataMap.get(poolAddress);
+        if (!binData) continue;
+        
+        const { binStep, activeBin } = binData;
         // Use pricePerToken for human-readable price (accounts for token decimals)
         const currentPrice = Number(activeBin.pricePerToken);
         
