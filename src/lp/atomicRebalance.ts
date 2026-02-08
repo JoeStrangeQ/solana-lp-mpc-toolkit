@@ -15,7 +15,7 @@ import { config } from '../config/index.js';
 import { arciumPrivacy } from '../privacy/index.js';
 import { buildAtomicWithdraw } from './atomicWithdraw.js';
 import { buildAtomicLP } from './atomic.js';
-import { sendBundle, waitForBundle, TipSpeed } from '../jito/index.js';
+import { sendBundle, sendBundleWithSimulation, waitForBundle, TipSpeed } from '../jito/index.js';
 import { FEE_CONFIG } from '../fees/index.js';
 import { getCachedDLMM, invalidatePoolCache } from '../services/pool-cache.js';
 import { getConnection } from '../services/connection-pool.js';
@@ -146,9 +146,10 @@ export async function executeRebalance(params: RebalanceParams): Promise<Rebalan
       }
     }
 
-    // Submit withdrawal bundle
-    console.log(`[Rebalance] Phase 1: Submitting ${signedWithdrawTxs.length} txs...`);
-    const { bundleId } = await sendBundle(signedWithdrawTxs);
+    // Simulate and submit withdrawal bundle
+    console.log(`[Rebalance] Phase 1: Simulating ${signedWithdrawTxs.length} txs...`);
+    const { bundleId } = await sendBundleWithSimulation(signedWithdrawTxs);
+    console.log(`[Rebalance] Phase 1: Simulation passed, bundle ${bundleId.slice(0, 8)}... submitted`);
     
     // Wait for withdrawal
     const withdrawStatus = await waitForBundle(bundleId, { timeoutMs: 60000 });
@@ -248,9 +249,10 @@ export async function executeRebalance(params: RebalanceParams): Promise<Rebalan
       }
     }
 
-    // Submit LP bundle
-    console.log(`[Rebalance] Phase 2: Submitting ${signedLpTxs.length} txs...`);
-    const lpBundle = await sendBundle(signedLpTxs);
+    // Simulate and submit LP bundle
+    console.log(`[Rebalance] Phase 2: Simulating ${signedLpTxs.length} txs...`);
+    const lpBundle = await sendBundleWithSimulation(signedLpTxs);
+    console.log(`[Rebalance] Phase 2: Simulation passed, bundle ${lpBundle.bundleId.slice(0, 8)}... submitted`);
     
     // Wait for LP
     const lpStatus = await waitForBundle(lpBundle.bundleId, { timeoutMs: 60000 });
