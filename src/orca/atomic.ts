@@ -211,47 +211,24 @@ export async function buildOrcaAtomicLP(params: OrcaAtomicLPParams): Promise<Bui
   const openPayload = await openPosTxBuilder.build();
   const openTx = openPayload.transaction;
 
-  // Optimize compute budget via simulation + dynamic priority fees
+  // For Orca: use the SDK transaction directly without compute budget modification
+  // The decompile/recompile approach was causing signature issues with Privy
   if (openTx instanceof VersionedTransaction) {
-    // Simulate and estimate optimal CU + priority fee
-    const budget = await optimizeComputeBudget(connection, openTx, 'high');
-    const budgetIxs = buildComputeBudgetInstructions(budget);
-    // Decompose the message to rebuild with optimized compute budget
-    const decompiledMsg = TransactionMessage.decompile(openTx.message);
-    const filteredIxs = decompiledMsg.instructions.filter(
-      (ix) => !ix.programId.equals(ComputeBudgetProgram.programId),
-    );
-    const newMsg = new TransactionMessage({
-      payerKey: decompiledMsg.payerKey,
-      recentBlockhash: decompiledMsg.recentBlockhash,
-      instructions: [...budgetIxs, ...filteredIxs],
-    }).compileToV0Message();
-    const newTx = new VersionedTransaction(newMsg);
+    // Pre-sign with the position keypair (if any)
     if (openPayload.signers.length > 0) {
-      newTx.sign(openPayload.signers);
+      openTx.sign(openPayload.signers);
+      console.log(`[Orca Atomic] Pre-signed with ${openPayload.signers.length} keypairs`);
     }
     unsignedTransactions.push(
-      Buffer.from(newTx.serialize()).toString('base64'),
+      Buffer.from(openTx.serialize()).toString('base64'),
     );
   } else {
-    // Legacy Transaction: convert to versioned for simulation, then apply budget
-    const tempVersioned = new VersionedTransaction(
-      new TransactionMessage({
-        payerKey: new PublicKey(walletAddress),
-        recentBlockhash: blockhash,
-        instructions: openTx.instructions,
-      }).compileToV0Message(),
-    );
-    const budget = await optimizeComputeBudget(connection, tempVersioned, 'high');
-    const budgetIxs = buildComputeBudgetInstructions(budget);
-    const filtered = openTx.instructions.filter(
-      (ix) => !ix.programId.equals(ComputeBudgetProgram.programId),
-    );
-    openTx.instructions = [...budgetIxs, ...filtered];
+    // Legacy Transaction: set blockhash and feePayer, then partial sign
     openTx.recentBlockhash = blockhash;
     openTx.feePayer = new PublicKey(walletAddress);
     if (openPayload.signers.length > 0) {
       openTx.partialSign(...openPayload.signers);
+      console.log(`[Orca Atomic] Pre-signed with ${openPayload.signers.length} keypairs`);
     }
     const serialized = openTx.serialize({ requireAllSignatures: false });
     unsignedTransactions.push(serialized.toString('base64'));
