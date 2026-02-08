@@ -18,6 +18,7 @@ import { config } from '../config/index.js';
 import { arciumPrivacy } from '../privacy/index.js';
 import { buildTipTransaction, TipSpeed } from '../jito/index.js';
 import { optimizeComputeBudget, buildComputeBudgetInstructions } from '../utils/priority-fees.js';
+import { getCachedDLMM } from '../services/pool-cache.js';
 
 const JUPITER_API = 'https://api.jup.ag/swap/v1';
 
@@ -109,8 +110,8 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
   // 1. Encrypt strategy (Arcium compatible)
   const encrypted = await arciumPrivacy.encryptStrategy({ intent: 'atomic_lp', pool: poolAddress, amount: collateralAmount });
 
-  // 2. Get pool info
-  const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+  // 2. Get pool info (cached DLMM instance)
+  const pool = await getCachedDLMM(connection, poolAddress);
   const [tokenXMint, tokenYMint] = [pool.tokenX.publicKey.toBase58(), pool.tokenY.publicKey.toBase58()];
   const [decimalsX, decimalsY] = [pool.tokenX.mint.decimals, pool.tokenY.mint.decimals];
   const halfCollateral = Math.floor(collateralAmount / 2);

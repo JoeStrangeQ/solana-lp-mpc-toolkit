@@ -17,6 +17,7 @@ import { buildAtomicWithdraw } from './atomicWithdraw.js';
 import { buildAtomicLP } from './atomic.js';
 import { sendBundle, waitForBundle, TipSpeed } from '../jito/index.js';
 import { FEE_CONFIG } from '../fees/index.js';
+import { getCachedDLMM, invalidatePoolCache } from '../services/pool-cache.js';
 
 export interface RebalanceParams {
   walletAddress: string;
@@ -85,8 +86,8 @@ export async function executeRebalance(params: RebalanceParams): Promise<Rebalan
 
   console.log(`[Rebalance] Starting resilient rebalance for ${positionAddress}...`);
 
-  // Load pool and position info
-  const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+  // Load pool and position info (cached DLMM instance)
+  const pool = await getCachedDLMM(connection, poolAddress);
   const activeBin = await pool.getActiveBin();
   
   const { userPositions } = await pool.getPositionsByUserAndLbPair(walletPubkey);
