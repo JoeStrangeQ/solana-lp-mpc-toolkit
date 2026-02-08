@@ -117,7 +117,13 @@ export class PrivyWalletClient {
       });
 
       // Response is { data: { signed_transaction: string } }
-      return (result as any).data?.signed_transaction || (result as any).signed_transaction;
+      console.log('[Privy] signTransaction response keys:', Object.keys(result || {}));
+      console.log('[Privy] signTransaction result.data keys:', Object.keys((result as any)?.data || {}));
+      const signedTx = (result as any).data?.signed_transaction || (result as any).signed_transaction || (result as any).data?.signedTransaction;
+      if (!signedTx) {
+        console.error('[Privy] signTransaction full response:', JSON.stringify(result).slice(0, 500));
+      }
+      return signedTx;
     } catch (error) {
       console.error('[Privy] Failed to sign transaction:', error);
       throw error;
