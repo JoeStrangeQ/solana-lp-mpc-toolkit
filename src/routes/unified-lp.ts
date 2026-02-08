@@ -179,7 +179,7 @@ app.post('/lp/add', async (c) => {
     }
 
     // 4. Route to correct DEX executor
-    const tipSpeed: TipSpeed = 'fast';
+    const tipSpeed: TipSpeed = 'extraFast'; // Higher tip for better landing
     const slippageBps = strategy === 'concentrated' ? 300 : 500;
 
     // Create signing function using Privy client
