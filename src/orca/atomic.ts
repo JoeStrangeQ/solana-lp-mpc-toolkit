@@ -211,14 +211,29 @@ export async function buildOrcaAtomicLP(params: OrcaAtomicLPParams): Promise<Bui
   const openPayload = await openPosTxBuilder.build();
   const openTx = openPayload.transaction;
 
-  // For Orca: use the SDK transaction directly without compute budget modification
-  // The decompile/recompile approach was causing signature issues with Privy
+  // Debug: log all signers from the payload
+  console.log(`[Orca Atomic] openPayload.signers count: ${openPayload.signers.length}`);
+  for (const signer of openPayload.signers) {
+    console.log(`[Orca Atomic] Signer: ${signer.publicKey.toBase58().slice(0, 8)}...`);
+  }
+
+  // Check how many signatures the transaction actually needs
   if (openTx instanceof VersionedTransaction) {
-    // Pre-sign with the position keypair (if any)
+    const numRequired = openTx.message.header.numRequiredSignatures;
+    const staticKeys = openTx.message.staticAccountKeys.slice(0, numRequired);
+    console.log(`[Orca Atomic] Tx requires ${numRequired} signatures from: ${staticKeys.map(k => k.toBase58().slice(0, 8)).join(', ')}`);
+    console.log(`[Orca Atomic] Wallet is: ${walletAddress.slice(0, 8)}...`);
+    
+    // Pre-sign with ALL keypairs from the payload
     if (openPayload.signers.length > 0) {
       openTx.sign(openPayload.signers);
       console.log(`[Orca Atomic] Pre-signed with ${openPayload.signers.length} keypairs`);
     }
+    
+    // Check which signatures are still missing
+    const filledCount = openTx.signatures.filter(s => !s.every(b => b === 0)).length;
+    console.log(`[Orca Atomic] After pre-sign: ${filledCount}/${numRequired} signatures filled`);
+    
     unsignedTransactions.push(
       Buffer.from(openTx.serialize()).toString('base64'),
     );
