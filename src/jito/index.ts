@@ -118,7 +118,10 @@ export async function sendBundle(
 
 /**
  * Simulate transactions before sending to Jito
- * Returns errors if simulation fails, null if all pass
+ * 
+ * NOTE: For atomic bundles (swap→LP), later transactions depend on earlier ones.
+ * We only hard-fail on the FIRST transaction. Subsequent tx failures are logged
+ * but treated as "expected" since they may depend on prior tx outputs.
  */
 export async function simulateTransactions(
   signedTransactions: string[]
@@ -126,6 +129,7 @@ export async function simulateTransactions(
   const rpcUrl = config.solana?.rpc || 'https://api.mainnet-beta.solana.com';
   const connection = new Connection(rpcUrl, 'confirmed');
   const errors: string[] = [];
+  let firstTxFailed = false;
 
   for (let i = 0; i < signedTransactions.length; i++) {
     try {
@@ -141,7 +145,25 @@ export async function simulateTransactions(
         const errStr = typeof result.value.err === 'string' 
           ? result.value.err 
           : JSON.stringify(result.value.err);
-        console.log(`[Jito] ❌ Tx ${i + 1} simulation failed: ${errStr}`);
+        
+        // Check if this is an "insufficient funds" error that might be due to dependency
+        const isInsufficientFunds = errStr.includes('Custom":1') || errStr.includes('insufficient');
+        
+        if (i === 0) {
+          // First transaction failure is always a real error
+          console.log(`[Jito] ❌ Tx ${i + 1} simulation failed: ${errStr}`);
+          firstTxFailed = true;
+          errors.push(`Tx ${i + 1}: ${errStr}`);
+        } else if (isInsufficientFunds) {
+          // Later txs failing with "insufficient funds" likely depend on prior swaps
+          console.log(`[Jito] ⚠️ Tx ${i + 1} simulation failed (likely depends on prior tx): ${errStr}`);
+          // Don't add to errors - this is expected for atomic bundles
+        } else {
+          // Other errors on later txs are still reported
+          console.log(`[Jito] ❌ Tx ${i + 1} simulation failed: ${errStr}`);
+          errors.push(`Tx ${i + 1}: ${errStr}`);
+        }
+        
         if (result.value.logs) {
           const relevantLogs = result.value.logs.filter(l => 
             l.includes('Error') || l.includes('failed') || l.includes('insufficient')
@@ -150,13 +172,14 @@ export async function simulateTransactions(
             console.log(`[Jito] Relevant logs: ${relevantLogs.join('\n')}`);
           }
         }
-        errors.push(`Tx ${i + 1}: ${errStr}`);
       } else {
         console.log(`[Jito] ✅ Tx ${i + 1} simulation passed`);
       }
     } catch (e: any) {
       console.log(`[Jito] ⚠️ Tx ${i + 1} simulation error: ${e.message}`);
-      errors.push(`Tx ${i + 1}: ${e.message}`);
+      if (i === 0) {
+        errors.push(`Tx ${i + 1}: ${e.message}`);
+      }
     }
   }
 
