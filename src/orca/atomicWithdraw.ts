@@ -13,6 +13,7 @@ import {
   TokenExtensionUtil,
 } from '@orca-so/whirlpools-sdk';
 import { Percentage } from '@orca-so/common-sdk';
+import { arciumPrivacy } from '../privacy/index.js';
 
 export interface OrcaWithdrawParams {
   walletAddress: string;
@@ -29,6 +30,15 @@ export interface BuiltOrcaWithdraw {
 
 export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<BuiltOrcaWithdraw> {
   const { walletAddress, poolAddress, positionMintAddress, slippageBps = 300 } = params;
+  
+  // Encrypt strategy with Arcium before execution
+  const encrypted = await arciumPrivacy.encryptStrategy({
+    intent: 'orca_withdraw',
+    pool: poolAddress,
+    position: positionMintAddress,
+  });
+  console.log(`[Orca Withdraw] Strategy encrypted: ${encrypted.ciphertext.slice(0, 20)}...`);
+
   const connection = getOrcaConnection();
   const client = getWhirlpoolClient(connection);
   const ctx = getWhirlpoolCtx(connection);

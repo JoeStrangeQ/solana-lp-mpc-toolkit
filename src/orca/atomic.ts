@@ -22,6 +22,7 @@ import BN from 'bn.js';
 import { config } from '../config/index.js';
 import { buildTipTransaction, type TipSpeed } from '../jito/index.js';
 import { optimizeComputeBudget, buildComputeBudgetInstructions } from '../utils/priority-fees.js';
+import { arciumPrivacy } from '../privacy/index.js';
 
 const JUPITER_API = 'https://api.jup.ag/swap/v1';
 const SOL_MINT = 'So11111111111111111111111111111111111111112';
@@ -93,6 +94,15 @@ export async function buildOrcaAtomicLP(params: OrcaAtomicLPParams): Promise<Bui
 
   const connection = getOrcaConnection();
   const client = getWhirlpoolClient(connection);
+
+  // 0. Encrypt strategy with Arcium before execution
+  const encrypted = await arciumPrivacy.encryptStrategy({
+    intent: 'orca_atomic_lp',
+    pool: poolAddress,
+    amount: Math.floor(amountSol * 1e9),
+    strategy,
+  });
+  console.log(`[Orca Atomic] Strategy encrypted: ${encrypted.ciphertext.slice(0, 20)}...`);
 
   // 1. Get pool data
   const pool = await client.getPool(new PublicKey(poolAddress));

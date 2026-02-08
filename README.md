@@ -118,6 +118,22 @@ Works in **both** Telegram and Terminal:
 | `/settings` | Alert preferences |
 | `/help` | All commands |
 
+### Natural Language Amounts
+
+The bot understands flexible amount inputs:
+- Numbers: `2.5`, `0.1 SOL`
+- Percentages: `50%`, `half`, `quarter`
+- Max: `max`, `all`, `everything`
+- Relative: `max minus 0.1`, `all but fees`
+
+### Settings Options
+
+Configure via `/settings`:
+- **Alert Threshold**: 0% / 5% / 10% / 25% value change
+- **Quiet Hours**: 22:00-08:00 UTC (no notifications)
+- **Auto-Rebalance**: ON/OFF
+- **Daily Summary**: ON/OFF
+
 ---
 
 ## 🔔 Monitoring & Alerts
@@ -165,7 +181,21 @@ Configure via `/settings` or webhook for your agent.
 
 ## 🛠 Built With
 
-Hono, [grammY](https://grammy.dev), Meteora DLMM, Jupiter, Jito, Privy MPC, Arcium, Upstash Redis — all TypeScript.
+Hono, [grammY](https://grammy.dev), Meteora DLMM, Orca Whirlpools, Jupiter, Jito, Privy MPC, Arcium, Upstash Redis — all TypeScript.
+
+### Reliability Features
+
+- **Circuit Breakers**: Jupiter Ultra API auto-disconnects after 3 failures
+- **Retry Logic**: Exponential backoff on oracle/RPC failures
+- **Timeouts**: 30s max for wallet signing operations
+- **Request Tracing**: Unique ID on every request for debugging
+
+### Performance Features
+
+- **Pool Caching**: 60s TTL for pool data, 10s for bin prices
+- **Connection Pool**: Shared RPC connection across requests
+- **Parallel Loading**: Batch pool discovery
+- **Bin Precompute**: Prices cached during monitoring cycles
 
 ---
 
