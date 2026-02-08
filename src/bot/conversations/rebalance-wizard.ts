@@ -15,6 +15,7 @@ import { executeRebalanceOperation, type RebalanceParams } from '../../services/
 import { loadWalletById } from '../../services/wallet-service.js';
 import { friendlyErrorMessage } from '../../utils/resilience.js';
 import { operationLock } from '../../utils/operation-lock.js';
+import { analyzePosition, type RebalanceAnalysis } from '../../services/auto-rebalance.js';
 
 export async function rebalanceWizard(
   conversation: Conversation<BotContext, BotContext>,
@@ -47,30 +48,69 @@ export async function rebalanceWizard(
 
   const priceFmt = (n: number) => (n < 1 ? n.toFixed(4) : n.toFixed(2));
 
+  // Analyze all positions for rebalance recommendations
+  const analyses: RebalanceAnalysis[] = positions.map(p => 
+    analyzePosition({
+      positionAddress: p.address,
+      poolAddress: p.poolAddress,
+      poolName: p.pool,
+      dex: 'meteora',
+      currentPrice: p.priceRange.current,
+      lowerBound: p.priceRange.lower,
+      upperBound: p.priceRange.upper,
+    })
+  );
+
+  // Count positions needing attention
+  const critical = analyses.filter(a => a.urgency === 'critical').length;
+  const high = analyses.filter(a => a.urgency === 'high').length;
+  const needsAttention = critical + high;
+
   // Build position selection keyboard
   const posKb = new InlineKeyboard();
   for (let i = 0; i < Math.min(positions.length, 8); i++) {
     const p = positions[i];
-    const icon = p.inRange ? '🟢' : '🔴';
-    posKb.text(`${icon} ${p.pool}`, `rb:sel:${i}`).row();
+    const analysis = analyses[i];
+    const urgencyIcon = {
+      low: '✅',
+      medium: '⚡',
+      high: '⚠️',
+      critical: '🔴',
+    };
+    posKb.text(`${urgencyIcon[analysis.urgency]} ${p.pool}`, `rb:sel:${i}`).row();
   }
   posKb.text('Cancel', 'cancel');
+
+  // Summary header
+  let summaryHeader = '';
+  if (critical > 0) {
+    summaryHeader = `🔴 *${critical} position(s) OUT OF RANGE* - not earning fees!\n\n`;
+  } else if (high > 0) {
+    summaryHeader = `⚠️ *${high} position(s) near edge* - may need rebalancing soon\n\n`;
+  } else {
+    summaryHeader = `✅ *All positions healthy* - select one to adjust range\n\n`;
+  }
 
   const posText = positions
     .slice(0, 8)
     .map((p, i) => {
-      const icon = p.inRange ? '🟢' : '🔴';
-      const status = p.inRange ? 'IN RANGE' : 'OUT OF RANGE';
+      const analysis = analyses[i];
+      const urgencyIcon = {
+        low: '✅',
+        medium: '⚡',
+        high: '⚠️',
+        critical: '🔴',
+      };
       return [
-        `${i + 1}. ${icon} *${p.pool}* - ${status}`,
-        `   Price: $${priceFmt(p.priceRange.current)}`,
-        `   Range: $${priceFmt(p.priceRange.lower)} - $${priceFmt(p.priceRange.upper)}`,
+        `${i + 1}. ${urgencyIcon[analysis.urgency]} *${p.pool}*`,
+        `   ${analysis.reason}`,
+        `   Price: $${priceFmt(p.priceRange.current)} (${analysis.rangePosition.toFixed(0)}% of range)`,
       ].join('\n');
     })
     .join('\n\n');
 
   await ctx.reply(
-    `*Rebalance - Select Position*\n\n${posText}\n\nTap a position to rebalance:`,
+    `*Rebalance Positions*\n\n${summaryHeader}${posText}\n\nTap a position to rebalance:`,
     {
       parse_mode: 'Markdown',
       reply_markup: posKb,
