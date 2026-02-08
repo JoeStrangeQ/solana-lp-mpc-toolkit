@@ -9,3 +9,4 @@ export { helpCommand } from './help.js';
 export { portfolioCommand } from './portfolio.js';
 export { statusCommand } from './status.js';
 export { findCommand } from './find.js';
+export { priceCommand } from './price.js';
