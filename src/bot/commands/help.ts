@@ -14,6 +14,7 @@ export async function helpCommand(ctx: BotContext) {
     ``,
     `🏊 *Liquidity*`,
     `/pools - Browse top LP pools`,
+    `/find SOL USDC - Search pools by tokens`,
     `/lp - Add liquidity wizard`,
     `/withdraw - Withdraw from positions`,
     `/rebalance - Rebalance out-of-range`,
