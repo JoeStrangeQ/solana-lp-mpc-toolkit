@@ -6,6 +6,7 @@ import { setCachedPositions } from '../types.js';
 import { InlineKeyboard } from 'grammy';
 import { getUserByChat, getUserPositions } from '../../onboarding/index.js';
 import { sparkline, formatPnL, rangeBar } from '../../utils/sparkline.js';
+import { estimateILForPriceChange } from '../../utils/il-calculator.js';
 
 export async function positionsCommand(ctx: BotContext) {
   const chatId = ctx.chat?.id;
@@ -84,12 +85,25 @@ export async function positionsCommand(ctx: BotContext) {
       const feeYNum = parseFloat(p.fees.tokenY.replace(/[^0-9.]/g, '')) || 0;
       const hasFees = feeXNum > 0 || feeYNum > 0;
       
+      // Estimate IL based on range width and position
+      // Assume entry was at range midpoint for estimation
+      const rangeMidpoint = (p.priceRange.lower + p.priceRange.upper) / 2;
+      const priceChangePercent = ((p.priceRange.current - rangeMidpoint) / rangeMidpoint) * 100;
+      const rangeWidthPercent = ((p.priceRange.upper - p.priceRange.lower) / rangeMidpoint) * 100;
+      const estimatedIL = estimateILForPriceChange(priceChangePercent, rangeWidthPercent);
+      const ilDisplay = estimatedIL < -0.5 
+        ? `📉 ~${Math.abs(estimatedIL).toFixed(1)}% IL` 
+        : estimatedIL > 0.5 
+          ? `📈 ~${estimatedIL.toFixed(1)}% gain`
+          : '✅ Minimal IL';
+      
       return [
         `━━━━━━━━━━━━━━━━━━`,
         `*${p.pool}* ${status}`,
         visualRange,
         `💰 ${p.amounts.tokenX.formatted} + ${p.amounts.tokenY.formatted}`,
         hasFees ? `✨ Fees: ${p.fees.tokenX} + ${p.fees.tokenY}` : null,
+        ilDisplay,
       ].filter(Boolean).join('\n');
     });
 
@@ -107,12 +121,24 @@ export async function positionsCommand(ctx: BotContext) {
       const feeB = parseFloat(p.fees?.tokenB?.replace(/[^0-9.]/g, '')) || 0;
       const hasFees = feeA > 0 || feeB > 0;
       
+      // Estimate IL based on range width and position
+      const rangeMidpoint = (p.priceLower + p.priceUpper) / 2;
+      const priceChangePercent = ((p.priceCurrent - rangeMidpoint) / rangeMidpoint) * 100;
+      const rangeWidthPercent = ((p.priceUpper - p.priceLower) / rangeMidpoint) * 100;
+      const estimatedIL = estimateILForPriceChange(priceChangePercent, rangeWidthPercent);
+      const ilDisplay = estimatedIL < -0.5 
+        ? `📉 ~${Math.abs(estimatedIL).toFixed(1)}% IL` 
+        : estimatedIL > 0.5 
+          ? `📈 ~${estimatedIL.toFixed(1)}% gain`
+          : '✅ Minimal IL';
+      
       return [
         `━━━━━━━━━━━━━━━━━━`,
         `*${p.poolName}* (Orca) ${status}`,
         visualRange,
         `💰 ${p.tokenA.amount} ${p.tokenA.symbol} + ${p.tokenB.amount} ${p.tokenB.symbol}`,
         hasFees ? `✨ Fees: ${p.fees.tokenA} + ${p.fees.tokenB}` : null,
+        ilDisplay,
       ].filter(Boolean).join('\n');
     });
 
