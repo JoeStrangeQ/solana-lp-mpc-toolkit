@@ -254,6 +254,12 @@ export function friendlyErrorMessage(error: any): string {
   if (!error) return 'An unexpected error occurred. Please try again.';
   const msg = (error.message || error.toString()).toLowerCase();
 
+  if (msg.includes('0x1794') || msg.includes('bitmapextension') || msg.includes('6036')) {
+    return 'This pool uses extended bin ranges that aren\'t fully supported yet. Try a different pool with higher liquidity.';
+  }
+  if (msg.includes('not_tradable') || msg.includes('not tradable')) {
+    return 'This token has low liquidity and cannot be swapped on Jupiter. Try a more liquid pool.';
+  }
   if (msg.includes('0x1771') || msg.includes('insufficientfunds')) {
     return 'Insufficient balance for swap. Try a smaller amount (leave ~0.15 SOL for fees).';
   }
