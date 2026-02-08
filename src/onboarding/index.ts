@@ -46,6 +46,8 @@ export interface UserProfile {
     dailySummary: boolean;
     autoRebalance: boolean;
     rebalanceThreshold: number;
+    alertOnValueChange?: number; // % value change to trigger alert
+    quietHours?: { start: number; end: number }; // UTC hours when alerts are silenced
   };
   createdAt: string;
   lastSeen: string;

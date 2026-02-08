@@ -44,6 +44,8 @@ export interface NotificationRecipient {
     dailySummary: boolean;
     autoRebalance: boolean; // If true, agents can auto-execute
     rebalanceThreshold: number; // % out of range before suggesting rebalance
+    alertOnValueChange?: number; // % value change to trigger alert (0 = any)
+    quietHours?: { start: number; end: number }; // UTC hours when alerts are silenced
   };
   
   createdAt: string;

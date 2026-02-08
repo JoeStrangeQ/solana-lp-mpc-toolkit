@@ -110,26 +110,46 @@ export function alertActionKeyboard(posIndex: number): InlineKeyboard {
     .text('OK', 'dismiss');
 }
 
+export interface SettingsPrefs {
+  alertOnOutOfRange: boolean;
+  autoRebalance: boolean;
+  dailySummary: boolean;
+  alertThreshold?: number; // % value change to trigger alert (0 = any)
+  quietHoursEnabled?: boolean;
+}
+
 export function settingsKeyboard(
   walletId: string,
-  prefs: { alertOnOutOfRange: boolean; autoRebalance: boolean; dailySummary: boolean },
+  prefs: SettingsPrefs,
 ): InlineKeyboard {
   // Truncate walletId to keep callback data under 64 bytes
   const wid = walletId.slice(0, 20);
+  
+  const thresholdLabel = prefs.alertThreshold 
+    ? `Threshold: ${prefs.alertThreshold}%` 
+    : 'Threshold: Any';
+  
   return new InlineKeyboard()
     .text(
-      prefs.alertOnOutOfRange ? 'Alerts: ON' : 'Alerts: OFF',
+      prefs.alertOnOutOfRange ? '🔔 Alerts: ON' : '🔕 Alerts: OFF',
       `set:alert:${wid}`,
     )
     .row()
     .text(
-      prefs.autoRebalance ? 'Auto-Rebalance: ON' : 'Auto-Rebalance: OFF',
+      prefs.autoRebalance ? '⚡ Auto-Rebal: ON' : '⚡ Auto-Rebal: OFF',
       `set:rebal:${wid}`,
     )
     .row()
     .text(
-      prefs.dailySummary ? 'Daily Summary: ON' : 'Daily Summary: OFF',
+      prefs.dailySummary ? '📊 Daily: ON' : '📊 Daily: OFF',
       `set:daily:${wid}`,
+    )
+    .row()
+    .text(`📏 ${thresholdLabel}`, `set:thresh:${wid}`)
+    .row()
+    .text(
+      prefs.quietHoursEnabled ? '🌙 Quiet: ON' : '🌙 Quiet: OFF',
+      `set:quiet:${wid}`,
     )
     .row()
     .text('Done', 'dismiss');
