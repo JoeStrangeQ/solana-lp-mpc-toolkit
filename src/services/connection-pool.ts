@@ -82,6 +82,6 @@ export function getConnectionStats(): {
   return {
     initialized: true,
     rpcEndpoint: sharedConnection.rpcEndpoint.slice(0, 50) + '...',
-    commitment: sharedConnection.commitment,
+    commitment: sharedConnection.commitment || DEFAULT_COMMITMENT,
   };
 }

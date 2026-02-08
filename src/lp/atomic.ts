@@ -169,7 +169,7 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
   
   // Build initial tx with default CU to simulate, then optimize
   const lpInstructions = lpTxPayload.instructions.filter(
-    (ix) => !ix.programId.equals(ComputeBudgetProgram.programId),
+    (ix: any) => !ix.programId.equals(ComputeBudgetProgram.programId),
   );
   const defaultMsg = new TransactionMessage({
     payerKey: new PublicKey(walletAddress),

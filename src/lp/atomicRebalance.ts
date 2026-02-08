@@ -92,7 +92,7 @@ export async function executeRebalance(params: RebalanceParams): Promise<Rebalan
   const activeBin = await pool.getActiveBin();
   
   const { userPositions } = await pool.getPositionsByUserAndLbPair(walletPubkey);
-  const position = userPositions.find(p => p.publicKey.toBase58() === positionAddress);
+  const position = userPositions.find((p: any) => p.publicKey.toBase58() === positionAddress);
   
   if (!position) {
     throw new Error(`Position ${positionAddress} not found`);

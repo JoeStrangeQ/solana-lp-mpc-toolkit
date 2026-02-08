@@ -77,11 +77,11 @@ export function getRequestId(c: Context): string | undefined {
 /**
  * Create a standardized JSON response with request ID included
  */
-export function jsonWithRequestId<T>(c: Context, data: T, status = 200) {
+export function jsonWithRequestId<T>(c: Context, data: T, status: number = 200) {
   const requestId = getRequestId(c);
   const response: T & { requestId?: string } = {
     ...data,
     requestId,
   };
-  return c.json(response, status);
+  return c.json(response, status as any);
 }
