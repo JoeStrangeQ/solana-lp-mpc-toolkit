@@ -38,6 +38,7 @@ import { Redis } from '@upstash/redis';
 import { assessPoolRisk, assessPositionRisk, getTokenVolatility, type PoolRiskAssessment, type PositionRiskAssessment } from './risk/index.js';
 import { withTimeout, PRIVY_SIGN_TIMEOUT_MS } from './utils/resilience.js';
 import { ErrorCode, createError, classifyError, getHttpStatus, getFriendlyMessage } from './utils/error-codes.js';
+import { requestIdMiddleware, getRequestId } from './middleware/requestId.js';
 
 // Redis client for cache invalidation
 let redis: Redis | null = null;
@@ -98,6 +99,9 @@ const monitoringState = {
 
 // Middleware
 app.use('*', cors());
+
+// Request ID middleware - generates unique ID for each request, logs timing
+app.use('*', requestIdMiddleware);
 
 // Stats tracking middleware
 app.use('*', async (c, next) => {

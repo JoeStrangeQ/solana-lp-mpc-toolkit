@@ -45,6 +45,9 @@ import actionsRoutes from './routes/actions.js';
 // Import bot
 import { createBot, initBot, getBot, getBotWebhookHandler } from './bot/index.js';
 
+// Import middleware
+import { requestIdMiddleware } from './middleware/requestId.js';
+
 // Import worker
 import { startWorker, isWorkerRunning } from './monitoring/index.js';
 
@@ -55,14 +58,8 @@ const app = new Hono();
 // Global middleware
 app.use('*', cors());
 
-// Request ID middleware - generates unique ID for each request
-app.use('*', async (c, next) => {
-  const requestId = c.req.header('x-request-id') || 
-    `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  c.set('requestId', requestId);
-  c.header('X-Request-Id', requestId);
-  await next();
-});
+// Request ID middleware - generates unique ID for each request, logs timing
+app.use('*', requestIdMiddleware);
 
 // Stats tracking middleware
 app.use('*', async (c, next) => {
