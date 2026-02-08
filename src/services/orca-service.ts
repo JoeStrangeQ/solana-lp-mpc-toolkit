@@ -77,12 +77,38 @@ export async function executeOrcaLp(params: OrcaLpExecuteParams) {
   for (let i = 0; i < lpResult.unsignedTransactions.length; i++) {
     const unsignedTx = lpResult.unsignedTransactions[i];
     console.log(`[Orca Service] Signing tx ${i + 1}/${lpResult.unsignedTransactions.length}...`);
+    
+    // Debug: decode and inspect the transaction
+    try {
+      const txBuf = Buffer.from(unsignedTx, 'base64');
+      const { VersionedTransaction } = await import('@solana/web3.js');
+      const decoded = VersionedTransaction.deserialize(txBuf);
+      const signers = decoded.message.staticAccountKeys.slice(0, decoded.message.header.numRequiredSignatures);
+      console.log(`[Orca Service] Tx ${i + 1} requires ${decoded.message.header.numRequiredSignatures} signatures`);
+      console.log(`[Orca Service] Tx ${i + 1} signers: ${signers.map(s => s.toBase58().slice(0, 8)).join(', ')}`);
+      console.log(`[Orca Service] Tx ${i + 1} existing sigs: ${decoded.signatures.filter(s => !s.every(b => b === 0)).length}`);
+    } catch (e: any) {
+      console.log(`[Orca Service] Failed to decode tx ${i + 1} for debug:`, e.message);
+    }
+    
     console.log(`[Orca Service] Unsigned tx length: ${unsignedTx.length}`);
     const signedTx = await signTransaction(unsignedTx);
     console.log(`[Orca Service] Signed tx length: ${signedTx?.length || 0}`);
     if (!signedTx) {
       throw new Error(`signTransaction returned null/undefined for tx ${i + 1}`);
     }
+    
+    // Debug: check signatures after Privy signs
+    try {
+      const signedBuf = Buffer.from(signedTx, 'base64');
+      const { VersionedTransaction } = await import('@solana/web3.js');
+      const decoded = VersionedTransaction.deserialize(signedBuf);
+      const filledSigs = decoded.signatures.filter(s => !s.every(b => b === 0)).length;
+      console.log(`[Orca Service] Tx ${i + 1} after signing: ${filledSigs}/${decoded.signatures.length} signatures filled`);
+    } catch (e: any) {
+      console.log(`[Orca Service] Failed to decode signed tx ${i + 1}:`, e.message);
+    }
+    
     signedTxs.push(signedTx);
   }
 
