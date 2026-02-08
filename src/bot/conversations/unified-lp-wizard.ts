@@ -445,8 +445,7 @@ export async function unifiedLpWizard(
 
       if (selectedPool.dex === 'orca') {
         // ---- Orca Whirlpool execution ----
-        // Use Jito bundle path (signTransaction only) - more reliable for multi-tx flows
-        // Direct RPC with signAndSendTransaction has issues with partially-signed txs
+        // Use direct RPC (signAndSendTransaction) - Privy's signTransaction doesn't work with partial signatures
         const params: OrcaLpExecuteParams = {
           walletId: user.walletId,
           walletAddress: user.walletAddress,
@@ -456,7 +455,7 @@ export async function unifiedLpWizard(
           tipSpeed: 'fast',
           slippageBps: 300,
           signTransaction: async (tx) => client.signTransaction(tx),
-          // Don't pass signAndSendTransaction - forces Jito bundle path
+          signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
         };
 
         const res = await executeOrcaLp(params);
@@ -469,7 +468,7 @@ export async function unifiedLpWizard(
         };
       } else {
         // ---- Meteora DLMM execution ----
-        // Use Jito bundle path for reliability with multi-tx flows
+        // Use direct RPC path - Privy's signTransaction has issues with partial signatures
         const params: LpExecuteParams = {
           walletId: user.walletId,
           walletAddress: user.walletAddress,
@@ -482,7 +481,7 @@ export async function unifiedLpWizard(
           tipSpeed: 'fast',
           slippageBps: 300,
           signTransaction: async (tx) => client.signTransaction(tx),
-          // Don't pass signAndSendTransaction - forces Jito bundle path
+          signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
         };
 
         const res = await executeLp(params);
