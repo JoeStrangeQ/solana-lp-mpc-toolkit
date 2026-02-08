@@ -13,6 +13,7 @@ export async function helpCommand(ctx: BotContext) {
     `/balance - Wallet balance`,
     `/price SOL - Check token prices`,
     `/gas - Network fee status`,
+    `/simulate 1 SOL - Estimate LP returns`,
     ``,
     `🏊 *Liquidity*`,
     `/pools - Browse top LP pools`,
@@ -27,6 +28,7 @@ export async function helpCommand(ctx: BotContext) {
     `/settings - Alert preferences`,
     `/status - System health check`,
     `/help - This message`,
+    `/about - Toolkit info`,
     ``,
     `🔒 Encrypted with *Arcium* | MEV-protected via *Jito*`,
   ].join('\n');
