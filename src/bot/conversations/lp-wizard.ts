@@ -381,9 +381,7 @@ export async function lpWizard(
         signTransaction: async (tx: string) => {
           return client.signTransaction(tx);
         },
-        signAndSendTransaction: async (tx: string) => {
-          return client.signAndSendTransaction(tx);
-        },
+        // Don't pass signAndSendTransaction - use Jito bundles for multi-tx reliability
       };
 
       const res = await executeLp(params);

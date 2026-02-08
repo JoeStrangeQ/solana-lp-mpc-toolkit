@@ -176,7 +176,7 @@ export async function orcaLpWizard(
         tipSpeed: 'fast',
         slippageBps: 300,
         signTransaction: async (tx) => client.signTransaction(tx),
-        signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
+        // Don't pass signAndSendTransaction - use Jito bundles for multi-tx reliability
       };
       const res = await executeOrcaLp(params);
       return { success: true as const, txHashes: res.txHashes, status: res.status };
