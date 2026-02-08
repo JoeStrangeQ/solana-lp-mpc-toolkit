@@ -12,6 +12,7 @@ export async function helpCommand(ctx: BotContext) {
     `/positions - View LP positions with IL`,
     `/balance - Wallet balance`,
     `/price SOL - Check token prices`,
+    `/gas - Network fee status`,
     ``,
     `🏊 *Liquidity*`,
     `/pools - Browse top LP pools`,
