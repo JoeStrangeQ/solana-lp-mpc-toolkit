@@ -5,7 +5,7 @@ import type { BotContext } from '../types.js';
 import { setCachedPositions } from '../types.js';
 import { InlineKeyboard } from 'grammy';
 import { getUserByChat, getUserPositions } from '../../onboarding/index.js';
-import { sparkline, formatPnL } from '../../utils/sparkline.js';
+import { sparkline, formatPnL, rangeBar } from '../../utils/sparkline.js';
 
 export async function positionsCommand(ctx: BotContext) {
   const chatId = ctx.chat?.id;
@@ -68,25 +68,12 @@ export async function positionsCommand(ctx: BotContext) {
 
     setCachedPositions(chatId, allCached);
 
-    const priceFmt = (n: number) => (n < 1 ? n.toFixed(4) : n.toFixed(2));
-    
-    // Generate price sparkline from range (simulated trend based on position in range)
-    const generateRangeSparkline = (lower: number, current: number, upper: number): string => {
-      const range = upper - lower;
-      const position = (current - lower) / range;
-      // Create a sparkline showing where price is in range
-      const values = Array(8).fill(0).map((_, i) => {
-        const x = i / 7;
-        // Bell curve centered on current position
-        return Math.exp(-Math.pow((x - position) * 3, 2));
-      });
-      return sparkline(values, 8);
-    };
-
-    // Format Meteora positions with PnL
+    // Format Meteora positions with visual range bar
     const meteoraLines = positions.map((p, i) => {
-      const status = p.inRange ? '🟢 IN RANGE' : '🔴 OUT';
-      const rangeChart = generateRangeSparkline(
+      const status = p.inRange ? '🟢 IN RANGE' : '🔴 OUT OF RANGE';
+      
+      // Visual range bar showing where current price is
+      const visualRange = rangeBar(
         p.priceRange.lower, 
         p.priceRange.current, 
         p.priceRange.upper
@@ -98,18 +85,19 @@ export async function positionsCommand(ctx: BotContext) {
       const hasFees = feeXNum > 0 || feeYNum > 0;
       
       return [
+        `━━━━━━━━━━━━━━━━━━`,
         `*${p.pool}* ${status}`,
-        `${rangeChart} $${priceFmt(p.priceRange.current)}`,
-        `↔️ $${priceFmt(p.priceRange.lower)} - $${priceFmt(p.priceRange.upper)}`,
+        visualRange,
         `💰 ${p.amounts.tokenX.formatted} + ${p.amounts.tokenY.formatted}`,
         hasFees ? `✨ Fees: ${p.fees.tokenX} + ${p.fees.tokenY}` : null,
       ].filter(Boolean).join('\n');
     });
 
-    // Format Orca positions with PnL
+    // Format Orca positions with visual range bar
     const orcaLines = orcaPositions.map((p: any) => {
-      const status = p.inRange ? '🟢 IN RANGE' : '🔴 OUT';
-      const rangeChart = generateRangeSparkline(
+      const status = p.inRange ? '🟢 IN RANGE' : '🔴 OUT OF RANGE';
+      
+      const visualRange = rangeBar(
         p.priceLower, 
         p.priceCurrent, 
         p.priceUpper
@@ -120,9 +108,9 @@ export async function positionsCommand(ctx: BotContext) {
       const hasFees = feeA > 0 || feeB > 0;
       
       return [
+        `━━━━━━━━━━━━━━━━━━`,
         `*${p.poolName}* (Orca) ${status}`,
-        `${rangeChart} $${priceFmt(p.priceCurrent)}`,
-        `↔️ $${priceFmt(p.priceLower)} - $${priceFmt(p.priceUpper)}`,
+        visualRange,
         `💰 ${p.tokenA.amount} ${p.tokenA.symbol} + ${p.tokenB.amount} ${p.tokenB.symbol}`,
         hasFees ? `✨ Fees: ${p.fees.tokenA} + ${p.fees.tokenB}` : null,
       ].filter(Boolean).join('\n');

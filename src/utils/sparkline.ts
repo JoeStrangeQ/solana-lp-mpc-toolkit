@@ -104,3 +104,89 @@ export function miniChart(values: number[], label?: string): string {
   
   return parts.join(' ');
 }
+
+/**
+ * Generate a visual range bar showing position within price range
+ * @param lower - Lower price bound
+ * @param current - Current price
+ * @param upper - Upper price bound
+ * @param width - Bar width (default 12)
+ * @returns Multi-line visual range display
+ */
+export function rangeBar(lower: number, current: number, upper: number, width = 12): string {
+  const range = upper - lower;
+  if (range <= 0) return '⚠️ Invalid range';
+  
+  const position = (current - lower) / range;
+  const clampedPos = Math.max(0, Math.min(1, position));
+  const markerIndex = Math.round(clampedPos * (width - 1));
+  
+  // Build the bar: ▓ for "active" (left of marker), ░ for inactive (right)
+  // Use ● for the current price marker
+  const FILLED = '▓';
+  const EMPTY = '░';
+  const MARKER = '●';
+  
+  let bar = '';
+  for (let i = 0; i < width; i++) {
+    if (i === markerIndex) {
+      bar += MARKER;
+    } else if (i < markerIndex) {
+      bar += FILLED;
+    } else {
+      bar += EMPTY;
+    }
+  }
+  
+  // Format prices compactly
+  const priceFmt = (n: number) => n < 1 ? n.toFixed(4) : n < 100 ? n.toFixed(2) : n.toFixed(0);
+  
+  // Calculate percentage through range
+  const pct = Math.round(clampedPos * 100);
+  const inRange = position >= 0 && position <= 1;
+  
+  // Show if out of range and by how much
+  let outOfRangeNote = '';
+  if (position < 0) {
+    const diff = ((lower - current) / current * 100).toFixed(1);
+    outOfRangeNote = ` ⚠️ ${diff}% below`;
+  } else if (position > 1) {
+    const diff = ((current - upper) / upper * 100).toFixed(1);
+    outOfRangeNote = ` ⚠️ ${diff}% above`;
+  }
+  
+  return [
+    `\`[$${priceFmt(lower)} ${bar} $${priceFmt(upper)}]\``,
+    `         ↑ $${priceFmt(current)} (${pct}%)${outOfRangeNote}`,
+  ].join('\n');
+}
+
+/**
+ * Compact single-line range indicator
+ * @param lower - Lower price bound
+ * @param current - Current price
+ * @param upper - Upper price bound
+ * @returns Single-line range display
+ */
+export function rangeIndicator(lower: number, current: number, upper: number): string {
+  const range = upper - lower;
+  if (range <= 0) return '⚠️';
+  
+  const position = (current - lower) / range;
+  const inRange = position >= 0 && position <= 1;
+  
+  const priceFmt = (n: number) => n < 1 ? n.toFixed(4) : n < 100 ? n.toFixed(2) : n.toFixed(0);
+  const pct = Math.round(Math.max(0, Math.min(100, position * 100)));
+  
+  // Visual 5-segment indicator: ◯◯●◯◯
+  const segments = 5;
+  const segIndex = Math.min(segments - 1, Math.max(0, Math.floor(position * segments)));
+  const indicator = Array(segments).fill('○').map((_, i) => i === segIndex ? '●' : '○').join('');
+  
+  if (!inRange) {
+    const arrow = position < 0 ? '◀' : '▶';
+    return `${arrow} $${priceFmt(current)} OUT`;
+  }
+  
+  return `${indicator} $${priceFmt(current)} (${pct}%)`;
+}

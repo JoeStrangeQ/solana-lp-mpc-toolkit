@@ -18,6 +18,7 @@ import DLMM from '@meteora-ag/dlmm';
 import BN from 'bn.js';
 import { assessPositionRisk } from '../risk/index.js';
 import { discoverAllPositions } from '../utils/position-discovery.js';
+import { rangeBar } from '../utils/sparkline.js';
 
 export async function handleCallback(ctx: BotContext) {
   const data = ctx.callbackQuery?.data;
@@ -400,21 +401,45 @@ export async function handleCallback(ctx: BotContext) {
         console.error('[Bot] Risk assessment failed (non-blocking):', riskErr?.message);
       }
 
+      // Generate visual range bar
+      const visualRange = rangeBar(
+        pos.priceRange.lower,
+        pos.priceRange.current,
+        pos.priceRange.upper
+      );
+
+      const status = pos.inRange ? '🟢 IN RANGE' : '🔴 OUT OF RANGE';
+      
+      // Calculate percentage through range
+      const range = pos.priceRange.upper - pos.priceRange.lower;
+      const positionInRange = (pos.priceRange.current - pos.priceRange.lower) / range;
+      const rangePercent = Math.round(Math.max(0, Math.min(100, positionInRange * 100)));
+      
+      // Suggest action based on position
+      let actionHint = '';
+      if (!pos.inRange) {
+        actionHint = '\n\n⚠️ *Out of range* — not earning fees. Consider rebalancing.';
+      } else if (rangePercent < 15 || rangePercent > 85) {
+        actionHint = '\n\n⚡ *Near edge* — may go out of range soon. Watch closely.';
+      }
+
       const text = [
-        `*${pos.pool}* - ${pos.inRange ? 'IN RANGE' : 'OUT OF RANGE'}`,
+        `*${pos.pool}* ${status}`,
         ``,
-        `Address: \`${pos.address.slice(0, 8)}...\``,
-        `Price: $${priceFmt(pos.priceRange.current)}`,
-        `Range: $${priceFmt(pos.priceRange.lower)} - $${priceFmt(pos.priceRange.upper)}`,
+        `📊 *Price Range*`,
+        visualRange,
         ``,
-        `Position:`,
+        `💰 *Position Value*`,
         `  ${pos.amounts.tokenX.formatted}`,
         `  ${pos.amounts.tokenY.formatted}`,
         ``,
-        `Fees Earned:`,
+        `✨ *Fees Earned*`,
         `  ${pos.fees.tokenX} + ${pos.fees.tokenY}`,
         ...riskLines,
-      ].join('\n');
+        actionHint,
+        ``,
+        `\`${pos.address.slice(0, 16)}...\``,
+      ].filter(Boolean).join('\n');
 
       const { positionActionsKeyboard } = await import('./keyboards.js');
       await ctx.reply(text, {
