@@ -23,6 +23,7 @@ import {
   withdrawCommand,
   settingsCommand,
   helpCommand,
+  portfolioCommand,
 } from './commands/index.js';
 import { handleCallback } from './callbacks.js';
 import { lpWizard } from './conversations/lp-wizard.js';
@@ -65,6 +66,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.command('withdraw', withdrawCommand);
   bot.command('settings', settingsCommand);
   bot.command('help', helpCommand);
+  bot.command('portfolio', portfolioCommand);
 
   // Conversation entry points (via commands)
   bot.command('lp', async (ctx) => {
