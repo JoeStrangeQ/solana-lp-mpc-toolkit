@@ -6,7 +6,7 @@ import DLMM from '@meteora-ag/dlmm';
 import { buildAtomicLP } from '../lp/atomic.js';
 import { buildAtomicWithdraw } from '../lp/atomicWithdraw.js';
 import { executeRebalance } from '../lp/atomicRebalance.js';
-import { sendBundle, waitForBundle, type TipSpeed } from '../jito/index.js';
+import { sendBundle, waitForBundle, simulateTransactions, type TipSpeed } from '../jito/index.js';
 import { discoverAllPositions } from '../utils/position-discovery.js';
 import { discoverOrcaPositions } from '../orca/positions.js';
 import { resolveTokens, calculateHumanPriceRange, formatPriceRange, formatPrice } from '../utils/token-metadata.js';
@@ -113,6 +113,15 @@ export async function executeLp(params: LpExecuteParams) {
     }
     signedTxs.push(signedTx);
   }
+
+  // Pre-flight simulation to catch errors before Jito
+  console.log(`[LP Service] Simulating ${signedTxs.length} transactions before Jito...`);
+  const simResult = await simulateTransactions(signedTxs);
+  if (!simResult.success) {
+    console.error(`[LP Service] ❌ Simulation failed:`, simResult.errors);
+    throw new Error(`Transaction simulation failed:\n${simResult.errors.join('\n')}`);
+  }
+  console.log(`[LP Service] ✅ All ${signedTxs.length} transactions passed simulation`);
 
   console.log(`[LP Service] Sending bundle with ${signedTxs.length} transactions...`);
   const { bundleId } = await withRetry(

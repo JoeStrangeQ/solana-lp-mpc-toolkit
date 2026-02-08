@@ -11,8 +11,8 @@
  * - USD: "$100", "100 dollars" (requires price)
  */
 
-// Fee reserve for transaction fees
-const FEE_RESERVE = 0.05;
+// Fee reserve for transaction fees (covers tx fees, rent for ATAs, position rent)
+const FEE_RESERVE = 0.15;
 
 export interface ParsedAmount {
   success: boolean;
