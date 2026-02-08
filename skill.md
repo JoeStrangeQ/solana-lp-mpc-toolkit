@@ -176,7 +176,7 @@ curl -X POST /lp/withdraw/atomic -d '{
 
 ```bash
 # 1. Load wallet
-curl -X POST /wallet/load -d '{"walletId": "eouu630z8fl0ddzubzn4tt4b"}'
+curl -X POST /wallet/load -d '{"walletId": "YOUR_WALLET_ID"}'
 
 # 2. User says: "LP $100 into SOL-USDC"
 #    → No pool specified, so fetch options first:
