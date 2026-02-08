@@ -47,12 +47,23 @@ export async function executeOrcaLp(params: OrcaLpExecuteParams) {
     const txHashes: string[] = [];
     for (let i = 0; i < lpResult.unsignedTransactions.length; i++) {
       console.log(`[Orca Service] Signing+sending tx ${i + 1}/${lpResult.unsignedTransactions.length}...`);
-      const txHash = await signAndSendTransaction(lpResult.unsignedTransactions[i]);
-      console.log(`[Orca Service] Tx ${i + 1} confirmed: ${txHash}`);
-      txHashes.push(txHash);
+      
+      try {
+        const txHash = await signAndSendTransaction(lpResult.unsignedTransactions[i]);
+        console.log(`[Orca Service] Tx ${i + 1} confirmed: ${txHash}`);
+        txHashes.push(txHash);
+      } catch (err: any) {
+        console.error(`[Orca Service] Tx ${i + 1} failed:`, err.message);
+        // If this is a signature verification error on a later tx, try refreshing blockhash
+        if (i > 0 && err.message?.includes('signature verification')) {
+          throw new Error(`Transaction ${i + 1} failed - position may be partially created. Check /positions.`);
+        }
+        throw err;
+      }
 
       if (i < lpResult.unsignedTransactions.length - 1) {
-        await new Promise(r => setTimeout(r, 3000));
+        // Longer delay between transactions to let state settle
+        await new Promise(r => setTimeout(r, 5000));
       }
     }
 
