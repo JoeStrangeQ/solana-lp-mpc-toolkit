@@ -6,7 +6,7 @@
  */
 import { InlineKeyboard } from 'grammy';
 import type { BotContext } from './types.js';
-import { setPendingPool, getCachedPosition, setWaitingForCA, setPendingPoolAddress, getDisplayedPool, setPendingLpPool } from './types.js';
+import { setPendingPool, getCachedPosition, setWaitingForCA, setPendingPoolAddress, getDisplayedPool, setPendingLpPool, getPoolByPrefix } from './types.js';
 import {
   getRecipient,
   upsertRecipient,
@@ -163,6 +163,36 @@ export async function handleCallback(ctx: BotContext) {
   }
 
   // ---- Pool selection from /pools → enter LP wizard with pool pre-selected ----
+  // New format: lp:p:dex:addressPrefix (stable, doesn't rely on index)
+  if (data.startsWith('lp:p:')) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    const parts = data.split(':');
+    const dexTag = parts[2]; // 'o' = orca, 'm' = meteora
+    const prefix = parts[3]; // first 11 chars of address
+    
+    const displayed = getPoolByPrefix(prefix);
+    if (displayed && chatId) {
+      if (dexTag === 'o' || displayed.dex === 'orca') {
+        // Route to Orca LP wizard
+        setPendingLpPool(chatId, {
+          address: displayed.address,
+          dex: 'orca',
+          name: displayed.name,
+          tickSpacing: displayed.tickSpacing,
+        });
+        await ctx.conversation.enter('orcaLpWizard');
+      } else {
+        // Default: Meteora LP wizard
+        setPendingPoolAddress(chatId, displayed.address);
+        await ctx.conversation.enter('lpWizard');
+      }
+    } else {
+      await ctx.reply('Pool not found. Please refresh the pool list with /pools');
+    }
+    return;
+  }
+  
+  // Legacy format: lp:pool:N (index-based, kept for backward compat)
   if (data.startsWith('lp:pool:')) {
     await ctx.answerCallbackQuery().catch(() => {});
     const poolIdPart = data.split(':')[2];
