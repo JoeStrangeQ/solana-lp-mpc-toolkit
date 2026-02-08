@@ -213,8 +213,10 @@ export async function lpWizard(
   const balanceCheck = await conversation.external(async () => {
     try {
       const bal = await getWalletBalance(user.walletAddress);
+      console.log(`[LP Wizard] Balance check for ${user.walletAddress}: ${bal.sol} SOL (${bal.lamports} lamports)`);
       return bal.sol;
-    } catch {
+    } catch (err) {
+      console.error(`[LP Wizard] Balance check failed for ${user.walletAddress}:`, err);
       return null;
     }
   });

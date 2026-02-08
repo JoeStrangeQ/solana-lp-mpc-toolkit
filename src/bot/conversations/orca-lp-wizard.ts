@@ -69,7 +69,14 @@ export async function orcaLpWizard(
 
   // Fetch balance early (needed for max and validation)
   const balanceCheck = await conversation.external(async () => {
-    try { return (await getWalletBalance(user.walletAddress)).sol; } catch { return null; }
+    try {
+      const bal = await getWalletBalance(user.walletAddress);
+      console.log(`[Orca LP] Balance check for ${user.walletAddress}: ${bal.sol} SOL (${bal.lamports} lamports)`);
+      return bal.sol;
+    } catch (err) {
+      console.error(`[Orca LP] Balance check failed for ${user.walletAddress}:`, err);
+      return null;
+    }
   });
 
   let amount: number;
@@ -102,6 +109,7 @@ export async function orcaLpWizard(
 
   // Balance check
   if (balanceCheck !== null && amount > balanceCheck - FEE_RESERVE) {
+    console.log(`[Orca LP] Balance check failed: have ${balanceCheck} SOL, need ${amount} + ${FEE_RESERVE} reserve`);
     await ctx.reply(
       `Not enough SOL. You have *${balanceCheck.toFixed(4)} SOL* but need *${amount} SOL* + ~${FEE_RESERVE} SOL for tx fees & rent.\n\nTry a smaller amount or tap *Max*.`,
       { parse_mode: 'Markdown' },
