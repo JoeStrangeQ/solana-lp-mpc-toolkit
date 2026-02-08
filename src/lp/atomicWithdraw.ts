@@ -17,6 +17,7 @@ import { getTokenPrices } from '../utils/prices.js';
 import { resolveTokens } from '../utils/token-metadata.js';
 import { jupiterClient, TOKENS } from '../swap/jupiter.js';
 import { getCachedDLMM } from '../services/pool-cache.js';
+import { getConnection } from '../services/connection-pool.js';
 
 export interface AtomicWithdrawParams {
   walletAddress: string;
@@ -94,7 +95,7 @@ export interface BuiltAtomicWithdraw {
  */
 export async function buildAtomicWithdraw(params: AtomicWithdrawParams): Promise<BuiltAtomicWithdraw> {
   const { walletAddress, poolAddress, positionAddress, tipSpeed = 'fast' } = params;
-  const connection = new Connection(config.solana.rpc);
+  const connection = getConnection();
 
   // 1. Encrypt withdrawal intent with Arcium
   const encrypted = await arciumPrivacy.encryptStrategy({

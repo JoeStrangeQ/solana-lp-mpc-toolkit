@@ -18,6 +18,7 @@ import { buildAtomicLP } from './atomic.js';
 import { sendBundle, waitForBundle, TipSpeed } from '../jito/index.js';
 import { FEE_CONFIG } from '../fees/index.js';
 import { getCachedDLMM, invalidatePoolCache } from '../services/pool-cache.js';
+import { getConnection } from '../services/connection-pool.js';
 
 export interface RebalanceParams {
   walletAddress: string;
@@ -81,7 +82,7 @@ export async function executeRebalance(params: RebalanceParams): Promise<Rebalan
     signTransaction,
   } = params;
 
-  const connection = new Connection(config.solana.rpc);
+  const connection = getConnection();
   const walletPubkey = new PublicKey(walletAddress);
 
   console.log(`[Rebalance] Starting resilient rebalance for ${positionAddress}...`);

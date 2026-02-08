@@ -19,6 +19,7 @@ import { arciumPrivacy } from '../privacy/index.js';
 import { buildTipTransaction, TipSpeed } from '../jito/index.js';
 import { optimizeComputeBudget, buildComputeBudgetInstructions } from '../utils/priority-fees.js';
 import { getCachedDLMM } from '../services/pool-cache.js';
+import { getConnection } from '../services/connection-pool.js';
 
 const JUPITER_API = 'https://api.jup.ag/swap/v1';
 
@@ -102,7 +103,7 @@ async function getSwapTransaction(params: {
  */
 export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomicLP> {
   const { walletAddress, poolAddress, collateralMint, collateralAmount, strategy, shape, minBinId, maxBinId, tipSpeed, slippageBps = 300, skipTip = false } = params;
-  const connection = new Connection(config.solana.rpc);
+  const connection = getConnection();
   
   // Convert bps to percentage for Meteora (300 bps = 3%)
   const meteoraSlippage = slippageBps / 100;

@@ -12,6 +12,7 @@ import { stats } from '../services/stats.js';
 import { getBot, checkBotHealth } from '../bot/index.js';
 import { getCircuitBreakerStatus } from '../services/ultra-swap.js';
 import { getCacheStats } from '../services/pool-cache.js';
+import { getConnectionStats } from '../services/connection-pool.js';
 
 const app = new Hono();
 
@@ -111,6 +112,7 @@ app.get('/health', async (c) => {
       jupiterUltra: circuitBreaker,
     },
     cache: getCacheStats(),
+    rpc: getConnectionStats(),
   });
 });
 
