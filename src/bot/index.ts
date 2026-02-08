@@ -24,6 +24,7 @@ import {
   settingsCommand,
   helpCommand,
   portfolioCommand,
+  statusCommand,
 } from './commands/index.js';
 import { handleCallback } from './callbacks.js';
 import { lpWizard } from './conversations/lp-wizard.js';
@@ -67,6 +68,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.command('settings', settingsCommand);
   bot.command('help', helpCommand);
   bot.command('portfolio', portfolioCommand);
+  bot.command('status', statusCommand);
 
   // Conversation entry points (via commands)
   bot.command('lp', async (ctx) => {

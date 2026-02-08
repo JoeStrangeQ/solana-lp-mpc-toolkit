@@ -7,3 +7,4 @@ export { withdrawCommand } from './withdraw.js';
 export { settingsCommand } from './settings.js';
 export { helpCommand } from './help.js';
 export { portfolioCommand } from './portfolio.js';
+export { statusCommand } from './status.js';
