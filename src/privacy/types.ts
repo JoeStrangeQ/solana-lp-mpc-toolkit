@@ -17,6 +17,9 @@ export interface LPStrategy {
   tokenB?: string;
   amountA?: number;
   amountB?: number;
+  // Orca-specific fields
+  strategy?: string;        // Strategy type for atomic LP
+  position?: string;        // Position mint address for withdrawals
 }
 
 export interface EncryptedStrategy {
