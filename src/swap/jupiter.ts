@@ -88,6 +88,8 @@ export class JupiterClient {
       outputMint,
       amount: amount.toString(),
       slippageBps: slippageBps.toString(),
+      // Exclude Meteora DLMM to avoid BitmapExtensionAccountIsNotProvided errors
+      excludeDexes: 'Meteora DLMM',
     });
 
     const url = `${this.baseUrl}/quote?${params}`;

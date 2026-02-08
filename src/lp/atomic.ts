@@ -52,14 +52,21 @@ async function getSwapQuote(params: {
   outputMint: string;
   amount: number;
   slippageBps?: number;
+  excludeDexes?: string[];
 }): Promise<any> {
-  const { inputMint, outputMint, amount, slippageBps = 100 } = params;
+  const { inputMint, outputMint, amount, slippageBps = 100, excludeDexes } = params;
   
   const url = new URL(`${JUPITER_API}/quote`);
   url.searchParams.set('inputMint', inputMint);
   url.searchParams.set('outputMint', outputMint);
   url.searchParams.set('amount', amount.toString());
   url.searchParams.set('slippageBps', slippageBps.toString());
+  
+  // Exclude Meteora DLMM to avoid BitmapExtensionAccountIsNotProvided errors
+  // This forces Jupiter to use other DEXes (Raydium, Orca, etc.) for swaps
+  if (excludeDexes && excludeDexes.length > 0) {
+    url.searchParams.set('excludeDexes', excludeDexes.join(','));
+  }
 
   const headers: Record<string, string> = { 'Accept': 'application/json' };
   if (config.jupiter?.apiKey) {
@@ -124,9 +131,12 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
   let amountXToLP = new BN(0);
   let amountYToLP = new BN(0);
 
+  // Exclude Meteora DLMM from swap routes to avoid BitmapExtensionAccountIsNotProvided errors
+  const excludeDexes = ['Meteora DLMM'];
+
   // Swap #1: Collateral -> TokenX
   if (collateralMint !== tokenXMint) {
-    const quoteX = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenXMint, amount: halfCollateral, slippageBps });
+    const quoteX = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenXMint, amount: halfCollateral, slippageBps, excludeDexes });
     const swapTxX_b64 = await getSwapTransaction({ quoteResponse: quoteX, userPublicKey: walletAddress });
     unsignedTransactions.push(VersionedTransaction.deserialize(Buffer.from(swapTxX_b64, 'base64')));
     // Use minimum guaranteed output (after slippage) for LP amounts to avoid insufficient funds
@@ -137,7 +147,7 @@ export async function buildAtomicLP(params: AtomicLPParams): Promise<BuiltAtomic
 
   // Swap #2: Collateral -> TokenY
   if (collateralMint !== tokenYMint) {
-    const quoteY = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenYMint, amount: halfCollateral, slippageBps });
+    const quoteY = await getSwapQuote({ inputMint: collateralMint, outputMint: tokenYMint, amount: halfCollateral, slippageBps, excludeDexes });
     const swapTxY_b64 = await getSwapTransaction({ quoteResponse: quoteY, userPublicKey: walletAddress });
     unsignedTransactions.push(VersionedTransaction.deserialize(Buffer.from(swapTxY_b64, 'base64')));
     // Use minimum guaranteed output (after slippage) for LP amounts to avoid insufficient funds
