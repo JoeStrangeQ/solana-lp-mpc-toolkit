@@ -18,6 +18,7 @@ import {
 import { getUserByChat } from '../../onboarding/index.js';
 import { executeLp, type LpExecuteParams } from '../../services/lp-service.js';
 import { loadWalletById, getWalletBalance } from '../../services/wallet-service.js';
+import { parseNaturalAmount, formatParsedAmount } from '../../utils/natural-amounts.js';
 import { validateSolAmount, validateSolanaAddress, friendlyErrorMessage } from '../../utils/resilience.js';
 import { operationLock } from '../../utils/operation-lock.js';
 import { consumePendingPool, consumePendingPoolAddress } from '../types.js';
@@ -231,19 +232,28 @@ export async function lpWizard(
     }
     await ctx.reply(`Using max: *${amount} SOL* (keeping ${FEE_RESERVE} SOL for fees)`, { parse_mode: 'Markdown' });
   } else if (amtData === 'lp:amt:custom') {
-    await ctx.reply('Enter the amount in SOL (e.g., 2.5):');
+    await ctx.reply(
+      'Enter amount:\n• Number: `2.5`\n• Percentage: `50%` or `half`\n• Max: `max` or `all but 0.1`',
+      { parse_mode: 'Markdown' }
+    );
     const customCtx = await conversation.waitFor('message:text', {
       otherwise: async (ctx) => {
-        await ctx.reply('Please send a number.');
+        await ctx.reply('Please send an amount (e.g., "2.5", "50%", "max").');
       },
     });
-    const parsed = parseFloat(customCtx.message.text.trim());
-    const validation = validateSolAmount(parsed);
-    if (isNaN(parsed) || !validation.valid) {
-      await ctx.reply(`${validation.error || 'Invalid amount.'} LP cancelled.`);
+    
+    // Use natural language parser
+    const parsed = parseNaturalAmount(customCtx.message.text.trim(), balanceCheck || 0);
+    if (!parsed.success || !parsed.amount) {
+      await ctx.reply(`${parsed.error || 'Invalid amount.'} LP cancelled.`);
       return;
     }
-    amount = parsed;
+    amount = parsed.amount;
+    
+    // Show parsed interpretation
+    if (parsed.description) {
+      await ctx.reply(`Using: *${amount} SOL* (${parsed.description})`, { parse_mode: 'Markdown' });
+    }
   } else {
     amount = parseFloat(amtData.split(':')[2]);
   }
