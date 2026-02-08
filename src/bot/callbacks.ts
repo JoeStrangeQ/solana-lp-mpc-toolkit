@@ -905,6 +905,28 @@ export async function handleCallback(ctx: BotContext) {
     }
   }
 
+  // ---- Conversation expired handlers ----
+  if (data === 'cf:rb') {
+    await ctx.answerCallbackQuery('Session expired').catch(() => {});
+    await ctx.reply(
+      '⏳ *Rebalance session expired*\n\n' +
+      'The rebalance wizard timed out. Please start again:\n' +
+      '• Use /rebalance to begin a new rebalance flow\n' +
+      '• Or tap a position in /positions and select Rebalance',
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
+  if (data.startsWith('cf:')) {
+    await ctx.answerCallbackQuery('Session expired').catch(() => {});
+    await ctx.reply(
+      '⏳ *Session expired*\n\nThe confirmation window has closed. Please start the operation again.',
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+
   // ---- Fallback ----
   await ctx.answerCallbackQuery('Processing...').catch(() => {});
   console.log(`[Bot] Unhandled callback: ${data}`);
