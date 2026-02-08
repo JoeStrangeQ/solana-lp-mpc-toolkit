@@ -455,7 +455,7 @@ export async function unifiedLpWizard(
           tipSpeed: 'fast',
           slippageBps: 300,
           signTransaction: async (tx) => client.signTransaction(tx),
-          signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
+          // Always use Jito bundles for multi-tx LP (fixes signature verification errors)
         };
 
         const res = await executeOrcaLp(params);
@@ -468,7 +468,7 @@ export async function unifiedLpWizard(
         };
       } else {
         // ---- Meteora DLMM execution ----
-        // Use direct RPC path - Privy's signTransaction has issues with partial signatures
+        // Always use Jito bundles for multi-tx LP (fixes signature verification errors)
         const params: LpExecuteParams = {
           walletId: user.walletId,
           walletAddress: user.walletAddress,
@@ -481,7 +481,7 @@ export async function unifiedLpWizard(
           tipSpeed: 'fast',
           slippageBps: 300,
           signTransaction: async (tx) => client.signTransaction(tx),
-          signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
+          // No signAndSendTransaction → forces Jito bundle path
         };
 
         const res = await executeLp(params);
