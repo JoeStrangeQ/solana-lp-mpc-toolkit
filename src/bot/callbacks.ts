@@ -122,6 +122,34 @@ export async function handleCallback(ctx: BotContext) {
           message = `Daily summary: ${newVal ? 'ON' : 'OFF'}`;
           break;
         }
+        case 'thresh': {
+          // Cycle through thresholds: 0 -> 5 -> 10 -> 25 -> 0
+          const thresholds = [0, 5, 10, 25];
+          const current = recipient.preferences.alertOnValueChange || 0;
+          const idx = thresholds.indexOf(current);
+          const newVal = thresholds[(idx + 1) % thresholds.length];
+          await upsertRecipient({
+            walletId,
+            preferences: { ...recipient.preferences, alertOnValueChange: newVal },
+          });
+          message = newVal > 0 
+            ? `Alert threshold: ${newVal}% value change`
+            : `Alert threshold: Any change`;
+          break;
+        }
+        case 'quiet': {
+          // Toggle quiet hours (22:00-08:00 UTC)
+          const hasQuiet = !!recipient.preferences.quietHours;
+          const newQuiet = hasQuiet ? undefined : { start: 22, end: 8 };
+          await upsertRecipient({
+            walletId,
+            preferences: { ...recipient.preferences, quietHours: newQuiet },
+          });
+          message = newQuiet 
+            ? `Quiet hours: 22:00-08:00 UTC (no alerts)`
+            : `Quiet hours: OFF`;
+          break;
+        }
         default:
           message = 'Unknown setting.';
       }

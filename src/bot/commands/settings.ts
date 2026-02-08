@@ -1,5 +1,5 @@
 /**
- * /settings command handler - Alert preferences
+ * /settings command handler - Alert preferences with frequency/threshold
  */
 import type { BotContext } from '../types.js';
 import { settingsKeyboard } from '../keyboards.js';
@@ -21,15 +21,19 @@ export async function settingsCommand(ctx: BotContext) {
     ctx.session.walletAddress = user.walletAddress;
 
     const prefs = user.preferences;
+    const threshold = prefs.alertOnValueChange || 0;
+    const quietEnabled = !!prefs.quietHours;
 
     const text = [
-      `*Alert Settings*`,
+      `*🔧 Alert Settings*`,
       ``,
-      `Out of Range Alerts: ${prefs.alertOnOutOfRange ? 'ON' : 'OFF'}`,
-      `Auto-Rebalance: ${prefs.autoRebalance ? 'ON' : 'OFF'}`,
-      `Daily Summary: ${prefs.dailySummary ? 'ON' : 'OFF'}`,
+      `🔔 Out of Range: ${prefs.alertOnOutOfRange ? 'ON' : 'OFF'}`,
+      `⚡ Auto-Rebalance: ${prefs.autoRebalance ? 'ON' : 'OFF'}`,
+      `📊 Daily Summary: ${prefs.dailySummary ? 'ON' : 'OFF'}`,
+      `📏 Alert Threshold: ${threshold > 0 ? `${threshold}% change` : 'Any change'}`,
+      `🌙 Quiet Hours: ${quietEnabled ? `${prefs.quietHours?.start}:00-${prefs.quietHours?.end}:00 UTC` : 'OFF'}`,
       ``,
-      `Tap to toggle:`,
+      `Tap to configure:`,
     ].join('\n');
 
     await ctx.reply(text, {
@@ -38,6 +42,8 @@ export async function settingsCommand(ctx: BotContext) {
         alertOnOutOfRange: prefs.alertOnOutOfRange,
         autoRebalance: prefs.autoRebalance,
         dailySummary: prefs.dailySummary,
+        alertThreshold: threshold,
+        quietHoursEnabled: quietEnabled,
       }),
     });
   } catch (error: any) {
