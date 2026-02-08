@@ -32,6 +32,7 @@ export async function helpCommand(ctx: BotContext) {
     `/alerts - View monitoring status`,
     `/status - System health check`,
     `/help - This message`,
+    `/tips - LP best practices`,
     `/about - Toolkit info`,
     ``,
     `🔒 Encrypted with *Arcium* | MEV-protected via *Jito*`,

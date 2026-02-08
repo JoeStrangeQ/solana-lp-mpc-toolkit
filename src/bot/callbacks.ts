@@ -787,6 +787,29 @@ export async function handleCallback(ctx: BotContext) {
     return;
   }
 
+  // ---- Tips ----
+  if (data.startsWith('tips:')) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    const { tipsCommand } = await import('./commands/tips.js');
+    
+    if (data === 'tips:next') {
+      await tipsCommand(ctx);
+    } else if (data === 'tips:all') {
+      const tips = [
+        '💡 *Concentrated vs Wide*: Concentrated = more fees, more work. Wide = passive.',
+        '📊 *IL Risk*: Bigger price moves = more IL. Fees often offset it.',
+        '⚡ *Rebalance*: When out of range, use /rebalance to fix.',
+        '🎯 *Pool Selection*: Consider TVL, volume, and volatility, not just APR.',
+        '🔒 *Security*: Claim fees regularly, check positions, use alerts.',
+      ];
+      await ctx.reply(
+        `*All LP Tips*\n\n${tips.join('\n\n')}`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+    return;
+  }
+
   // ---- Swap ----
   if (data.startsWith('swap:')) {
     await ctx.answerCallbackQuery().catch(() => {});

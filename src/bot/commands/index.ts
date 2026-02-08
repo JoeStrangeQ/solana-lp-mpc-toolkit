@@ -8,6 +8,7 @@ export { claimCommand } from './claim.js';
 export { swapCommand } from './swap.js';
 export { alertsCommand } from './alerts.js';
 export { historyCommand } from './history.js';
+export { tipsCommand } from './tips.js';
 export { settingsCommand } from './settings.js';
 export { helpCommand } from './help.js';
 export { portfolioCommand } from './portfolio.js';
