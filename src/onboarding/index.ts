@@ -10,6 +10,7 @@ import { Connection, PublicKey } from '@solana/web3.js';
 import { config } from '../config/index.js';
 import { upsertRecipient } from '../notifications/index.js';
 import { discoverAllPositions } from '../utils/position-discovery.js';
+import { getAggregatedPrice } from '../services/oracle-service.js';
 
 // ============ Redis Keys (UNIFIED) ============
 const KEYS = {
@@ -502,8 +503,15 @@ export async function getWalletBalance(walletAddress: string): Promise<{
     const solBalance = await connection.getBalance(pubkey);
     const sol = solBalance / 1e9;
     
-    // Get SOL price (approximate)
-    const solPrice = 105; // TODO: fetch from Jupiter
+    // Get SOL price from oracle
+    let solPrice = 100; // fallback
+    try {
+      const SOL_MINT = 'So11111111111111111111111111111111111111112';
+      const priceData = await getAggregatedPrice(SOL_MINT);
+      solPrice = priceData.price;
+    } catch (e) {
+      console.warn('[Onboarding] Failed to fetch SOL price, using fallback');
+    }
     const solUsd = sol * solPrice;
     
     const tokenAccounts = await connection.getParsedTokenAccountsByOwner(pubkey, {
