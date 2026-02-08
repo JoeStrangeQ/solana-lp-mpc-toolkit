@@ -14,6 +14,7 @@ import {
   formatPriceRange,
   formatPrice,
 } from './token-metadata';
+import { getCachedPoolInfo, getCachedDLMM } from '../services/pool-cache.js';
 
 // Cache for Meteora pool names
 const poolNameCache = new Map<string, string>();
@@ -304,28 +305,18 @@ export async function getPoolInfo(
   displayPrice: string;
 } | null> {
   try {
-    const pool = await DLMM.create(connection, new PublicKey(poolAddress));
-    const binStep = Number(pool.lbPair.binStep);
-    const activeBin = await pool.getActiveBin();
-    const currentPrice = Number(activeBin.price);
-    
-    const tokenXMint = pool.tokenX.publicKey.toBase58();
-    const tokenYMint = pool.tokenY.publicKey.toBase58();
-    
-    const [tokenX, tokenY] = await Promise.all([
-      resolveToken(tokenXMint),
-      resolveToken(tokenYMint),
-    ]);
+    // Use cached pool info (60s TTL)
+    const cached = await getCachedPoolInfo(connection, poolAddress);
     
     return {
       address: poolAddress,
-      name: `${tokenX.symbol}-${tokenY.symbol}`,
-      tokenX: { mint: tokenXMint, symbol: tokenX.symbol },
-      tokenY: { mint: tokenYMint, symbol: tokenY.symbol },
-      binStep,
-      activeBinId: activeBin.binId,
-      currentPrice,
-      displayPrice: `${formatPrice(currentPrice)} ${tokenY.symbol} per ${tokenX.symbol}`,
+      name: `${cached.tokenX.symbol}-${cached.tokenY.symbol}`,
+      tokenX: { mint: cached.tokenX.mint, symbol: cached.tokenX.symbol },
+      tokenY: { mint: cached.tokenY.mint, symbol: cached.tokenY.symbol },
+      binStep: cached.binStep,
+      activeBinId: cached.activeBin,
+      currentPrice: cached.activePrice,
+      displayPrice: `${formatPrice(cached.activePrice)} ${cached.tokenY.symbol} per ${cached.tokenX.symbol}`,
     };
   } catch (e) {
     console.warn(`[PositionDiscovery] Failed to get pool info:`, (e as Error).message);

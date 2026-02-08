@@ -16,6 +16,7 @@ import { FEE_CONFIG, calculateFee } from '../fees/index.js';
 import { getTokenPrices } from '../utils/prices.js';
 import { resolveTokens } from '../utils/token-metadata.js';
 import { jupiterClient, TOKENS } from '../swap/jupiter.js';
+import { getCachedDLMM } from '../services/pool-cache.js';
 
 export interface AtomicWithdrawParams {
   walletAddress: string;
@@ -102,8 +103,8 @@ export async function buildAtomicWithdraw(params: AtomicWithdrawParams): Promise
     amount: 0, // Will be filled after position query
   } as any);
 
-  // 2. Get pool and position info
-  const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+  // 2. Get pool and position info (cached DLMM instance)
+  const pool = await getCachedDLMM(connection, poolAddress);
   const userPositions = await pool.getPositionsByUserAndLbPair(new PublicKey(walletAddress));
   
   const position = userPositions.userPositions.find(
