@@ -21,6 +21,7 @@ import {
   positionsCommand,
   depositCommand,
   withdrawCommand,
+  claimCommand,
   settingsCommand,
   helpCommand,
   portfolioCommand,
@@ -70,6 +71,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.command('positions', positionsCommand);
   bot.command('deposit', depositCommand);
   bot.command('withdraw', withdrawCommand);
+  bot.command('claim', claimCommand);
   bot.command('settings', settingsCommand);
   bot.command('help', helpCommand);
   bot.command('portfolio', portfolioCommand);

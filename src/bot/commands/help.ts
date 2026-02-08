@@ -20,6 +20,7 @@ export async function helpCommand(ctx: BotContext) {
     `/find SOL USDC - Search pools by tokens`,
     `/lp - Add liquidity wizard`,
     `/withdraw - Withdraw from positions`,
+    `/claim - Claim fees without withdrawing`,
     `/rebalance - Rebalance out-of-range`,
     ``,
     `⚙️ *Setup & Settings*`,
