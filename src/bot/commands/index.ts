@@ -10,6 +10,7 @@ export { alertsCommand } from './alerts.js';
 export { historyCommand } from './history.js';
 export { tipsCommand } from './tips.js';
 export { exportCommand } from './export.js';
+export { refreshCommand } from './refresh.js';
 export { settingsCommand } from './settings.js';
 export { helpCommand } from './help.js';
 export { portfolioCommand } from './portfolio.js';

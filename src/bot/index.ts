@@ -27,6 +27,7 @@ import {
   historyCommand,
   tipsCommand,
   exportCommand,
+  refreshCommand,
   settingsCommand,
   helpCommand,
   portfolioCommand,
@@ -82,6 +83,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.command('history', historyCommand);
   bot.command('tips', tipsCommand);
   bot.command('export', exportCommand);
+  bot.command('refresh', refreshCommand);
   bot.command('settings', settingsCommand);
   bot.command('help', helpCommand);
   bot.command('portfolio', portfolioCommand);
