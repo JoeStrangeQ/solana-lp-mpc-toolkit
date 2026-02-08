@@ -8,14 +8,16 @@ import { InlineKeyboard } from 'grammy';
 
 export function mainMenuKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
-    .text('Balance', 'cmd:balance')
-    .text('Positions', 'cmd:positions')
+    .text('📊 Portfolio', 'cmd:portfolio')
+    .text('💰 Balance', 'cmd:balance')
     .row()
-    .text('Add LP', 'cmd:pools')
-    .text('Withdraw', 'cmd:withdraw')
+    .text('📋 Positions', 'cmd:positions')
+    .text('🏊 Add LP', 'cmd:pools')
     .row()
-    .text('Top Pools', 'cmd:pools')
-    .text('Settings', 'cmd:settings');
+    .text('🔄 Rebalance', 'cmd:rebalance')
+    .text('💸 Withdraw', 'cmd:withdraw')
+    .row()
+    .text('⚙️ Settings', 'cmd:settings');
 }
 
 export function poolSelectionKeyboard(
