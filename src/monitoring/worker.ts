@@ -219,6 +219,29 @@ async function checkPosition(position: TrackedPosition): Promise<{ alertQueued: 
   // Use shared connection pool
   const conn = getConnection();
   
+  // FIRST: Verify position still exists on-chain
+  try {
+    const positionPubkey = new PublicKey(position.positionAddress);
+    const accountInfo = await conn.getAccountInfo(positionPubkey);
+    
+    if (!accountInfo) {
+      // Position was closed/doesn't exist - auto-remove from tracking
+      await log('warn', `Position ${position.positionAddress} no longer exists on-chain - removing from tracking`, {
+        pool: position.poolName,
+        userId: position.userId,
+      });
+      
+      // Import and call remove function
+      const { untrackPosition } = await import('./userRules.js');
+      await untrackPosition(position.userId, position.positionAddress);
+      
+      return { alertQueued: false };
+    }
+  } catch (e: any) {
+    await log('error', `Failed to verify position ${position.positionAddress} exists: ${e.message}`);
+    // Continue anyway - might be RPC issue
+  }
+  
   // Use cached bin data (10s TTL) - precomputes for subsequent requests
   const binData = await getCachedBinData(conn, position.poolAddress);
   const currentBin = binData.activeBinId;
