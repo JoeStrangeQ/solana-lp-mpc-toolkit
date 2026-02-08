@@ -50,9 +50,11 @@ export function amountKeyboard(): InlineKeyboard {
 
 export function strategyKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
-    .text('Concentrated (+/- 5 bins)', 'lp:str:c')
+    .text('🎯 Tight (±2%) - Max fees, more rebalancing', 'lp:str:c')
     .row()
-    .text('Wide (+/- 20 bins)', 'lp:str:w')
+    .text('📊 Balanced (±5%) - Good yield, less work', 'lp:str:m')
+    .row()
+    .text('🌊 Wide (±15%) - Set & forget', 'lp:str:w')
     .row()
     .text('Cancel', 'cancel');
 }
