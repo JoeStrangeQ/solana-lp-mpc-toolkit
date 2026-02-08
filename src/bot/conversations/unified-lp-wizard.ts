@@ -437,6 +437,8 @@ export async function unifiedLpWizard(
 
       if (selectedPool.dex === 'orca') {
         // ---- Orca Whirlpool execution ----
+        // Use Jito bundle path (signTransaction only) - more reliable for multi-tx flows
+        // Direct RPC with signAndSendTransaction has issues with partially-signed txs
         const params: OrcaLpExecuteParams = {
           walletId: user.walletId,
           walletAddress: user.walletAddress,
@@ -446,7 +448,7 @@ export async function unifiedLpWizard(
           tipSpeed: 'fast',
           slippageBps: 300,
           signTransaction: async (tx) => client.signTransaction(tx),
-          signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
+          // Don't pass signAndSendTransaction - forces Jito bundle path
         };
 
         const res = await executeOrcaLp(params);
@@ -459,6 +461,7 @@ export async function unifiedLpWizard(
         };
       } else {
         // ---- Meteora DLMM execution ----
+        // Use Jito bundle path for reliability with multi-tx flows
         const params: LpExecuteParams = {
           walletId: user.walletId,
           walletAddress: user.walletAddress,
@@ -471,7 +474,7 @@ export async function unifiedLpWizard(
           tipSpeed: 'fast',
           slippageBps: 300,
           signTransaction: async (tx) => client.signTransaction(tx),
-          signAndSendTransaction: async (tx) => client.signAndSendTransaction(tx),
+          // Don't pass signAndSendTransaction - forces Jito bundle path
         };
 
         const res = await executeLp(params);
