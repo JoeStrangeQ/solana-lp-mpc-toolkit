@@ -44,18 +44,20 @@ export async function poolsCommand(ctx: BotContext) {
   if (!chatId) return;
 
   const kb = new InlineKeyboard()
+    .text('🏆 Best Yields', 'pools:best')  // New: unified view
+    .row()
     .text('Trending', 'pools:trending')
     .text('High TVL', 'pools:hightvl')
     .row()
     .text('LSTs', 'pools:lst')
     .text('xStocks', 'pools:xstocks')
     .row()
-    .text('Orca Whirlpools', 'pools:orca')
-    .text('Paste CA', 'pools:ca')
+    .text('Meteora', 'pools:all')
+    .text('Orca', 'pools:orca')
     .row()
-    .text('All (Top APR)', 'pools:all');
+    .text('Paste CA', 'pools:ca');
 
-  await ctx.reply('*Browse LP Pools*\n\nSelect a category:', {
+  await ctx.reply('*Browse LP Pools*\n\nTap *Best Yields* for top pools across all DEXes, or pick a category:', {
     parse_mode: 'Markdown',
     reply_markup: kb,
   });
@@ -222,6 +224,97 @@ export async function showOrcaPools(ctx: BotContext) {
   } catch (error: any) {
     console.error('[Bot] /pools orca error:', error);
     await ctx.reply('Failed to fetch Orca pools. Please try again.');
+  }
+}
+
+/**
+ * Show best yield pools across all DEXes (unified view)
+ */
+export async function showBestYieldPools(ctx: BotContext) {
+  try {
+    await ctx.reply('🔍 Finding best yield pools across all DEXes...');
+
+    // Fetch from both sources in parallel
+    const [meteoraPools, orcaPoolsResult] = await Promise.allSettled([
+      fetchPoolsByCategory('all'),
+      import('../../orca/pools.js').then(m => m.fetchOrcaPools(8, 'tvl')),
+    ]);
+
+    // Process Meteora pools
+    const meteora = meteoraPools.status === 'fulfilled' 
+      ? meteoraPools.value.map(p => ({
+          ...p,
+          dex: 'meteora' as const,
+          dailyYieldPer100: (p.apr / 365 * 100 / 100).toFixed(2), // $ per day on $100
+        }))
+      : [];
+
+    // Process Orca pools (estimate APR from fee rate if not available)
+    const orca = orcaPoolsResult.status === 'fulfilled'
+      ? orcaPoolsResult.value.map(p => ({
+          name: p.name,
+          address: p.address,
+          apr: p.feeRate * 3, // Rough estimate: feeRate in bps, ~3x daily turnover
+          tvl: p.tvl,
+          volume24h: 0,
+          binStep: 0,
+          tickSpacing: p.tickSpacing,
+          dex: 'orca' as const,
+          dailyYieldPer100: ((p.feeRate * 3) / 365 * 100 / 100).toFixed(2),
+        }))
+      : [];
+
+    // Combine and sort by APR (highest first)
+    const combined = [...meteora, ...orca]
+      .filter(p => p.tvl >= 50000) // Min $50K TVL
+      .sort((a, b) => b.apr - a.apr)
+      .slice(0, 10);
+
+    if (combined.length === 0) {
+      await ctx.reply('No pools found. Please try again later.');
+      return;
+    }
+
+    const poolLines = combined.map((p, i) => {
+      const fmtTvl = p.tvl >= 1_000_000 
+        ? `$${(p.tvl / 1_000_000).toFixed(1)}M` 
+        : `$${(p.tvl / 1_000).toFixed(0)}K`;
+      const dexTag = p.dex === 'orca' ? '🌀' : '☄️';
+      return `${i + 1}. ${dexTag} *${p.name}*\n   ${p.apr.toFixed(1)}% APR (~$${p.dailyYieldPer100}/day per $100) | TVL: ${fmtTvl}`;
+    }).join('\n\n');
+
+    const text = [
+      `*🏆 Best Yield Pools*`,
+      `_Across Meteora ☄️ & Orca 🌀_`,
+      ``,
+      poolLines,
+      ``,
+      `Tap a pool to add liquidity.`,
+    ].join('\n');
+
+    // Cache displayed pools for callback lookup
+    const chatId = ctx.chat?.id;
+    if (chatId) {
+      setDisplayedPools(chatId, combined.map(p => ({
+        address: p.address,
+        name: p.name,
+        dex: p.dex,
+        tickSpacing: p.dex === 'orca' ? p.tickSpacing : undefined,
+      })));
+    }
+
+    // Build keyboard with address-based callbacks
+    const kb = new InlineKeyboard();
+    for (const pool of combined) {
+      const dexTag = pool.dex === 'orca' ? 'o' : 'm';
+      kb.text(`${pool.dex === 'orca' ? '🌀' : '☄️'} ${pool.name}`, `lp:p:${dexTag}:${pool.address.slice(0, 11)}`).row();
+    }
+    kb.text('Back to Categories', 'cmd:pools');
+
+    await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: kb });
+  } catch (error: any) {
+    console.error('[Bot] /pools best error:', error);
+    await ctx.reply('Failed to fetch pools. Please try again.');
   }
 }
 

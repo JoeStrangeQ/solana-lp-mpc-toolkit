@@ -68,6 +68,13 @@ export async function handleCallback(ctx: BotContext) {
       return;
     }
 
+    if (category === 'best') {
+      // Unified best yields across all DEXes
+      const { showBestYieldPools } = await import('./commands/pools.js');
+      await showBestYieldPools(ctx);
+      return;
+    }
+
     // Load and display pools by category
     const { showPoolCategory } = await import('./commands/pools.js');
     await showPoolCategory(ctx, category as any);
@@ -162,7 +169,7 @@ export async function handleCallback(ctx: BotContext) {
     return;
   }
 
-  // ---- Pool selection from /pools → enter LP wizard with pool pre-selected ----
+  // ---- Pool selection from /pools → enter unified LP wizard ----
   // New format: lp:p:dex:addressPrefix (stable, doesn't rely on index)
   if (data.startsWith('lp:p:')) {
     await ctx.answerCallbackQuery().catch(() => {});
@@ -172,20 +179,15 @@ export async function handleCallback(ctx: BotContext) {
     
     const displayed = getPoolByPrefix(prefix);
     if (displayed && chatId) {
-      if (dexTag === 'o' || displayed.dex === 'orca') {
-        // Route to Orca LP wizard
-        setPendingLpPool(chatId, {
-          address: displayed.address,
-          dex: 'orca',
-          name: displayed.name,
-          tickSpacing: displayed.tickSpacing,
-        });
-        await ctx.conversation.enter('orcaLpWizard');
-      } else {
-        // Default: Meteora LP wizard
-        setPendingPoolAddress(chatId, displayed.address);
-        await ctx.conversation.enter('lpWizard');
-      }
+      // Use unified wizard for all DEXes
+      const dex = (dexTag === 'o' || displayed.dex === 'orca') ? 'orca' : 'meteora';
+      setPendingLpPool(chatId, {
+        address: displayed.address,
+        dex,
+        name: displayed.name,
+        tickSpacing: displayed.tickSpacing,
+      });
+      await ctx.conversation.enter('unifiedLpWizard');
     } else {
       await ctx.reply('Pool not found. Please refresh the pool list with /pools');
     }
@@ -199,7 +201,8 @@ export async function handleCallback(ctx: BotContext) {
 
     if (poolIdPart === 'ca') {
       // CA flow: address was already stored via setPendingPoolAddress
-      await ctx.conversation.enter('lpWizard');
+      // Unified wizard handles consumePendingPoolAddress
+      await ctx.conversation.enter('unifiedLpWizard');
       return;
     }
 
@@ -208,24 +211,19 @@ export async function handleCallback(ctx: BotContext) {
       // Look up actual pool address from the displayed pools cache
       const displayed = getDisplayedPool(chatId, poolIdx);
       if (displayed) {
-        if (displayed.dex === 'orca') {
-          // Route to Orca LP wizard
-          setPendingLpPool(chatId, {
-            address: displayed.address,
-            dex: 'orca',
-            name: displayed.name,
-            tickSpacing: displayed.tickSpacing,
-          });
-          await ctx.conversation.enter('orcaLpWizard');
-        } else {
-          // Default: Meteora LP wizard
-          setPendingPoolAddress(chatId, displayed.address);
-          await ctx.conversation.enter('lpWizard');
-        }
+        // Use unified wizard for all DEXes
+        const dex = displayed.dex === 'orca' ? 'orca' : 'meteora';
+        setPendingLpPool(chatId, {
+          address: displayed.address,
+          dex,
+          name: displayed.name,
+          tickSpacing: displayed.tickSpacing,
+        });
+        await ctx.conversation.enter('unifiedLpWizard');
       } else {
-        // Fallback: store index for backward compat with LP wizard's own fetch
+        // Fallback: store index for backward compat with unified wizard's own fetch
         setPendingPool(chatId, poolIdx);
-        await ctx.conversation.enter('lpWizard');
+        await ctx.conversation.enter('unifiedLpWizard');
       }
     }
     return;

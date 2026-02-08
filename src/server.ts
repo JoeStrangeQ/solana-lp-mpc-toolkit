@@ -41,6 +41,7 @@ import skillRoutes from './routes/skill.js';
 import oracleRoutes from './routes/oracle.js';
 import ultraSwapRoutes from './routes/ultra-swap.js';
 import actionsRoutes from './routes/actions.js';
+import unifiedLpRoutes from './routes/unified-lp.js';
 
 // Import bot
 import { createBot, initBot, getBot, getBotWebhookHandler } from './bot/index.js';
@@ -88,6 +89,7 @@ app.route('/positions', positionsByAddress());
 app.route('/lp', lpRoutes);
 app.route('/lp/withdraw', withdrawRoutes);
 app.route('/lp/rebalance', rebalanceRoutes);
+app.route('/unified', unifiedLpRoutes);
 app.route('/swap', swapRoutes);
 app.route('/encrypt', encryptRoutes);
 

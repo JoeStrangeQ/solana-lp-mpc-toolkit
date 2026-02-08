@@ -29,6 +29,7 @@ import { lpWizard } from './conversations/lp-wizard.js';
 import { withdrawWizard } from './conversations/withdraw-wizard.js';
 import { rebalanceWizard } from './conversations/rebalance-wizard.js';
 import { orcaLpWizard } from './conversations/orca-lp-wizard.js';
+import { unifiedLpWizard } from './conversations/unified-lp-wizard.js';
 
 let bot: Bot<BotContext> | null = null;
 
@@ -53,6 +54,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.use(createConversation(withdrawWizard));
   bot.use(createConversation(rebalanceWizard));
   bot.use(createConversation(orcaLpWizard));
+  bot.use(createConversation(unifiedLpWizard));
 
   // Register command handlers
   bot.command('start', startCommand);
@@ -66,7 +68,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
 
   // Conversation entry points (via commands)
   bot.command('lp', async (ctx) => {
-    await ctx.conversation.enter('lpWizard');
+    await ctx.conversation.enter('unifiedLpWizard');
   });
   bot.command('rebalance', async (ctx) => {
     await ctx.conversation.enter('rebalanceWizard');
