@@ -126,13 +126,22 @@ export interface DisplayedPool {
 }
 
 const _displayedPools = new Map<number, DisplayedPool[]>(); // chatId -> pools shown
+const _poolsByPrefix = new Map<string, DisplayedPool>(); // addressPrefix -> pool (global)
 
 export function setDisplayedPools(chatId: number, pools: DisplayedPool[]): void {
   _displayedPools.set(chatId, pools);
+  // Also index by address prefix for stable lookup
+  for (const pool of pools) {
+    _poolsByPrefix.set(pool.address.slice(0, 11), pool);
+  }
 }
 
 export function getDisplayedPool(chatId: number, index: number): DisplayedPool | undefined {
   return _displayedPools.get(chatId)?.[index];
+}
+
+export function getPoolByPrefix(prefix: string): DisplayedPool | undefined {
+  return _poolsByPrefix.get(prefix);
 }
 
 type BaseContext = Context & SessionFlavor<SessionData>;

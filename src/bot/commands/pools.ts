@@ -103,12 +103,13 @@ export async function showPoolCategory(ctx: BotContext, category: PoolCategory |
       address: p.address,
       name: p.name,
       apy: p.apr,
+      dex: 'meteora' as const,
     }));
 
-    // Cache displayed pools so callback handler can resolve index → address
+    // Cache displayed pools so callback handler can resolve prefix → full pool
     const chatId = ctx.chat?.id;
     if (chatId) {
-      setDisplayedPools(chatId, pools.map(p => ({ address: p.address, name: p.name })));
+      setDisplayedPools(chatId, pools.map(p => ({ address: p.address, name: p.name, dex: 'meteora' })));
     }
 
     await ctx.reply(text, {
@@ -209,10 +210,11 @@ export async function showOrcaPools(ctx: BotContext) {
       })));
     }
 
-    // Build selection keyboard
+    // Build selection keyboard with address-based callbacks
     const kb = new InlineKeyboard();
-    for (let i = 0; i < pools.length; i++) {
-      kb.text(`${pools[i].name}`, `lp:pool:${i}`).row();
+    for (const pool of pools) {
+      // Use address prefix for stable lookup: lp:p:o:PREFIX (o = orca)
+      kb.text(`${pool.name}`, `lp:p:o:${pool.address.slice(0, 11)}`).row();
     }
     kb.text('Back to Categories', 'cmd:pools');
 

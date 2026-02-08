@@ -19,16 +19,16 @@ export function mainMenuKeyboard(): InlineKeyboard {
 }
 
 export function poolSelectionKeyboard(
-  pools: Array<{ address: string; name: string; apy?: number }>,
+  pools: Array<{ address: string; name: string; apy?: number; dex?: string }>,
 ): InlineKeyboard {
   const kb = new InlineKeyboard();
-  for (let i = 0; i < pools.length; i++) {
-    const pool = pools[i];
+  for (const pool of pools) {
     const label = pool.apy
       ? `${pool.name} (${pool.apy.toFixed(1)}% APY)`
       : pool.name;
-    // Use index-based callback to stay under 64 bytes
-    kb.text(label, `lp:pool:${i}`).row();
+    // Use address prefix for stable lookup (11 chars + prefix = ~20 bytes, under 64 limit)
+    const dexTag = pool.dex === 'orca' ? 'o' : 'm';
+    kb.text(label, `lp:p:${dexTag}:${pool.address.slice(0, 11)}`).row();
   }
   kb.text('Cancel', 'cancel');
   return kb;
