@@ -254,8 +254,11 @@ export function friendlyErrorMessage(error: any): string {
   if (!error) return 'An unexpected error occurred. Please try again.';
   const msg = (error.message || error.toString()).toLowerCase();
 
+  if (msg.includes('0x1771') || msg.includes('insufficientfunds')) {
+    return 'Insufficient balance for swap. Try a smaller amount (leave ~0.15 SOL for fees).';
+  }
   if (msg.includes('insufficient') || msg.includes('not enough') || msg.includes('balance')) {
-    return 'Insufficient SOL balance. Please deposit more SOL and try again.';
+    return 'Insufficient SOL balance. Try a smaller amount or deposit more SOL.';
   }
   if (msg.includes('pool not found') || msg.includes('not found')) {
     return 'Pool not found. Please check the address and try again.';

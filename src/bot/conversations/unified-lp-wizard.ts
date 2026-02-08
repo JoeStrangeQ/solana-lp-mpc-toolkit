@@ -28,8 +28,9 @@ import {
   type PendingLpPool,
 } from '../types.js';
 
-// Fee reserve: covers tx fees (~0.005/tx × 3), rent for ATAs + position (~0.01)
-const FEE_RESERVE = 0.05;
+// Fee reserve: covers tx fees (~0.01/tx × 3-5), rent for ATAs (~0.003 × 3), position rent (~0.01)
+// Atomic LP needs more buffer due to multiple transactions + potential ATA creation
+const FEE_RESERVE = 0.15;
 
 interface PoolInfo {
   address: string;
