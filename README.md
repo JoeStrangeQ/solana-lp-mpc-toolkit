@@ -15,21 +15,26 @@ AI agents and humans managing LP together, seamlessly:
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        YOU                                  │
-└──────────┬─────────────────────────────────┬────────────────┘
-           │                                 │
-   ┌───────▼───────┐                 ┌───────▼───────┐
-   │  @mnm_lp_bot  │                 │   Terminal    │
-   │   Telegram    │                 │  (Clawdbot)   │
-   └───────┬───────┘                 └───────┬───────┘
-           │                                 │
-           │     "LP 1 SOL into SOL-USDC"    │
-           └─────────────┬───────────────────┘
-                         │
-                         ▼
-           ┌─────────────────────────────┐
-           │     LP Agent Toolkit API     │
-           │  🔐 Arcium | ⚡ Jito | 🔑 MPC │
-           └─────────────────────────────┘
+└──────────┬─────────────────────────────────────────────────┬┘
+           │                                                 │
+   ┌───────▼───────┐                               ┌─────────▼─────────┐
+   │  @mnm_lp_bot  │                               │     Terminal      │
+   │   Telegram    │                               │   (OpenClaw AI)   │
+   └───────┬───────┘                               └─────────┬─────────┘
+           │                                                 │
+           │     "LP 1 SOL into SOL-USDC balanced"          │
+           └───────────────────┬─────────────────────────────┘
+                               │
+                               ▼
+             ┌─────────────────────────────────────┐
+             │       LP Agent Toolkit API          │
+             │  🔐 Arcium | ⚡ Jito | 🔑 Privy MPC │
+             └─────────────────────────────────────┘
+                               │
+           ┌───────────────────┼───────────────────┐
+           ▼                   ▼                   ▼
+      ☄️ Meteora          🌀 Orca           🔄 Jupiter
+        DLMM            Whirlpools           Swaps
 ```
 
 **Same result, any surface.** Natural language everywhere.
@@ -40,11 +45,40 @@ AI agents and humans managing LP together, seamlessly:
 
 | Traditional LP | LP Agent Toolkit |
 |----------------|------------------|
-| Swap tokens first | SOL in → Position out |
-| Exposed to MEV | Jito-bundled |
+| Swap tokens first | SOL in → Position out (atomic) |
+| Exposed to MEV | Jito-bundled (private mempool) |
 | Manage keys yourself | MPC custody (Privy) |
 | Manual monitoring | 24/7 automated alerts |
+| Single DEX | Multi-DEX (Meteora + Orca) |
 | CLI only | Telegram + Terminal + API |
+
+---
+
+## 🚀 Features
+
+### Multi-DEX Support
+- **Meteora DLMM** — Concentrated liquidity with dynamic bins
+- **Orca Whirlpools** — Tick-based concentrated liquidity
+- **Unified Pool Discovery** — Best yields across all DEXes
+
+### Atomic Execution
+- **Swap + LP in one bundle** — No failed half-states
+- **Jito MEV Protection** — Private mempool, no frontrunning
+- **Pre-flight Simulation** — Catch errors before broadcast
+
+### Smart Strategies
+- 🎯 **Tight (±2%)** — 6 bins, max APR, frequent rebalancing
+- 📊 **Balanced (±5%)** — 16 bins, good yield, less work
+- 🌊 **Wide (±15%)** — 50 bins, set & forget
+
+### Position Management
+- **Real-time Monitoring** — Out-of-range alerts
+- **Auto-cleanup** — Closed positions removed automatically
+- **IL Estimates** — Impermanent loss displayed on positions
+- **Sparkline Charts** — Price history visualization
+
+### 24 Telegram Commands
+Full bot control via `/help` — pools, positions, withdraw, swap, claim, rebalance, and more.
 
 ---
 
@@ -56,24 +90,16 @@ AI agents and humans managing LP together, seamlessly:
 2. Send `/start` to create your wallet
 3. Deposit SOL to the address
 4. Send `/pools` to see opportunities
-5. Tap a pool → Pick amount → Done!
-
-Or just type naturally: *"LP 0.5 SOL into the best pool"*
+5. Tap a pool → Pick amount → Choose strategy → Done!
 
 ### Option 2: AI Agent (OpenClaw/Claude)
 
 ```bash
-# Download the skill
-curl -o ~/.openclaw/skills/lp-agent/SKILL.md \
-  https://lp-agent-api-production.up.railway.app/skill.md
-
-# Connect your wallet
-curl -X POST "https://lp-agent-api-production.up.railway.app/openclaw/connect" \
+# Your agent can use the API directly
+curl -X POST https://lp-agent-api-production.up.railway.app/lp/atomic \
   -H "Content-Type: application/json" \
-  -d '{"walletId": "YOUR_WALLET_ID"}'
+  -d '{"walletId": "...", "poolAddress": "...", "amountSol": 0.5}'
 ```
-
-Then just tell your agent: *"Check my LP positions"* or *"Withdraw from SOL-USDC"*
 
 ### Option 3: Direct API
 
@@ -81,70 +107,33 @@ Then just tell your agent: *"Check my LP positions"* or *"Withdraw from SOL-USDC
 # Create wallet
 curl -X POST https://lp-agent-api-production.up.railway.app/wallet/create
 
-# Atomic LP (SOL → swap → position in one bundle)
-curl -X POST https://lp-agent-api-production.up.railway.app/lp/atomic \
-  -H "Content-Type: application/json" \
-  -d '{"walletId": "...", "poolAddress": "...", "amountSol": 0.5}'
+# Get top pools (Meteora + Orca unified)
+curl https://lp-agent-api-production.up.railway.app/unified/pools
+
+# Check positions
+curl "https://lp-agent-api-production.up.railway.app/positions?address=YOUR_WALLET"
 ```
-
----
-
-## 💬 Natural Language Commands
-
-Works in **both** Telegram and Terminal:
-
-| You Say | Action |
-|---------|--------|
-| "LP 0.5 SOL into SOL-USDC" | Opens concentrated position |
-| "Check my balance" | Shows wallet balance |
-| "What are the top pools?" | Lists pools by TVL/APY |
-| "Show my positions" | Displays all LP with P&L |
-| "Withdraw from MET-USDC" | Closes position, returns SOL |
-| "Claim my fees" | Collects earned fees |
-| "Rebalance my positions" | Re-centers around current price |
 
 ---
 
 ## 📱 Telegram Commands
 
-| Command | Description |
-|---------|-------------|
-| `/start` | Create wallet or show existing |
-| `/balance` | Check wallet balance & tokens |
-| `/pools` | Browse top pools with LP buttons |
-| `/positions` | View positions with details + actions |
-| `/deposit` | Get deposit address |
-| `/withdraw` | Withdraw funds |
-| `/settings` | Alert preferences |
-| `/help` | All commands |
+| Category | Commands |
+|----------|----------|
+| **Getting Started** | `/start` `/help` `/about` `/deposit` |
+| **Portfolio** | `/portfolio` `/positions` `/balance` `/history` |
+| **Pool Discovery** | `/pools` `/find SOL USDC` |
+| **Liquidity** | `/lp` `/withdraw` `/claim` `/rebalance` `/swap` |
+| **Market Data** | `/price` `/gas` `/simulate` |
+| **Settings** | `/settings` `/alerts` `/status` `/refresh` |
 
 ### Natural Language Amounts
 
-The bot understands flexible amount inputs:
+The bot understands flexible inputs:
 - Numbers: `2.5`, `0.1 SOL`
 - Percentages: `50%`, `half`, `quarter`
 - Max: `max`, `all`, `everything`
 - Relative: `max minus 0.1`, `all but fees`
-
-### Settings Options
-
-Configure via `/settings`:
-- **Alert Threshold**: 0% / 5% / 10% / 25% value change
-- **Quiet Hours**: 22:00-08:00 UTC (no notifications)
-- **Auto-Rebalance**: ON/OFF
-- **Daily Summary**: ON/OFF
-
----
-
-## 🔔 Monitoring & Alerts
-
-Positions are checked every 5 minutes:
-
-- **Out of Range** → Instant Telegram notification
-- **Back in Range** → Confirmation alert
-- **Rebalance Needed** → One-tap fix
-
-Configure via `/settings` or webhook for your agent.
 
 ---
 
@@ -156,79 +145,68 @@ Configure via `/settings` or webhook for your agent.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/wallet/create` | POST | Create MPC wallet |
+| `/health` | GET | System health + Telegram status |
+| `/unified/pools` | GET | Top pools across Meteora + Orca |
+| `/pools/top` | GET | Risk-scored Meteora pools |
+| `/positions` | GET | List all LP positions (multi-DEX) |
+| `/lp/atomic` | POST | Atomic swap→LP via Jito |
+| `/lp/withdraw/atomic` | POST | Atomic withdraw + fee |
+| `/lp/rebalance/execute` | POST | Rebalance out-of-range position |
+| `/wallet/create` | POST | Create Privy MPC wallet |
 | `/wallet/:id/balance` | GET | Check balance |
-| `/pools/top` | GET | Top pools by TVL |
-| `/positions/:walletId` | GET | List LP positions |
-| `/lp/execute` | POST | ⚡ Full LP: build + sign + submit (Jito) |
-| `/lp/withdraw/execute` | POST | ⚡ Full withdraw: build + sign + submit (Jito) |
-| `/lp/atomic` | POST | Build LP bundle (unsigned) |
-| `/lp/withdraw/atomic` | POST | Build withdraw bundle (unsigned) |
-| `/fees/claim` | POST | Claim LP fees |
-| `/lp/rebalance/execute` | POST | Atomic rebalance |
 
-### Integration
+### Monitoring
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/skill.md` | GET | OpenClaw skill file |
-| `/openclaw/connect` | POST | One-call agent setup |
-| `/openclaw/setup` | GET | Step-by-step guide |
-| `/telegram/send` | POST | Send via bot (for agents) |
-| `/notify/register` | POST | Configure alerts |
+| `/monitor/add` | POST | Track position |
+| `/monitor/positions` | GET | List tracked positions |
+| `/health/telegram` | GET | Telegram bot health |
 
 ---
 
-## 🛠 Built With
-
-Hono, [grammY](https://grammy.dev), Meteora DLMM, Orca Whirlpools, Jupiter, Jito, Privy MPC, Arcium, Upstash Redis — all TypeScript.
+## 🛠 Architecture
 
 ### Reliability Features
-
-- **Circuit Breakers**: Jupiter Ultra API auto-disconnects after 3 failures
-- **Retry Logic**: Exponential backoff on oracle/RPC failures
-- **Timeouts**: 30s max for wallet signing operations
-- **Request Tracing**: Unique ID on every request for debugging
+- **Circuit Breakers** — Jupiter Ultra auto-disconnects after 3 failures
+- **Retry Logic** — Exponential backoff on oracle/RPC failures  
+- **30s Timeouts** — Wallet signing operations
+- **Request Tracing** — Unique ID on every request
+- **Pre-flight Simulation** — Catches errors before Jito submission
 
 ### Performance Features
+- **Pool Caching** — 60s TTL for pool data, 10s for bin prices
+- **Connection Pool** — Shared RPC connection
+- **Parallel Loading** — Batch pool discovery
+- **Bin Precompute** — Prices cached during monitoring
 
-- **Pool Caching**: 60s TTL for pool data, 10s for bin prices
-- **Connection Pool**: Shared RPC connection across requests
-- **Parallel Loading**: Batch pool discovery
-- **Bin Precompute**: Prices cached during monitoring cycles
+### Smart Simulation
+For atomic bundles (swap→LP), later transactions depend on earlier ones:
+- Only hard-fails on first transaction
+- Subsequent "insufficient funds" errors treated as expected
+- Lets Jito handle the atomic execution
 
 ---
 
-## 🔐 Security Architecture
+## 🔐 Security
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    SECURITY LAYERS                        │
-├──────────────────────────────────────────────────────────┤
-│  🔑 MPC CUSTODY (Privy)                                  │
-│     Private keys sharded, never reconstructed            │
-│     No seed phrases, no exposure                         │
-├──────────────────────────────────────────────────────────┤
-│  🔐 ARCIUM ENCRYPTION                                    │
-│     Strategy encrypted before execution                  │
-│     Parameters hidden until settlement                   │
-├──────────────────────────────────────────────────────────┤
-│  ⚡ JITO BUNDLES                                         │
-│     Atomic execution (all or nothing)                    │
-│     Private mempool (no frontrunning)                    │
-├──────────────────────────────────────────────────────────┤
-│  🔒 WEBHOOK SECURITY                                     │
-│     HMAC-SHA256 signatures                               │
-│     Per-wallet secrets                                   │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      SECURITY LAYERS                         │
+├──────────────────────────────────────────────────────────────┤
+│  🔑 MPC CUSTODY (Privy)                                      │
+│     Private keys sharded across nodes, never reconstructed   │
+├──────────────────────────────────────────────────────────────┤
+│  🔐 ARCIUM ENCRYPTION                                        │
+│     Strategy encrypted before execution (x25519-aes256gcm)   │
+├──────────────────────────────────────────────────────────────┤
+│  ⚡ JITO BUNDLES                                              │
+│     Atomic execution, private mempool, no frontrunning       │
+├──────────────────────────────────────────────────────────────┤
+│  🛡️ PRE-FLIGHT SIMULATION                                    │
+│     Transactions validated before broadcast                  │
+└──────────────────────────────────────────────────────────────┘
 ```
-
-**What's protected:**
-- ✅ Private keys never leave MPC
-- ✅ Strategies encrypted end-to-end
-- ✅ Transactions MEV-protected
-- ✅ Webhook payloads signed
-- ✅ No secrets in client code
 
 ---
 
@@ -237,10 +215,25 @@ Hono, [grammY](https://grammy.dev), Meteora DLMM, Orca Whirlpools, Jupiter, Jito
 | Fee | Rate | When |
 |-----|------|------|
 | Protocol | 1% | On withdrawals |
-| Jito Tip | ~0.0001 SOL | Per bundle |
+| Jito Tip | ~0.001-0.005 SOL | Per bundle |
 | Network | ~0.001 SOL | Standard fees |
+| Reserve | 0.15 SOL | Held for tx fees |
 
 Treasury: `fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt`
+
+---
+
+## 📊 Tech Stack
+
+- **Framework:** Hono (edge-ready)
+- **Bot:** grammY (Telegram)
+- **DEXes:** Meteora DLMM, Orca Whirlpools
+- **Swaps:** Jupiter (excludes Meteora DLMM routes)
+- **Bundles:** Jito Block Engine
+- **Wallets:** Privy MPC
+- **Privacy:** Arcium Encryption
+- **Cache:** Upstash Redis
+- **Deploy:** Railway
 
 ---
 
@@ -249,21 +242,55 @@ Treasury: `fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt`
 | Resource | URL |
 |----------|-----|
 | **API** | https://lp-agent-api-production.up.railway.app |
-| **Docs** | https://api.mnm.ag |
+| **Frontend** | https://api.mnm.ag |
 | **Telegram** | [@mnm_lp_bot](https://t.me/mnm_lp_bot) |
-| **Skill File** | [/skill.md](https://lp-agent-api-production.up.railway.app/skill.md) |
 | **GitHub** | [solana-lp-mpc-toolkit](https://github.com/JoeStrangeQ/solana-lp-mpc-toolkit) |
+| **Health** | [/health](https://lp-agent-api-production.up.railway.app/health) |
 
 ---
 
-## 🏆 Hackathon Submission
+## 🏆 Hackathon
 
 **Colosseum Agent Hackathon** (Feb 2-12, 2026)
 
 - **Track:** DeFi Agents
 - **Agent ID:** 17
-- **Name:** MnM LP Agent Toolkit
+- **Team:** MnM Labs
+
+### What We Built
+
+1. **Multi-DEX LP Agent** — Unified interface for Meteora + Orca
+2. **Atomic Execution** — Swap→LP in one Jito bundle
+3. **24/7 Monitoring** — Position tracking with Telegram alerts
+4. **AI-Native Design** — Natural language, agent-friendly API
+5. **Privacy Layer** — Arcium encryption for strategies
+6. **MPC Custody** — No exposed private keys
 
 ---
 
-Built with 🦐 by [MnM](https://mnm.ag)
+## 📝 Changelog (Feb 8, 2026)
+
+### New Features
+- ✅ Orca Whirlpool integration (LP + position discovery)
+- ✅ Unified pool view (Meteora + Orca + Raydium data)
+- ✅ Strategy selector with bin counts (6/16/50 bins)
+- ✅ Pool display shows bin step / tick spacing
+- ✅ Pre-flight simulation for all LP flows
+- ✅ Smart simulation for dependent transactions
+
+### Bug Fixes
+- ✅ Orca fee payer fix (transaction rebuilding)
+- ✅ Auto-cleanup of closed positions from monitoring
+- ✅ Exclude Meteora DLMM from Jupiter swaps (bitmap extension fix)
+- ✅ FEE_RESERVE consistency (0.15 SOL everywhere)
+- ✅ Better error messages for low-liquidity tokens
+
+### UX Improvements
+- ✅ Strategy buttons show bin counts
+- ✅ Pool list shows bin step (Meteora) / tick spacing (Orca)
+- ✅ Clear error messages for common failures
+- ✅ Human-friendly yield display ($X/day per $100)
+
+---
+
+Built with 🦐 by [MnM Labs](https://mnm.ag)
