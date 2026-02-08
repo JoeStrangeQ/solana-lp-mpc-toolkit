@@ -12,3 +12,4 @@ export { findCommand } from './find.js';
 export { priceCommand } from './price.js';
 export { gasCommand } from './gas.js';
 export { aboutCommand } from './about.js';
+export { simulateCommand } from './simulate.js';
