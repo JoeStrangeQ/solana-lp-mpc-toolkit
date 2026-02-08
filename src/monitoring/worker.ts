@@ -13,6 +13,8 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import DLMM from '@meteora-ag/dlmm';
 import { config } from '../config/index.js';
+import { getCachedDLMM, getCachedBinData } from '../services/pool-cache.js';
+import { getConnection } from '../services/connection-pool.js';
 import {
   getAllTrackedPositions,
   updatePositionStatus,
@@ -86,7 +88,6 @@ const MAX_LOG_ENTRIES = 500;
 // Runtime state
 let isRunning = false;
 let positionCheckTimer: NodeJS.Timeout | null = null;
-let connection: Connection | null = null;
 
 // Redis client
 let redis: Redis | null = null;
@@ -183,10 +184,6 @@ async function checkAllPositions(): Promise<void> {
     
     await log('info', `Checking ${positions.length} positions`);
     
-    if (!connection) {
-      connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
-    }
-    
     let checkedCount = 0;
     let alertsQueued = 0;
     
@@ -219,13 +216,12 @@ async function checkAllPositions(): Promise<void> {
 }
 
 async function checkPosition(position: TrackedPosition): Promise<{ alertQueued: boolean }> {
-  if (!connection) {
-    connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
-  }
+  // Use shared connection pool
+  const conn = getConnection();
   
-  const pool = await DLMM.create(connection, new PublicKey(position.poolAddress));
-  const activeBin = await pool.getActiveBin();
-  const currentBin = activeBin.binId;
+  // Use cached bin data (10s TTL) - precomputes for subsequent requests
+  const binData = await getCachedBinData(conn, position.poolAddress);
+  const currentBin = binData.activeBinId;
   
   const inRange = currentBin >= position.binRange.lower && currentBin <= position.binRange.upper;
   const wasInRange = position.lastInRange !== false;
