@@ -787,6 +787,101 @@ export async function handleCallback(ctx: BotContext) {
     return;
   }
 
+  // ---- Swap ----
+  if (data.startsWith('swap:')) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    
+    // Quick swap buttons: swap:0.1:SOL:USDC
+    const parts = data.split(':');
+    if (parts.length === 4 && parts[1] !== 'exec') {
+      const amount = parts[1];
+      const from = parts[2];
+      const to = parts[3];
+      // Simulate the command
+      if (ctx.message) {
+        ctx.message.text = `/swap ${amount} ${from} to ${to}`;
+      }
+      const { swapCommand } = await import('./commands/swap.js');
+      // Create a fake message context
+      await ctx.reply(`Processing /swap ${amount} ${from} to ${to}...`);
+      return;
+    }
+    
+    // Swap execution: swap:exec:0.1:SOL:USDC
+    if (parts[1] === 'exec' && parts.length === 5) {
+      const amount = parseFloat(parts[2]);
+      const fromToken = parts[3];
+      const toToken = parts[4];
+      
+      await ctx.reply(`🔄 Executing swap: ${amount} ${fromToken} → ${toToken}...\n\nThis may take 30 seconds.`);
+      
+      // Execute swap in background
+      (async () => {
+        try {
+          const { getUserByChat } = await import('../onboarding/index.js');
+          const { loadWalletById } = await import('../services/wallet-service.js');
+          
+          const user = await getUserByChat(ctx.chat?.id || 0);
+          if (!user) {
+            await ctx.reply('No wallet found.');
+            return;
+          }
+          
+          const { client } = await loadWalletById(user.walletId);
+          
+          // Token mints
+          const TOKEN_MINTS: Record<string, string> = {
+            'SOL': 'So11111111111111111111111111111111111111112',
+            'USDC': 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+            'USDT': 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+          };
+          
+          const fromMint = TOKEN_MINTS[fromToken] || fromToken;
+          const toMint = TOKEN_MINTS[toToken] || toToken;
+          const decimals = fromToken === 'SOL' ? 9 : 6;
+          
+          // Get swap transaction from Jupiter
+          const quoteResp = await fetch(
+            `https://quote-api.jup.ag/v6/quote?inputMint=${fromMint}&outputMint=${toMint}&amount=${Math.floor(amount * 10 ** decimals)}&slippageBps=100`
+          );
+          const quote = await quoteResp.json() as any;
+          
+          const swapResp = await fetch('https://quote-api.jup.ag/v6/swap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              quoteResponse: quote,
+              userPublicKey: user.walletAddress,
+              wrapAndUnwrapSol: true,
+              dynamicComputeUnitLimit: true,
+            }),
+          });
+          const swapData = await swapResp.json() as any;
+          
+          if (!swapData.swapTransaction) {
+            throw new Error('Failed to build swap transaction');
+          }
+          
+          // Sign and send
+          const txHash = await client.signAndSendTransaction(swapData.swapTransaction);
+          
+          const outAmount = parseInt(quote.outAmount) / (toToken === 'SOL' ? 1e9 : 1e6);
+          await ctx.reply(
+            `*Swap Complete!* ✅\n\n` +
+            `${amount} ${fromToken} → ${outAmount.toFixed(6)} ${toToken}\n\n` +
+            `Tx: \`${txHash.slice(0, 16)}...\`\n\n` +
+            `Use /balance to check.`,
+            { parse_mode: 'Markdown' }
+          );
+        } catch (error: any) {
+          console.error('[Swap] Execution error:', error);
+          await ctx.reply(`*Swap Failed*\n\n${error.message}`, { parse_mode: 'Markdown' });
+        }
+      })();
+      return;
+    }
+  }
+
   // ---- Fallback ----
   await ctx.answerCallbackQuery('Processing...').catch(() => {});
   console.log(`[Bot] Unhandled callback: ${data}`);

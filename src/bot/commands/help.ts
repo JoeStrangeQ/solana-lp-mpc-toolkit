@@ -22,6 +22,7 @@ export async function helpCommand(ctx: BotContext) {
     `/withdraw - Withdraw from positions`,
     `/claim - Claim fees without withdrawing`,
     `/rebalance - Rebalance out-of-range`,
+    `/swap 1 SOL to USDC - Quick token swap`,
     ``,
     `⚙️ *Setup & Settings*`,
     `/start - Create or view wallet`,
