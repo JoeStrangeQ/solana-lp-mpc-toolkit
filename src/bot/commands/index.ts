@@ -11,3 +11,4 @@ export { statusCommand } from './status.js';
 export { findCommand } from './find.js';
 export { priceCommand } from './price.js';
 export { gasCommand } from './gas.js';
+export { aboutCommand } from './about.js';

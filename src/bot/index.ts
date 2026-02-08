@@ -28,6 +28,7 @@ import {
   findCommand,
   priceCommand,
   gasCommand,
+  aboutCommand,
 } from './commands/index.js';
 import { handleCallback } from './callbacks.js';
 import { lpWizard } from './conversations/lp-wizard.js';
@@ -75,6 +76,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.command('find', findCommand);
   bot.command('price', priceCommand);
   bot.command('gas', gasCommand);
+  bot.command('about', aboutCommand);
 
   // Conversation entry points (via commands)
   bot.command('lp', async (ctx) => {
