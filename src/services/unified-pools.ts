@@ -1,7 +1,7 @@
 /**
  * Unified Pool Fetcher Service
  *
- * Aggregates liquidity pools from multiple DEXes (Meteora DLMM, Orca Whirlpools)
+ * Aggregates liquidity pools from multiple DEXes (Meteora DLMM, Orca Whirlpools, Raydium CLMM)
  * into a unified format for the LP Agent Toolkit.
  *
  * Features:
@@ -12,6 +12,7 @@
  */
 
 import { STABLECOINS } from '../risk/index.js';
+import type { RaydiumPoolInfo } from '../raydium/types.js';
 
 // ============ Types ============
 
@@ -20,7 +21,7 @@ export interface UnifiedPool {
   name: string;
   tokenA: { symbol: string; mint: string };
   tokenB: { symbol: string; mint: string };
-  dex: 'meteora' | 'orca';
+  dex: 'meteora' | 'orca' | 'raydium';
   apr: number;
   tvl: number;
   volume24h: number;
@@ -28,14 +29,14 @@ export interface UnifiedPool {
   riskScore: number;
   dailyYieldPer100Usd: number; // e.g., 1.50 means "$1.50/day"
   binStep?: number; // Meteora DLMM
-  tickSpacing?: number; // Orca Whirlpools
+  tickSpacing?: number; // Orca Whirlpools / Raydium CLMM
 }
 
 export interface FetchUnifiedPoolsOptions {
   limit?: number;
   minTvl?: number;
   maxRiskScore?: number;
-  dexFilter?: 'meteora' | 'orca' | 'all';
+  dexFilter?: 'meteora' | 'orca' | 'raydium' | 'all';
   sortBy?: 'apr' | 'tvl' | 'riskAdjustedYield' | 'volume24h';
   tokenFilter?: string; // Only pools containing this token symbol
 }
@@ -44,8 +45,9 @@ export interface FetchUnifiedPoolsOptions {
 
 const METEORA_API = 'https://dlmm-api.meteora.ag/pair/all';
 const ORCA_API = 'https://api.orca.so/v2/solana/pools';
+const RAYDIUM_API = 'https://api-v3.raydium.io/pools/info/list';
 
-// Tick spacing to fee rate mapping (bps) for Orca
+// Tick spacing to fee rate mapping (bps) for Orca/Raydium
 const TICK_SPACING_FEE: Record<number, number> = {
   1: 1, 2: 2, 4: 5, 8: 10, 16: 15, 32: 30, 64: 65, 128: 100, 256: 200,
 };
@@ -62,6 +64,7 @@ interface CacheEntry<T> {
 
 let _meteoraCache: CacheEntry<any[]> | null = null;
 let _orcaCache: CacheEntry<any[]> | null = null;
+let _raydiumCache: CacheEntry<any[]> | null = null;
 
 // ============ Risk Scoring ============
 
@@ -266,6 +269,67 @@ function transformOrcaPool(p: any): UnifiedPool {
   };
 }
 
+// ============ Raydium Fetching ============
+
+/**
+ * Fetch top Raydium CLMM pools
+ */
+export async function fetchRaydiumTopPools(limit: number = 20): Promise<UnifiedPool[]> {
+  // Check cache
+  if (_raydiumCache && Date.now() - _raydiumCache.fetchedAt < CACHE_TTL_MS) {
+    return _raydiumCache.data.slice(0, limit).map(transformRaydiumPool);
+  }
+
+  try {
+    const url = `${RAYDIUM_API}?poolType=concentrated&poolSortField=liquidity&sortType=desc&page=1&pageSize=${Math.min(limit * 2, 100)}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`Raydium API failed: ${resp.status}`);
+
+    const data = (await resp.json()) as any;
+    if (!data.success) throw new Error('Raydium API returned error');
+
+    const rawPools = data.data?.data || [];
+
+    _raydiumCache = { data: rawPools, fetchedAt: Date.now() };
+
+    return rawPools.slice(0, limit).map(transformRaydiumPool);
+  } catch (error) {
+    console.error('[UnifiedPools] Raydium fetch error:', error);
+    return [];
+  }
+}
+
+function transformRaydiumPool(p: any): UnifiedPool {
+  const tokenASymbol = p.mintA?.symbol || 'UNKNOWN';
+  const tokenBSymbol = p.mintB?.symbol || 'UNKNOWN';
+  const name = `${tokenASymbol}-${tokenBSymbol}`;
+  const tickSpacing = p.config?.tickSpacing || 64;
+  const feeRate = Math.round((p.feeRate || 0.0025) * 10000); // Convert to bps
+  
+  const tvl = p.tvl || 0;
+  const volume24h = p.day?.volume || 0;
+  
+  // Raydium provides APR directly (already percentage)
+  const apr = p.day?.apr || 0;
+
+  const riskScore = calculatePoolRiskScore(tokenASymbol, tokenBSymbol, tvl, volume24h);
+
+  return {
+    address: p.id,
+    name,
+    tokenA: { symbol: tokenASymbol, mint: p.mintA?.address || '' },
+    tokenB: { symbol: tokenBSymbol, mint: p.mintB?.address || '' },
+    dex: 'raydium',
+    apr,
+    tvl,
+    volume24h,
+    feeRate,
+    riskScore,
+    dailyYieldPer100Usd: calculateDailyYield(apr),
+    tickSpacing,
+  };
+}
+
 // ============ Unified Fetching ============
 
 /**
@@ -284,13 +348,14 @@ export async function fetchUnifiedPools(
     tokenFilter,
   } = options;
 
-  // Fetch from both DEXes in parallel
-  const [meteoraPools, orcaPools] = await Promise.all([
-    dexFilter === 'orca' ? [] : fetchMeteoraTopPools(limit * 2),
-    dexFilter === 'meteora' ? [] : fetchOrcaTopPools(limit * 2),
+  // Fetch from all DEXes in parallel
+  const [meteoraPools, orcaPools, raydiumPools] = await Promise.all([
+    dexFilter === 'orca' || dexFilter === 'raydium' ? [] : fetchMeteoraTopPools(limit * 2),
+    dexFilter === 'meteora' || dexFilter === 'raydium' ? [] : fetchOrcaTopPools(limit * 2),
+    dexFilter === 'meteora' || dexFilter === 'orca' ? [] : fetchRaydiumTopPools(limit * 2),
   ]);
 
-  let allPools = [...meteoraPools, ...orcaPools];
+  let allPools = [...meteoraPools, ...orcaPools, ...raydiumPools];
 
   // Apply filters
   allPools = allPools.filter(pool => {
@@ -357,13 +422,14 @@ export async function findBestPool(
   const tokenAUpper = tokenA.toUpperCase();
   const tokenBUpper = tokenB.toUpperCase();
 
-  // Fetch all pools
-  const [meteoraPools, orcaPools] = await Promise.all([
+  // Fetch all pools from all DEXes
+  const [meteoraPools, orcaPools, raydiumPools] = await Promise.all([
     fetchMeteoraTopPools(100),
     fetchOrcaTopPools(100),
+    fetchRaydiumTopPools(100),
   ]);
 
-  const allPools = [...meteoraPools, ...orcaPools];
+  const allPools = [...meteoraPools, ...orcaPools, ...raydiumPools];
 
   // Find matching pools
   const matchingPools = allPools.filter(pool => {
@@ -404,7 +470,7 @@ export async function findPoolsByToken(
  * Format pool for display
  */
 export function formatPoolDisplay(pool: UnifiedPool): string {
-  const dexBadge = pool.dex === 'meteora' ? '🌙' : '🐋';
+  const dexBadge = pool.dex === 'meteora' ? '🌙' : pool.dex === 'orca' ? '🐋' : '⚡'; // Raydium = lightning
   const tvlStr = pool.tvl >= 1_000_000 
     ? `$${(pool.tvl / 1_000_000).toFixed(1)}M`
     : pool.tvl >= 1_000 
@@ -427,6 +493,7 @@ export function formatPoolDisplay(pool: UnifiedPool): string {
 export function clearUnifiedPoolsCache(): void {
   _meteoraCache = null;
   _orcaCache = null;
+  _raydiumCache = null;
 }
 
 // ============ Exports ============
@@ -453,9 +520,14 @@ export async function testUnifiedPools(): Promise<void> {
   const orcaPools = await fetchOrcaTopPools(5);
   orcaPools.forEach(p => console.log(formatPoolDisplay(p) + '\n'));
 
+  // Test Raydium
+  console.log('\n=== Raydium Top Pools ===');
+  const raydiumPools = await fetchRaydiumTopPools(5);
+  raydiumPools.forEach(p => console.log(formatPoolDisplay(p) + '\n'));
+
   // Test unified
   console.log('\n=== Unified Pools (Risk-Adjusted) ===');
-  const unified = await fetchUnifiedPools({ limit: 8, sortBy: 'riskAdjustedYield' });
+  const unified = await fetchUnifiedPools({ limit: 10, sortBy: 'riskAdjustedYield' });
   unified.forEach(p => console.log(formatPoolDisplay(p) + '\n'));
 
   // Test findBestPool
