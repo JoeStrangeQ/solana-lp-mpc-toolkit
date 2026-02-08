@@ -332,9 +332,10 @@ export async function unifiedLpWizard(
   }
 
   // ---- Step 3: Strategy Selection ----
+  const binStepInfo = selectedPool.binStep ? `\n\n_Pool bin step: ${selectedPool.binStep}bp (${(selectedPool.binStep / 100).toFixed(2)}% per bin)_` : '';
   await ctx.reply(
-    `Choose range strategy:`,
-    { reply_markup: strategyKeyboard() },
+    `Choose range strategy:${binStepInfo}\n\n• *Tight* = 6 bins, max APR but needs rebalancing often\n• *Balanced* = 16 bins, good yield with less maintenance\n• *Wide* = 50 bins, set & forget, lower APR`,
+    { reply_markup: strategyKeyboard(selectedPool.binStep), parse_mode: 'Markdown' },
   );
 
   const strCtx = await conversation.waitForCallbackQuery(/^(lp:str:[cmw]|cancel)$/, {

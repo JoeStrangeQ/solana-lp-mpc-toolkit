@@ -50,13 +50,15 @@ export function amountKeyboard(): InlineKeyboard {
     .text('Cancel', 'cancel');
 }
 
-export function strategyKeyboard(): InlineKeyboard {
+export function strategyKeyboard(binStep?: number): InlineKeyboard {
+  // Show bin counts when binStep is provided (Meteora)
+  const binInfo = binStep ? ` • ${binStep}bp bins` : '';
   return new InlineKeyboard()
-    .text('🎯 Tight (±2%) - Max fees, more rebalancing', 'lp:str:c')
+    .text(`🎯 Tight (±2%) 6 bins${binInfo}`, 'lp:str:c')
     .row()
-    .text('📊 Balanced (±5%) - Good yield, less work', 'lp:str:m')
+    .text(`📊 Balanced (±5%) 16 bins${binInfo}`, 'lp:str:m')
     .row()
-    .text('🌊 Wide (±15%) - Set & forget', 'lp:str:w')
+    .text(`🌊 Wide (±15%) 50 bins${binInfo}`, 'lp:str:w')
     .row()
     .text('Cancel', 'cancel');
 }

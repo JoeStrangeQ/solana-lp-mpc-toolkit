@@ -280,7 +280,13 @@ export async function showBestYieldPools(ctx: BotContext) {
         ? `$${(p.tvl / 1_000_000).toFixed(1)}M` 
         : `$${(p.tvl / 1_000).toFixed(0)}K`;
       const dexTag = p.dex === 'orca' ? '🌀' : '☄️';
-      return `${i + 1}. ${dexTag} *${p.name}*\n   ${p.apr.toFixed(1)}% APR (~$${p.dailyYieldPer100}/day per $100) | TVL: ${fmtTvl}`;
+      // Show bin step for Meteora or tick spacing for Orca
+      const stepInfo = p.dex === 'meteora' && p.binStep 
+        ? ` • ${p.binStep}bp` 
+        : p.dex === 'orca' && p.tickSpacing 
+          ? ` • tick ${p.tickSpacing}` 
+          : '';
+      return `${i + 1}. ${dexTag} *${p.name}*${stepInfo}\n   ${p.apr.toFixed(1)}% APR (~$${p.dailyYieldPer100}/day per $100) | TVL: ${fmtTvl}`;
     }).join('\n\n');
 
     const text = [
