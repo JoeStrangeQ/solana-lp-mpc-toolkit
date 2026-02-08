@@ -189,22 +189,44 @@ export async function orcaLpWizard(
   });
 
   if (result.success) {
-    const txRef = result.txHashes?.length
-      ? `Tx: \`${result.txHashes[result.txHashes.length - 1]?.slice(0, 16)}...\``
-      : '';
-    const text = [
-      `*Orca LP Position Created!*`,
-      ``,
-      `Pool: *${selectedPool.name}*`,
-      `Amount: ${amount} SOL`,
-      `Strategy: ${strategy}`,
-      ``,
-      `Encrypted with Arcium`,
-      txRef,
-      ``,
-      `Use /positions to view.`,
-    ].join('\n');
-    await ctx.reply(text, { parse_mode: 'Markdown' });
+    // Check if bundle actually landed
+    const status = result.status;
+    const bundleLanded = typeof status !== 'object' || status?.landed !== false;
+    
+    if (bundleLanded) {
+      const txRef = result.txHashes?.length
+        ? `Tx: \`${result.txHashes[result.txHashes.length - 1]?.slice(0, 16)}...\``
+        : '';
+      const text = [
+        `*Orca LP Position Created!*`,
+        ``,
+        `Pool: *${selectedPool.name}*`,
+        `Amount: ${amount} SOL`,
+        `Strategy: ${strategy}`,
+        ``,
+        `Encrypted with Arcium`,
+        txRef,
+        ``,
+        `Use /positions to view.`,
+      ].join('\n');
+      await ctx.reply(text, { parse_mode: 'Markdown' });
+    } else {
+      // Bundle was submitted but didn't land
+      const errorMsg = (typeof status === 'object' && status?.error) || 'Bundle did not land on chain';
+      const text = [
+        `*Orca LP - Bundle Pending*`,
+        ``,
+        `Pool: *${selectedPool.name}*`,
+        `Amount: ${amount} SOL`,
+        ``,
+        `⚠️ Bundle submitted but not yet confirmed.`,
+        `Status: ${errorMsg}`,
+        ``,
+        `Your funds are safe. Check /positions in a few minutes.`,
+        `The transaction may still land, or try again.`,
+      ].join('\n');
+      await ctx.reply(text, { parse_mode: 'Markdown' });
+    }
   } else {
     await ctx.reply(
       `*Orca LP Failed*\n\n${result.error}\n\nTry again with /pools.`,

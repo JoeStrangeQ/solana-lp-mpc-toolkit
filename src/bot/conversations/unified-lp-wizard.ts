@@ -502,26 +502,49 @@ export async function unifiedLpWizard(
   });
 
   if (result.success) {
-    const txRef = result.txHashes?.length
-      ? `Tx: \`${result.txHashes[result.txHashes.length - 1]?.slice(0, 16)}...\``
-      : result.bundleId
-        ? `Bundle: \`${result.bundleId.slice(0, 16)}...\``
-        : '';
+    // Check if bundle actually landed (for Jito bundle path)
+    const status = result.status;
+    const bundleLanded = typeof status !== 'object' || status?.landed !== false;
+    
+    if (bundleLanded) {
+      const txRef = result.txHashes?.length
+        ? `Tx: \`${result.txHashes[result.txHashes.length - 1]?.slice(0, 16)}...\``
+        : result.bundleId
+          ? `Bundle: \`${result.bundleId.slice(0, 16)}...\``
+          : '';
 
-    const text = [
-      `*LP Position Created!* 🎉`,
-      ``,
-      `${dexLabel} *${selectedPool.name}*`,
-      `Amount: ${amount} SOL`,
-      `Strategy: ${strategyDesc}`,
-      ``,
-      `Encrypted with Arcium`,
-      txRef,
-      ``,
-      `Use /positions to view your LP.`,
-    ].join('\n');
+      const text = [
+        `*LP Position Created!* 🎉`,
+        ``,
+        `${dexLabel} *${selectedPool.name}*`,
+        `Amount: ${amount} SOL`,
+        `Strategy: ${strategyDesc}`,
+        ``,
+        `Encrypted with Arcium`,
+        txRef,
+        ``,
+        `Use /positions to view your LP.`,
+      ].join('\n');
 
-    await ctx.reply(text, { parse_mode: 'Markdown' });
+      await ctx.reply(text, { parse_mode: 'Markdown' });
+    } else {
+      // Bundle was submitted but didn't land in time
+      const errorMsg = (typeof status === 'object' && status?.error) || 'Bundle did not confirm in time';
+      const text = [
+        `*LP - Bundle Pending* ⏳`,
+        ``,
+        `${dexLabel} *${selectedPool.name}*`,
+        `Amount: ${amount} SOL`,
+        ``,
+        `⚠️ Bundle submitted but not yet confirmed.`,
+        `Status: ${errorMsg}`,
+        ``,
+        `Your funds are safe. Check /positions in a few minutes.`,
+        `The transaction may still land, or try again.`,
+      ].join('\n');
+
+      await ctx.reply(text, { parse_mode: 'Markdown' });
+    }
   } else {
     await ctx.reply(
       `*LP Failed*\n\n${result.error}\n\nYour tokens are safe in your wallet. Try again with /pools.`,
