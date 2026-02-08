@@ -24,6 +24,7 @@ import {
   claimCommand,
   swapCommand,
   alertsCommand,
+  historyCommand,
   settingsCommand,
   helpCommand,
   portfolioCommand,
@@ -76,6 +77,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.command('claim', claimCommand);
   bot.command('swap', swapCommand);
   bot.command('alerts', alertsCommand);
+  bot.command('history', historyCommand);
   bot.command('settings', settingsCommand);
   bot.command('help', helpCommand);
   bot.command('portfolio', portfolioCommand);
