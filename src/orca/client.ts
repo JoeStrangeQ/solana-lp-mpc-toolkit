@@ -23,7 +23,15 @@ export function getOrcaConnection(): Connection {
 export function getWhirlpoolCtx(connection?: Connection): WhirlpoolContext {
   const conn = connection || getOrcaConnection();
   const provider = new AnchorProvider(conn, DUMMY_WALLET, { commitment: 'finalized' });
-  return WhirlpoolContext.withProvider(provider);
+  
+  // CRITICAL: Use 'ata' method for wrapped SOL accounts to avoid ephemeral keypairs
+  // The 'keypair' method (default) creates signers we can't access with Privy MPC
+  return WhirlpoolContext.withProvider(provider, undefined, undefined, {
+    accountResolverOptions: {
+      createWrappedSolAccountMethod: 'ata',
+      allowPDAOwnerAddress: false,
+    },
+  });
 }
 
 export function getWhirlpoolClient(connection?: Connection): WhirlpoolClient {
