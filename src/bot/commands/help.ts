@@ -28,6 +28,7 @@ export async function helpCommand(ctx: BotContext) {
     `/start - Create or view wallet`,
     `/deposit - Get deposit address`,
     `/settings - Alert preferences`,
+    `/alerts - View monitoring status`,
     `/status - System health check`,
     `/help - This message`,
     `/about - Toolkit info`,
