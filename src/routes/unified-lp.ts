@@ -161,8 +161,8 @@ app.post('/lp/add', async (c) => {
       return c.json({ success: false, error: 'Could not determine target pool' }, 400);
     }
 
-    // 2. Load wallet
-    const { wallet } = await loadWalletById(walletId);
+    // 2. Load wallet (client is Privy client, wallet is the wallet object)
+    const { client, wallet } = await loadWalletById(walletId);
     if (!wallet) {
       return c.json({ success: false, error: `Wallet ${walletId} not found` }, 404);
     }
@@ -182,10 +182,9 @@ app.post('/lp/add', async (c) => {
     const tipSpeed: TipSpeed = 'fast';
     const slippageBps = strategy === 'concentrated' ? 300 : 500;
 
-    // Create signing functions from Privy wallet
+    // Create signing function using Privy client
     const signTransaction = async (tx: string) => {
-      const signed = await wallet.signTransaction({ transaction: tx });
-      return signed.signedTransaction;
+      return client.signTransaction(tx);
     };
 
     try {
