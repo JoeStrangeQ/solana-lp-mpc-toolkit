@@ -8,6 +8,7 @@ import { buildAtomicWithdraw } from '../lp/atomicWithdraw.js';
 import { executeRebalance } from '../lp/atomicRebalance.js';
 import { sendBundle, waitForBundle, type TipSpeed } from '../jito/index.js';
 import { discoverAllPositions } from '../utils/position-discovery.js';
+import { discoverOrcaPositions } from '../orca/positions.js';
 import { resolveTokens, calculateHumanPriceRange, formatPriceRange, formatPrice } from '../utils/token-metadata.js';
 import { config } from '../config/index.js';
 import { Redis } from '@upstash/redis';
@@ -127,7 +128,74 @@ export async function executeLp(params: LpExecuteParams) {
 
 export async function getPositionsForWallet(walletAddress: string) {
   const conn = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
-  return discoverAllPositions(conn, walletAddress);
+  
+  // Fetch both Meteora and Orca positions in parallel
+  const [meteoraPositions, orcaPositions] = await Promise.all([
+    discoverAllPositions(conn, walletAddress).catch(e => {
+      console.warn('[LP Service] Meteora position discovery failed:', e.message);
+      return [];
+    }),
+    discoverOrcaPositions(conn, walletAddress).catch(e => {
+      console.warn('[LP Service] Orca position discovery failed:', e.message);
+      return [];
+    }),
+  ]);
+
+  // Normalize Orca positions to match Meteora format
+  const normalizedOrca = orcaPositions.map(pos => ({
+    address: pos.address,
+    pool: {
+      address: pos.poolAddress,
+      name: pos.poolName || `${pos.tokenA?.symbol || 'Unknown'}-${pos.tokenB?.symbol || 'Unknown'}`,
+      tokenX: {
+        mint: '',
+        symbol: pos.tokenA?.symbol || 'Unknown',
+        name: pos.tokenA?.symbol || 'Unknown',
+        decimals: 9,
+      },
+      tokenY: {
+        mint: '',
+        symbol: pos.tokenB?.symbol || 'Unknown',
+        name: pos.tokenB?.symbol || 'Unknown',
+        decimals: 6,
+      },
+      binStep: 0, // Orca uses tickSpacing, not binStep
+    },
+    binRange: {
+      lower: pos.tickLowerIndex,
+      upper: pos.tickUpperIndex,
+    },
+    priceRange: {
+      priceLower: pos.priceLower,
+      priceUpper: pos.priceUpper,
+      currentPrice: pos.priceCurrent,
+      display: `${pos.priceLower?.toFixed(2)} - ${pos.priceUpper?.toFixed(2)}`,
+      unit: `${pos.tokenB?.symbol || 'USD'} per ${pos.tokenA?.symbol || 'Token'}`,
+    },
+    activeBinId: 0, // Not applicable for Orca
+    inRange: pos.inRange,
+    amounts: {
+      tokenX: pos.tokenA?.amount || '0',
+      tokenY: pos.tokenB?.amount || '0',
+    },
+    fees: {
+      tokenX: pos.fees?.tokenA || '0',
+      tokenY: pos.fees?.tokenB || '0',
+      tokenXFormatted: `${pos.fees?.tokenA || '0'} ${pos.tokenA?.symbol || ''}`,
+      tokenYFormatted: `${pos.fees?.tokenB || '0'} ${pos.tokenB?.symbol || ''}`,
+    },
+    dex: 'orca' as const,
+    solscanUrl: `https://solscan.io/account/${pos.address}`,
+  }));
+
+  // Mark Meteora positions with dex
+  const normalizedMeteora = meteoraPositions.map(pos => ({
+    ...pos,
+    dex: 'meteora' as const,
+  }));
+
+  console.log(`[LP Service] Found ${normalizedMeteora.length} Meteora + ${normalizedOrca.length} Orca positions`);
+  return [...normalizedMeteora, ...normalizedOrca];
 }
 
 export interface RebalanceParams {

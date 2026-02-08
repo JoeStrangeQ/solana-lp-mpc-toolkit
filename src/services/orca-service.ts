@@ -7,7 +7,7 @@ import { buildOrcaAtomicLP, type OrcaAtomicLPParams } from '../orca/atomic.js';
 import { buildOrcaWithdraw } from '../orca/atomicWithdraw.js';
 import { buildOrcaFeeClaimTx } from '../orca/fees.js';
 import { discoverOrcaPositions } from '../orca/positions.js';
-import { sendBundle, waitForBundle, type TipSpeed } from '../jito/index.js';
+import { sendBundle, waitForBundle, simulateTransactions, type TipSpeed } from '../jito/index.js';
 import { config } from '../config/index.js';
 import { withRetry, isTransientError } from '../utils/resilience.js';
 import { invalidatePositionCache } from './lp-service.js';
@@ -111,6 +111,15 @@ export async function executeOrcaLp(params: OrcaLpExecuteParams) {
     
     signedTxs.push(signedTx);
   }
+
+  // Simulate all transactions before sending to Jito
+  console.log(`[Orca Service] Simulating ${signedTxs.length} transactions before Jito...`);
+  const simResult = await simulateTransactions(signedTxs);
+  if (!simResult.success) {
+    console.error(`[Orca Service] ❌ Simulation failed:`, simResult.errors);
+    throw new Error(`Transaction simulation failed:\n${simResult.errors.join('\n')}`);
+  }
+  console.log(`[Orca Service] ✅ All ${signedTxs.length} transactions passed simulation`);
 
   console.log(`[Orca Service] Sending bundle with ${signedTxs.length} transactions...`);
   const { bundleId } = await withRetry(

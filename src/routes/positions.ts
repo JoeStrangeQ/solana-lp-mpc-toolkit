@@ -28,14 +28,14 @@ app.get('/:walletId', async (c) => {
 
     return c.json({
       success: true,
-      message: `Found ${positions.length} positions across all DLMM pools`,
+      message: `Found ${positions.length} positions across Meteora and Orca`,
       data: {
         walletId,
         walletAddress,
         positions,
         totalPositions: positions.length,
       },
-      note: 'Universal discovery - no hardcoded pool list, finds positions in ANY Meteora DLMM pool',
+      note: 'Multi-DEX discovery - finds positions in Meteora DLMM and Orca Whirlpools',
     });
   } catch (error: any) {
     return c.json({ error: 'Failed to fetch positions', details: error.message }, 500);
@@ -122,13 +122,13 @@ export function positionsByAddress() {
 
       return c.json({
         success: true,
-        message: `Found ${positions.length} positions across all DLMM pools`,
+        message: `Found ${positions.length} positions across Meteora and Orca`,
         data: {
           walletAddress,
           positions,
           totalPositions: positions.length,
         },
-        note: 'Universal discovery - no hardcoded pool list, finds positions in ANY Meteora DLMM pool',
+        note: 'Multi-DEX discovery - finds positions in Meteora DLMM and Orca Whirlpools',
       });
     } catch (error: any) {
       return c.json({ error: 'Failed to fetch positions', details: error.message }, 500);

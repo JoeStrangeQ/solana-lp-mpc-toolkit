@@ -6,12 +6,14 @@
  */
 
 import { 
+  Connection,
   PublicKey, 
   SystemProgram, 
   TransactionMessage, 
   VersionedTransaction,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
+import { config } from '../config/index.js';
 
 const JITO_BLOCK_ENGINE_URL = 'https://mainnet.block-engine.jito.wtf';
 const JITO_API_KEY = process.env.JITO_API_KEY || '';
@@ -115,6 +117,71 @@ export async function sendBundle(
 }
 
 /**
+ * Simulate transactions before sending to Jito
+ * Returns errors if simulation fails, null if all pass
+ */
+export async function simulateTransactions(
+  signedTransactions: string[]
+): Promise<{ success: boolean; errors: string[] }> {
+  const rpcUrl = config.solana?.rpc || 'https://api.mainnet-beta.solana.com';
+  const connection = new Connection(rpcUrl, 'confirmed');
+  const errors: string[] = [];
+
+  for (let i = 0; i < signedTransactions.length; i++) {
+    try {
+      const txBuf = Buffer.from(signedTransactions[i], 'base64');
+      const tx = VersionedTransaction.deserialize(txBuf);
+      
+      const result = await connection.simulateTransaction(tx, {
+        sigVerify: false, // Skip sig verify since some might be partial
+        replaceRecentBlockhash: true, // Use latest blockhash for simulation
+      });
+
+      if (result.value.err) {
+        const errStr = typeof result.value.err === 'string' 
+          ? result.value.err 
+          : JSON.stringify(result.value.err);
+        console.log(`[Jito] ❌ Tx ${i + 1} simulation failed: ${errStr}`);
+        if (result.value.logs) {
+          const relevantLogs = result.value.logs.filter(l => 
+            l.includes('Error') || l.includes('failed') || l.includes('insufficient')
+          );
+          if (relevantLogs.length > 0) {
+            console.log(`[Jito] Relevant logs: ${relevantLogs.join('\n')}`);
+          }
+        }
+        errors.push(`Tx ${i + 1}: ${errStr}`);
+      } else {
+        console.log(`[Jito] ✅ Tx ${i + 1} simulation passed`);
+      }
+    } catch (e: any) {
+      console.log(`[Jito] ⚠️ Tx ${i + 1} simulation error: ${e.message}`);
+      errors.push(`Tx ${i + 1}: ${e.message}`);
+    }
+  }
+
+  return { success: errors.length === 0, errors };
+}
+
+/**
+ * Send bundle with pre-flight simulation
+ */
+export async function sendBundleWithSimulation(
+  signedTransactions: string[]
+): Promise<{ bundleId: string; simulated: boolean }> {
+  // First simulate all transactions
+  const simResult = await simulateTransactions(signedTransactions);
+  
+  if (!simResult.success) {
+    throw new Error(`Bundle simulation failed:\n${simResult.errors.join('\n')}`);
+  }
+
+  // If simulation passes, send to Jito
+  const result = await sendBundle(signedTransactions);
+  return { ...result, simulated: true };
+}
+
+/**
  * Wait for bundle to land
  */
 export async function waitForBundle(
@@ -145,6 +212,14 @@ export async function waitForBundle(
       const json = await response.json() as { result?: { value?: Array<{ slot: number; confirmation_status: string; err?: any }> } };
       const bundle = json.result?.value?.[0];
 
+      // Log full response for debugging
+      if (bundle) {
+        console.log(`[Jito] Bundle ${bundleId.slice(0,8)}... status: ${bundle.confirmation_status || 'pending'}, slot: ${bundle.slot || 'N/A'}, err: ${JSON.stringify(bundle.err)}`);
+      } else {
+        // No bundle data yet - Jito hasn't processed it
+        console.log(`[Jito] Bundle ${bundleId.slice(0,8)}... not yet in Jito's response (may have been dropped)`);
+      }
+
       if (bundle) {
         // Check confirmation status first
         if (bundle.confirmation_status === 'finalized' || bundle.confirmation_status === 'confirmed') {
@@ -156,12 +231,13 @@ export async function waitForBundle(
         }
         // Only treat as error if err exists and is NOT {"Ok": null}
         if (bundle.err && !('Ok' in bundle.err)) {
+          console.log(`[Jito] ❌ Bundle failed with error: ${JSON.stringify(bundle.err)}`);
           return { landed: false, error: JSON.stringify(bundle.err) };
         }
       }
+    } else {
+      console.log(`[Jito] getBundleStatuses request failed: ${response.status}`);
     }
-    
-    console.log(`⏳ Bundle ${bundleId} status: checking...`);
     await new Promise(r => setTimeout(r, intervalMs));
   }
 
