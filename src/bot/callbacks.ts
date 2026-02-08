@@ -45,6 +45,12 @@ export async function handleCallback(ctx: BotContext) {
       case 'settings':
         const { settingsCommand } = await import('./commands/settings.js');
         return settingsCommand(ctx);
+      case 'portfolio':
+        const { portfolioCommand } = await import('./commands/portfolio.js');
+        return portfolioCommand(ctx);
+      case 'rebalance':
+        await ctx.conversation.enter('rebalanceWizard');
+        return;
       default:
         await ctx.reply(`Unknown command: ${cmd}`);
         return;
