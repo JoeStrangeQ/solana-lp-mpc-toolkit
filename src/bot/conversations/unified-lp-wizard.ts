@@ -337,7 +337,7 @@ export async function unifiedLpWizard(
     { reply_markup: strategyKeyboard() },
   );
 
-  const strCtx = await conversation.waitForCallbackQuery(/^(lp:str:[cw]|cancel)$/, {
+  const strCtx = await conversation.waitForCallbackQuery(/^(lp:str:[cmw]|cancel)$/, {
     otherwise: async (ctx) => {
       await ctx.reply('Please tap a strategy button above.');
     },
@@ -350,8 +350,15 @@ export async function unifiedLpWizard(
     return;
   }
 
-  const strategy: 'concentrated' | 'wide' = strData === 'lp:str:c' ? 'concentrated' : 'wide';
-  const binOffset = strategy === 'concentrated' ? 5 : 20;
+  // Map strategy to bin/tick offset
+  // c = tight (±2%), m = balanced (±5%), w = wide (±15%)
+  const strategyMap: Record<string, { name: string; offset: number }> = {
+    'lp:str:c': { name: 'tight', offset: 3 },      // ±2% range
+    'lp:str:m': { name: 'balanced', offset: 8 },   // ±5% range  
+    'lp:str:w': { name: 'wide', offset: 25 },      // ±15% range
+  };
+  const { name: strategyName, offset: binOffset } = strategyMap[strData] || strategyMap['lp:str:m'];
+  const strategy: 'concentrated' | 'wide' = strData === 'lp:str:w' ? 'wide' : 'concentrated';
 
   // ---- Step 4: Distribution Shape (Meteora only) ----
   let shape: 'spot' | 'curve' | 'bidask' = 'spot';
@@ -383,9 +390,10 @@ export async function unifiedLpWizard(
     ? `\nEstimated: *${estimateDailyYield(amount, selectedPool.apr)}* on your $${(amount * 100).toFixed(0)}`
     : '';
 
+  const rangeDesc = binOffset <= 5 ? '±2%' : binOffset <= 10 ? '±5%' : '±15%';
   const strategyDesc = selectedPool.dex === 'meteora'
-    ? `${strategy} (${shape})`
-    : strategy;
+    ? `${strategyName} ${rangeDesc} (${shape})`
+    : `${strategyName} ${rangeDesc}`;
 
   const summary = [
     `*Confirm LP Position*`,
@@ -397,7 +405,7 @@ export async function unifiedLpWizard(
     ``,
     `Your position will be:`,
     `• Encrypted with Arcium`,
-    `• ${selectedPool.dex === 'meteora' ? 'Bundled via Jito (MEV-protected)' : 'Sent via direct RPC'}`,
+    `• Bundled via Jito (MEV-protected)`,
     ``,
     `Confirm?`,
   ].join('\n');
