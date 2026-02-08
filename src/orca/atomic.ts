@@ -10,6 +10,7 @@ import {
   VersionedTransaction,
   TransactionMessage,
   ComputeBudgetProgram,
+  MessageV0,
 } from '@solana/web3.js';
 import { getWhirlpoolClient, getOrcaConnection } from './client.js';
 import {
@@ -209,7 +210,7 @@ export async function buildOrcaAtomicLP(params: OrcaAtomicLPParams): Promise<Bui
 
   // Open position + add liquidity
   const openPayload = await openPosTxBuilder.build();
-  const openTx = openPayload.transaction;
+  let openTx = openPayload.transaction;
 
   // Debug: log all signers from the payload
   console.log(`[Orca Atomic] openPayload.signers count: ${openPayload.signers.length}`);
@@ -219,6 +220,71 @@ export async function buildOrcaAtomicLP(params: OrcaAtomicLPParams): Promise<Bui
 
   // Check how many signatures the transaction actually needs
   if (openTx instanceof VersionedTransaction) {
+    // CRITICAL FIX: The SDK uses a dummy wallet as fee payer (first account).
+    // We need to rebuild the message to:
+    // 1. Remove the dummy fee payer entirely
+    // 2. Put the real wallet first
+    // 3. Renumber all account references
+    const oldMsg = openTx.message;
+    const oldStaticKeys = oldMsg.staticAccountKeys;
+    const walletPubkey = new PublicKey(walletAddress);
+    
+    // Find where the real wallet is in the account keys
+    const walletIndex = oldStaticKeys.findIndex(k => k.equals(walletPubkey));
+    const numOldSigners = oldMsg.header.numRequiredSignatures;
+    console.log(`[Orca Atomic] Old message: ${numOldSigners} signers, wallet at index ${walletIndex}`);
+    
+    if (walletIndex > 0 && walletIndex < numOldSigners) {
+      // Wallet is a signer but not at index 0
+      // We need to remove index 0 (dummy) and shift wallet to front
+      
+      // Remove the dummy (index 0) from account keys
+      const newStaticKeys = [
+        walletPubkey, // Wallet first (fee payer)
+        ...oldStaticKeys.slice(1, walletIndex), // Before wallet
+        ...oldStaticKeys.slice(walletIndex + 1), // After wallet (including position mint)
+      ];
+      
+      // Map old indices to new indices
+      // - Index 0 (dummy) -> removed
+      // - Index 1..walletIndex-1 -> shifted down by 0 (stays at 1..walletIndex-1 because wallet moved to 0)
+      // - walletIndex -> 0
+      // - walletIndex+1..end -> shifted down by 1
+      const remapIndex = (oldIdx: number): number => {
+        if (oldIdx === 0) return 0; // Dummy -> wallet (both are fee payer role)
+        if (oldIdx === walletIndex) return 0; // Wallet -> 0
+        if (oldIdx < walletIndex) return oldIdx; // Before wallet: no change
+        return oldIdx - 1; // After wallet: shift down by 1
+      };
+      
+      // Update header: reduce required signers by 1 (removing dummy)
+      const newHeader = {
+        numRequiredSignatures: numOldSigners - 1,
+        numReadonlySignedAccounts: oldMsg.header.numReadonlySignedAccounts,
+        numReadonlyUnsignedAccounts: oldMsg.header.numReadonlyUnsignedAccounts,
+      };
+      
+      // Rebuild compiled instructions with remapped indices
+      const newInstructions = oldMsg.compiledInstructions.map(ix => ({
+        programIdIndex: remapIndex(ix.programIdIndex),
+        accountKeyIndexes: ix.accountKeyIndexes.map(remapIndex),
+        data: ix.data,
+      }));
+      
+      // Create new message
+      const newMsg = new MessageV0({
+        header: newHeader,
+        staticAccountKeys: newStaticKeys,
+        recentBlockhash: oldMsg.recentBlockhash,
+        compiledInstructions: newInstructions,
+        addressTableLookups: oldMsg.addressTableLookups,
+      });
+      
+      // Create new transaction with fixed message
+      openTx = new VersionedTransaction(newMsg);
+      console.log(`[Orca Atomic] Rebuilt tx: removed dummy, wallet now at 0, ${newHeader.numRequiredSignatures} signers`);
+    }
+    
     const numRequired = openTx.message.header.numRequiredSignatures;
     const staticKeys = openTx.message.staticAccountKeys.slice(0, numRequired);
     console.log(`[Orca Atomic] Tx requires ${numRequired} signatures from: ${staticKeys.map(k => k.toBase58().slice(0, 8)).join(', ')}`);
