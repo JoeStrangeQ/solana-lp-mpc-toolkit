@@ -100,13 +100,20 @@ export async function executeLp(params: LpExecuteParams) {
     return { lpResult, txHashes, status: 'sent' };
   }
 
-  // Fallback: Jito bundle path (for API routes or non-Privy contexts)
+  // Jito bundle path
+  console.log(`[LP Service] Jito bundle path: ${lpResult.unsignedTransactions.length} transactions`);
   const signedTxs: string[] = [];
-  for (const unsignedTx of lpResult.unsignedTransactions) {
+  for (let i = 0; i < lpResult.unsignedTransactions.length; i++) {
+    const unsignedTx = lpResult.unsignedTransactions[i];
+    console.log(`[LP Service] Signing tx ${i + 1}/${lpResult.unsignedTransactions.length}...`);
     const signedTx = await signTransaction(unsignedTx);
+    if (!signedTx) {
+      throw new Error(`signTransaction returned null/undefined for tx ${i + 1}`);
+    }
     signedTxs.push(signedTx);
   }
 
+  console.log(`[LP Service] Sending bundle with ${signedTxs.length} transactions...`);
   const { bundleId } = await withRetry(
     () => sendBundle(signedTxs),
     { maxRetries: 2, baseDelayMs: 2000, retryOn: isTransientError },

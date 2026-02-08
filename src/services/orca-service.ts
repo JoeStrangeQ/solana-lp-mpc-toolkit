@@ -61,12 +61,21 @@ export async function executeOrcaLp(params: OrcaLpExecuteParams) {
   }
 
   // Jito bundle path
+  console.log(`[Orca Service] Jito bundle path: ${lpResult.unsignedTransactions.length} transactions`);
   const signedTxs: string[] = [];
-  for (const unsignedTx of lpResult.unsignedTransactions) {
+  for (let i = 0; i < lpResult.unsignedTransactions.length; i++) {
+    const unsignedTx = lpResult.unsignedTransactions[i];
+    console.log(`[Orca Service] Signing tx ${i + 1}/${lpResult.unsignedTransactions.length}...`);
+    console.log(`[Orca Service] Unsigned tx length: ${unsignedTx.length}`);
     const signedTx = await signTransaction(unsignedTx);
+    console.log(`[Orca Service] Signed tx length: ${signedTx?.length || 0}`);
+    if (!signedTx) {
+      throw new Error(`signTransaction returned null/undefined for tx ${i + 1}`);
+    }
     signedTxs.push(signedTx);
   }
 
+  console.log(`[Orca Service] Sending bundle with ${signedTxs.length} transactions...`);
   const { bundleId } = await withRetry(
     () => sendBundle(signedTxs),
     { maxRetries: 2, baseDelayMs: 2000, retryOn: isTransientError },
