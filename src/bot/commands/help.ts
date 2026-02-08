@@ -11,6 +11,7 @@ export async function helpCommand(ctx: BotContext) {
     `/portfolio - Total value & health summary`,
     `/positions - View LP positions with IL`,
     `/balance - Wallet balance`,
+    `/history - Recent transactions`,
     `/price SOL - Check token prices`,
     `/gas - Network fee status`,
     `/simulate 1 SOL - Estimate LP returns`,
