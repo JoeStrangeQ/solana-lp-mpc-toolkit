@@ -37,6 +37,7 @@ import {
   gasCommand,
   aboutCommand,
   simulateCommand,
+  rebalanceCommand,
 } from './commands/index.js';
 import { handleCallback } from './callbacks.js';
 import { lpWizard } from './conversations/lp-wizard.js';
@@ -102,9 +103,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.command('lp', async (ctx) => {
     await ctx.conversation.enter('unifiedLpWizard');
   });
-  bot.command('rebalance', async (ctx) => {
-    await ctx.conversation.enter('rebalanceWizard');
-  });
+  bot.command('rebalance', rebalanceCommand);
 
   // Callback queries (non-conversation callbacks handled here;
   // conversation callbacks are intercepted by the conversations plugin)
