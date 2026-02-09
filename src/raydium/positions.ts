@@ -58,6 +58,16 @@ export async function fetchRaydiumPositions(walletAddress: string): Promise<Rayd
         const priceLower = tickToPrice(pos.tickLower, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
         const priceUpper = tickToPrice(pos.tickUpper, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
         
+        // Calculate token amounts from liquidity
+        const { amountA, amountB } = calculateAmountsFromLiquidity(
+          pos.liquidity,
+          priceLower,
+          priceUpper,
+          currentPrice,
+          poolInfo.mintA.decimals,
+          poolInfo.mintB.decimals,
+        );
+        
         result.push({
           positionAddress: pos.nftMint.toBase58(),
           positionMint: pos.nftMint.toBase58(),
@@ -78,10 +88,10 @@ export async function fetchRaydiumPositions(walletAddress: string): Promise<Rayd
           priceUpper,
           currentPrice,
           inRange: currentPrice >= priceLower && currentPrice <= priceUpper,
-          feesOwedA: 0, // TODO: Calculate from rewards
+          feesOwedA: 0, // TODO: Calculate from rewards when SDK supports it
           feesOwedB: 0,
-          amountA: 0, // TODO: Calculate from liquidity
-          amountB: 0,
+          amountA,
+          amountB,
         });
       } catch (err) {
         console.error(`[Raydium] Error processing position ${pos.nftMint.toBase58()}:`, err);
@@ -103,6 +113,57 @@ function tickToPrice(tick: number, decimalsA: number, decimalsB: number): number
   // price = 1.0001^tick * 10^(decimalsA - decimalsB)
   const decimalAdjustment = Math.pow(10, decimalsA - decimalsB);
   return Math.pow(1.0001, tick) * decimalAdjustment;
+}
+
+/**
+ * Calculate token amounts from liquidity using concentrated liquidity math
+ * 
+ * For a position with liquidity L at price range [pLower, pUpper] with current price p:
+ * - Below range (p < pLower): all in token A
+ * - Above range (p > pUpper): all in token B
+ * - In range: split between both tokens
+ */
+function calculateAmountsFromLiquidity(
+  liquidity: { toString(): string },
+  priceLower: number,
+  priceUpper: number,
+  currentPrice: number,
+  decimalsA: number,
+  decimalsB: number,
+): { amountA: number; amountB: number } {
+  const L = Number(liquidity.toString());
+  
+  if (L === 0 || priceLower <= 0 || priceUpper <= 0) {
+    return { amountA: 0, amountB: 0 };
+  }
+  
+  const sqrtPriceLower = Math.sqrt(priceLower);
+  const sqrtPriceUpper = Math.sqrt(priceUpper);
+  const sqrtPriceCurrent = Math.sqrt(Math.max(currentPrice, 0.0000001));
+  
+  let amountA = 0;
+  let amountB = 0;
+  
+  if (currentPrice < priceLower) {
+    // Below range: all in token A
+    amountA = L * (1 / sqrtPriceLower - 1 / sqrtPriceUpper);
+    amountB = 0;
+  } else if (currentPrice > priceUpper) {
+    // Above range: all in token B
+    amountA = 0;
+    amountB = L * (sqrtPriceUpper - sqrtPriceLower);
+  } else {
+    // In range: split between tokens
+    amountA = L * (1 / sqrtPriceCurrent - 1 / sqrtPriceUpper);
+    amountB = L * (sqrtPriceCurrent - sqrtPriceLower);
+  }
+  
+  // Apply decimal adjustments
+  // Liquidity is in the smallest units, so divide by 10^decimals
+  amountA = amountA / Math.pow(10, decimalsA);
+  amountB = amountB / Math.pow(10, decimalsB);
+  
+  return { amountA, amountB };
 }
 
 /**
@@ -130,6 +191,16 @@ export async function fetchRaydiumPosition(
     const priceLower = tickToPrice(positionData.tickLower, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
     const priceUpper = tickToPrice(positionData.tickUpper, poolInfo.mintA.decimals, poolInfo.mintB.decimals);
     
+    // Calculate token amounts from liquidity
+    const { amountA, amountB } = calculateAmountsFromLiquidity(
+      positionData.liquidity,
+      priceLower,
+      priceUpper,
+      currentPrice,
+      poolInfo.mintA.decimals,
+      poolInfo.mintB.decimals,
+    );
+    
     return {
       positionAddress: positionMint,
       positionMint,
@@ -150,10 +221,10 @@ export async function fetchRaydiumPosition(
       priceUpper,
       currentPrice,
       inRange: currentPrice >= priceLower && currentPrice <= priceUpper,
-      feesOwedA: 0,
+      feesOwedA: 0, // TODO: Calculate from rewards when SDK supports it
       feesOwedB: 0,
-      amountA: 0,
-      amountB: 0,
+      amountA,
+      amountB,
     };
   } catch (error) {
     console.error('[Raydium] Error fetching position:', error);
