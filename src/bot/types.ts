@@ -72,7 +72,7 @@ export function consumeWaitingForCA(chatId: number): boolean {
  */
 export interface PendingLpPool {
   address: string;
-  dex: 'meteora' | 'orca';
+  dex: 'meteora' | 'orca' | 'raydium';
   name?: string;
   tickSpacing?: number; // Orca only
 }
@@ -99,7 +99,7 @@ export interface CachedPosition {
   poolAddress: string;
   walletId: string;
   walletAddress: string;
-  dex?: 'meteora' | 'orca';
+  dex?: 'meteora' | 'orca' | 'raydium';
   positionMintAddress?: string; // Orca positions need this for withdraw
 }
 
@@ -121,7 +121,7 @@ export function getCachedPosition(chatId: number, index: number): CachedPosition
 export interface DisplayedPool {
   address: string;
   name: string;
-  dex?: 'meteora' | 'orca';
+  dex?: 'meteora' | 'orca' | 'raydium';
   tickSpacing?: number;
 }
 

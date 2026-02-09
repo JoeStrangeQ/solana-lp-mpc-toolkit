@@ -17,6 +17,7 @@ import {
 import { getUserByChat } from '../../onboarding/index.js';
 import { executeLp, type LpExecuteParams } from '../../services/lp-service.js';
 import { executeOrcaLp, type OrcaLpExecuteParams } from '../../services/orca-service.js';
+import { executeRaydiumLp, type RaydiumLpExecuteParams } from '../../services/raydium-service.js';
 import { loadWalletById, getWalletBalance } from '../../services/wallet-service.js';
 import { parseNaturalAmount } from '../../utils/natural-amounts.js';
 import { validateSolAmount, validateSolanaAddress, friendlyErrorMessage } from '../../utils/resilience.js';
@@ -35,9 +36,9 @@ const FEE_RESERVE = 0.15;
 interface PoolInfo {
   address: string;
   name: string;
-  dex: 'meteora' | 'orca';
+  dex: 'meteora' | 'orca' | 'raydium';
   binStep?: number;      // Meteora
-  tickSpacing?: number;  // Orca
+  tickSpacing?: number;  // Orca / Raydium
   apr?: number;          // For yield estimate
   tvl?: number;
 }
@@ -463,6 +464,34 @@ export async function unifiedLpWizard(
         return {
           success: true as const,
           dex: 'orca' as const,
+          txHashes: res.txHashes,
+          bundleId: res.bundleId,
+          status: res.status,
+        };
+      } else if (selectedPool.dex === 'raydium') {
+        // ---- Raydium CLMM execution ----
+        const strategyMap: Record<string, 'tight' | 'balanced' | 'wide'> = {
+          'lp:str:c': 'tight',
+          'lp:str:m': 'balanced',
+          'lp:str:w': 'wide',
+        };
+        const raydiumStrategy = strategyMap[strData] || 'balanced';
+        
+        const params: RaydiumLpExecuteParams = {
+          walletId: user.walletId,
+          walletAddress: user.walletAddress,
+          poolAddress: selectedPool.address,
+          amountSol: amount,
+          strategy: raydiumStrategy,
+          tipSpeed: 'fast',
+          slippageBps: 300,
+          signTransaction: async (tx) => client.signTransaction(tx),
+        };
+
+        const res = await executeRaydiumLp(params);
+        return {
+          success: true as const,
+          dex: 'raydium' as const,
           txHashes: res.txHashes,
           bundleId: res.bundleId,
           status: res.status,

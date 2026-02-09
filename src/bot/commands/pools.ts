@@ -44,7 +44,7 @@ export async function poolsCommand(ctx: BotContext) {
   if (!chatId) return;
 
   const kb = new InlineKeyboard()
-    .text('🏆 Best Yields', 'pools:best')  // New: unified view
+    .text('🏆 Best Yields', 'pools:best')  // Unified view across all DEXes
     .row()
     .text('Trending', 'pools:trending')
     .text('High TVL', 'pools:hightvl')
@@ -52,8 +52,9 @@ export async function poolsCommand(ctx: BotContext) {
     .text('LSTs', 'pools:lst')
     .text('xStocks', 'pools:xstocks')
     .row()
-    .text('Meteora', 'pools:all')
-    .text('Orca', 'pools:orca')
+    .text('🌙 Meteora', 'pools:all')
+    .text('🐋 Orca', 'pools:orca')
+    .text('⚡ Raydium', 'pools:raydium')
     .row()
     .text('Paste CA', 'pools:ca');
 
@@ -228,16 +229,69 @@ export async function showOrcaPools(ctx: BotContext) {
 }
 
 /**
+ * Display Raydium CLMM pools (called from callback handler)
+ */
+export async function showRaydiumPools(ctx: BotContext) {
+  try {
+    const { fetchRaydiumTopPools } = await import('../../services/unified-pools.js');
+    const pools = await fetchRaydiumTopPools(8);
+
+    if (pools.length === 0) {
+      await ctx.reply('No Raydium pools found. Try again later.');
+      return;
+    }
+
+    const poolLines = pools.map((p, i) => {
+      const fmtTvl = p.tvl >= 1_000_000 ? `$${(p.tvl / 1_000_000).toFixed(1)}M` : p.tvl >= 1_000 ? `$${(p.tvl / 1_000).toFixed(0)}K` : `$${p.tvl.toFixed(0)}`;
+      return `${i + 1}. *${p.name}* (${(p.feeRate / 100).toFixed(2)}% fee)\n   APR: ${p.apr.toFixed(1)}% | TVL: ${fmtTvl}`;
+    }).join('\n\n');
+
+    const text = [
+      `*⚡ Raydium CLMM Pools*`,
+      ``,
+      poolLines,
+      ``,
+      `Tap a pool to add liquidity.`,
+    ].join('\n');
+
+    // Cache displayed pools with raydium dex tag
+    const chatId = ctx.chat?.id;
+    if (chatId) {
+      setDisplayedPools(chatId, pools.map(p => ({
+        address: p.address,
+        name: p.name,
+        dex: 'raydium' as const,
+        tickSpacing: p.tickSpacing,
+      })));
+    }
+
+    // Build selection keyboard with address-based callbacks
+    const kb = new InlineKeyboard();
+    for (const pool of pools) {
+      // Use address prefix for stable lookup: lp:p:r:PREFIX (r = raydium)
+      kb.text(`${pool.name}`, `lp:p:r:${pool.address.slice(0, 11)}`).row();
+    }
+    kb.text('Back to Categories', 'cmd:pools');
+
+    await ctx.reply(text, { parse_mode: 'Markdown', reply_markup: kb });
+  } catch (error: any) {
+    console.error('[Bot] /pools raydium error:', error);
+    await ctx.reply('Failed to fetch Raydium pools. Please try again.');
+  }
+}
+
+/**
  * Show best yield pools across all DEXes (unified view)
  */
 export async function showBestYieldPools(ctx: BotContext) {
   try {
     await ctx.reply('🔍 Finding best yield pools across all DEXes...');
 
-    // Fetch from both sources in parallel
-    const [meteoraPools, orcaPoolsResult] = await Promise.allSettled([
+    // Fetch from all sources in parallel
+    const [meteoraPools, orcaPoolsResult, raydiumPoolsResult] = await Promise.allSettled([
       fetchPoolsByCategory('all'),
       import('../../orca/pools.js').then(m => m.fetchOrcaPools(8, 'tvl')),
+      import('../../services/unified-pools.js').then(m => m.fetchRaydiumTopPools(8)),
     ]);
 
     // Process Meteora pools
@@ -264,8 +318,23 @@ export async function showBestYieldPools(ctx: BotContext) {
         }))
       : [];
 
+    // Process Raydium pools
+    const raydium = raydiumPoolsResult.status === 'fulfilled'
+      ? raydiumPoolsResult.value.map(p => ({
+          name: p.name,
+          address: p.address,
+          apr: p.apr,
+          tvl: p.tvl,
+          volume24h: p.volume24h,
+          binStep: 0,
+          tickSpacing: p.tickSpacing,
+          dex: 'raydium' as const,
+          dailyYieldPer100: p.dailyYieldPer100Usd?.toFixed(2) || (p.apr / 365).toFixed(2),
+        }))
+      : [];
+
     // Combine and sort by APR (highest first)
-    const combined = [...meteora, ...orca]
+    const combined = [...meteora, ...orca, ...raydium]
       .filter(p => p.tvl >= 50000) // Min $50K TVL
       .sort((a, b) => b.apr - a.apr)
       .slice(0, 10);
@@ -279,11 +348,11 @@ export async function showBestYieldPools(ctx: BotContext) {
       const fmtTvl = p.tvl >= 1_000_000 
         ? `$${(p.tvl / 1_000_000).toFixed(1)}M` 
         : `$${(p.tvl / 1_000).toFixed(0)}K`;
-      const dexTag = p.dex === 'orca' ? '🌀' : '☄️';
-      // Show bin step for Meteora or tick spacing for Orca
+      const dexTag = p.dex === 'orca' ? '🐋' : p.dex === 'raydium' ? '⚡' : '🌙';
+      // Show bin step for Meteora or tick spacing for Orca/Raydium
       const stepInfo = p.dex === 'meteora' && p.binStep 
         ? ` • ${p.binStep}bp` 
-        : p.dex === 'orca' && p.tickSpacing 
+        : (p.dex === 'orca' || p.dex === 'raydium') && p.tickSpacing 
           ? ` • tick ${p.tickSpacing}` 
           : '';
       return `${i + 1}. ${dexTag} *${p.name}*${stepInfo}\n   ${p.apr.toFixed(1)}% APR (~$${p.dailyYieldPer100}/day per $100) | TVL: ${fmtTvl}`;
@@ -291,7 +360,7 @@ export async function showBestYieldPools(ctx: BotContext) {
 
     const text = [
       `*🏆 Best Yield Pools*`,
-      `_Across Meteora ☄️ & Orca 🌀_`,
+      `_Across Meteora 🌙, Orca 🐋 & Raydium ⚡_`,
       ``,
       poolLines,
       ``,
@@ -312,8 +381,9 @@ export async function showBestYieldPools(ctx: BotContext) {
     // Build keyboard with address-based callbacks
     const kb = new InlineKeyboard();
     for (const pool of combined) {
-      const dexTag = pool.dex === 'orca' ? 'o' : 'm';
-      kb.text(`${pool.dex === 'orca' ? '🌀' : '☄️'} ${pool.name}`, `lp:p:${dexTag}:${pool.address.slice(0, 11)}`).row();
+      const dexTag = pool.dex === 'orca' ? 'o' : pool.dex === 'raydium' ? 'r' : 'm';
+      const dexIcon = pool.dex === 'orca' ? '🐋' : pool.dex === 'raydium' ? '⚡' : '🌙';
+      kb.text(`${dexIcon} ${pool.name}`, `lp:p:${dexTag}:${pool.address.slice(0, 11)}`).row();
     }
     kb.text('Back to Categories', 'cmd:pools');
 

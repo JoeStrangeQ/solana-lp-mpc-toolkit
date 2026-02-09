@@ -75,6 +75,12 @@ export async function handleCallback(ctx: BotContext) {
       return;
     }
 
+    if (category === 'raydium') {
+      const { showRaydiumPools } = await import('./commands/pools.js');
+      await showRaydiumPools(ctx);
+      return;
+    }
+
     if (category === 'best') {
       // Unified best yields across all DEXes
       const { showBestYieldPools } = await import('./commands/pools.js');
@@ -181,13 +187,15 @@ export async function handleCallback(ctx: BotContext) {
   if (data.startsWith('lp:p:')) {
     await ctx.answerCallbackQuery().catch(() => {});
     const parts = data.split(':');
-    const dexTag = parts[2]; // 'o' = orca, 'm' = meteora
+    const dexTag = parts[2]; // 'o' = orca, 'm' = meteora, 'r' = raydium
     const prefix = parts[3]; // first 11 chars of address
     
     const displayed = getPoolByPrefix(prefix);
     if (displayed && chatId) {
       // Use unified wizard for all DEXes
-      const dex = (dexTag === 'o' || displayed.dex === 'orca') ? 'orca' : 'meteora';
+      let dex: 'meteora' | 'orca' | 'raydium' = 'meteora';
+      if (dexTag === 'o' || displayed.dex === 'orca') dex = 'orca';
+      else if (dexTag === 'r' || displayed.dex === 'raydium') dex = 'raydium';
       setPendingLpPool(chatId, {
         address: displayed.address,
         dex,
@@ -219,7 +227,9 @@ export async function handleCallback(ctx: BotContext) {
       const displayed = getDisplayedPool(chatId, poolIdx);
       if (displayed) {
         // Use unified wizard for all DEXes
-        const dex = displayed.dex === 'orca' ? 'orca' : 'meteora';
+        let dex: 'meteora' | 'orca' | 'raydium' = 'meteora';
+        if (displayed.dex === 'orca') dex = 'orca';
+        else if (displayed.dex === 'raydium') dex = 'raydium';
         setPendingLpPool(chatId, {
           address: displayed.address,
           dex,
