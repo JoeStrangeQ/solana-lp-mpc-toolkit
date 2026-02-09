@@ -5,6 +5,7 @@ import type { BotContext } from '../types.js';
 import { InlineKeyboard } from 'grammy';
 import { getUserByChat, getUserPositions } from '../../onboarding/index.js';
 import { getOrcaPositionsForWallet } from '../../services/orca-service.js';
+import { fetchRaydiumPositions } from '../../raydium/positions.js';
 import { getAggregatedPrice } from '../../services/oracle-service.js';
 
 interface PortfolioSummary {
@@ -16,6 +17,7 @@ interface PortfolioSummary {
   byDex: {
     meteora: { count: number; valueUsd: number };
     orca: { count: number; valueUsd: number };
+    raydium: { count: number; valueUsd: number };
   };
   topPositions: Array<{
     pool: string;
@@ -48,13 +50,14 @@ export async function portfolioCommand(ctx: BotContext) {
       console.warn('[Portfolio] Failed to fetch SOL price, using default');
     }
 
-    // Fetch all positions
-    const [meteoraPositions, orcaPositions] = await Promise.all([
+    // Fetch all positions from all DEXes
+    const [meteoraPositions, orcaPositions, raydiumPositions] = await Promise.all([
       getUserPositions(user.walletAddress).catch(() => []),
       getOrcaPositionsForWallet(user.walletAddress).catch(() => []),
+      fetchRaydiumPositions(user.walletAddress).catch(() => []),
     ]);
 
-    const totalPositions = meteoraPositions.length + orcaPositions.length;
+    const totalPositions = meteoraPositions.length + orcaPositions.length + raydiumPositions.length;
 
     if (totalPositions === 0) {
       await ctx.reply(
@@ -109,9 +112,25 @@ export async function portfolioCommand(ctx: BotContext) {
       if (pos.inRange) orcaInRange++;
     }
 
-    const totalValueUsd = meteoraValueUsd + orcaValueUsd;
-    const totalFeesUsd = meteoraFeesUsd + orcaFeesUsd;
-    const inRangeCount = meteoraInRange + orcaInRange;
+    // Calculate Raydium values
+    let raydiumValueUsd = 0;
+    let raydiumFeesUsd = 0;
+    let raydiumInRange = 0;
+
+    for (const pos of raydiumPositions) {
+      // Raydium positions have amountA/amountB
+      const valueUsd = pos.amountA * solPrice + pos.amountB;
+      raydiumValueUsd += valueUsd;
+
+      // Add fees
+      raydiumFeesUsd += pos.feesOwedA * solPrice + pos.feesOwedB;
+
+      if (pos.inRange) raydiumInRange++;
+    }
+
+    const totalValueUsd = meteoraValueUsd + orcaValueUsd + raydiumValueUsd;
+    const totalFeesUsd = meteoraFeesUsd + orcaFeesUsd + raydiumFeesUsd;
+    const inRangeCount = meteoraInRange + orcaInRange + raydiumInRange;
     const outOfRangeCount = totalPositions - inRangeCount;
 
     // Build top positions list
@@ -126,6 +145,12 @@ export async function portfolioCommand(ctx: BotContext) {
         pool: p.poolName,
         dex: 'Orca',
         valueUsd: parseFloat(p.tokenA?.amount || '0') * solPrice + parseFloat(p.tokenB?.amount || '0'),
+        inRange: p.inRange,
+      })),
+      ...raydiumPositions.map(p => ({
+        pool: p.poolName,
+        dex: 'Raydium',
+        valueUsd: p.amountA * solPrice + p.amountB,
         inRange: p.inRange,
       })),
     ].sort((a, b) => b.valueUsd - a.valueUsd);
@@ -148,8 +173,9 @@ export async function portfolioCommand(ctx: BotContext) {
       `   🔴 Out of Range: ${outOfRangeCount}`,
       ``,
       `*By DEX:*`,
-      meteoraPositions.length > 0 ? `   Meteora: ${meteoraPositions.length} pos (${formatUsd(meteoraValueUsd)})` : null,
-      orcaPositions.length > 0 ? `   Orca: ${orcaPositions.length} pos (${formatUsd(orcaValueUsd)})` : null,
+      meteoraPositions.length > 0 ? `   🌙 Meteora: ${meteoraPositions.length} pos (${formatUsd(meteoraValueUsd)})` : null,
+      orcaPositions.length > 0 ? `   🐋 Orca: ${orcaPositions.length} pos (${formatUsd(orcaValueUsd)})` : null,
+      raydiumPositions.length > 0 ? `   ⚡ Raydium: ${raydiumPositions.length} pos (${formatUsd(raydiumValueUsd)})` : null,
       ``,
       healthStatus,
     ].filter(Boolean).join('\n');
