@@ -94,6 +94,81 @@ export async function handleCallback(ctx: BotContext) {
     return;
   }
 
+  // ---- DCA callbacks ----
+  if (data.startsWith('dca:')) {
+    await ctx.answerCallbackQuery().catch(() => {});
+    const parts = data.split(':');
+    const action = parts[1];
+
+    if (action === 'new') {
+      await ctx.conversation.enter('dcaWizard');
+      return;
+    }
+
+    if (action === 'info') {
+      await ctx.reply(
+        `*What is DCA?*\n\n` +
+        `Dollar Cost Averaging (DCA) automatically adds liquidity to a pool at regular intervals.\n\n` +
+        `*Benefits:*\n` +
+        `• Spread entry over time\n` +
+        `• Reduce timing risk\n` +
+        `• Set it and forget it\n\n` +
+        `*How it works:*\n` +
+        `1. Choose a pool\n` +
+        `2. Set total budget (e.g., 5 SOL)\n` +
+        `3. Set amount per deposit (e.g., 0.5 SOL)\n` +
+        `4. Choose interval (hourly, daily, weekly)\n\n` +
+        `The bot will automatically deposit at each interval until your budget is used.`,
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
+
+    if (action === 'toggle') {
+      const scheduleId = parts[2];
+      const { getDCASchedule, pauseDCASchedule, resumeDCASchedule } = await import('../services/dca-service.js');
+      const schedule = await getDCASchedule(scheduleId);
+      
+      if (!schedule) {
+        await ctx.reply('Schedule not found.');
+        return;
+      }
+
+      if (schedule.status === 'active') {
+        await pauseDCASchedule(scheduleId);
+        await ctx.reply(`⏸️ DCA paused for ${schedule.poolName}`);
+      } else if (schedule.status === 'paused') {
+        await resumeDCASchedule(scheduleId);
+        await ctx.reply(`▶️ DCA resumed for ${schedule.poolName}`);
+      }
+      
+      // Refresh the DCA list
+      const { dcaCommand } = await import('./commands/dca.js');
+      await dcaCommand(ctx);
+      return;
+    }
+
+    if (action === 'cancel') {
+      const scheduleId = parts[2];
+      const { cancelDCASchedule, getDCASchedule } = await import('../services/dca-service.js');
+      const schedule = await getDCASchedule(scheduleId);
+      
+      if (schedule) {
+        await cancelDCASchedule(scheduleId);
+        await ctx.reply(`🗑️ DCA cancelled for ${schedule.poolName}`);
+        
+        // Refresh the DCA list
+        const { dcaCommand } = await import('./commands/dca.js');
+        await dcaCommand(ctx);
+      } else {
+        await ctx.reply('Schedule not found.');
+      }
+      return;
+    }
+
+    return;
+  }
+
   // ---- Settings toggles ----
   if (data.startsWith('set:')) {
     await ctx.answerCallbackQuery().catch(() => {});

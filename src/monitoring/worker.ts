@@ -88,6 +88,7 @@ const MAX_LOG_ENTRIES = 500;
 // Runtime state
 let isRunning = false;
 let positionCheckTimer: NodeJS.Timeout | null = null;
+let dcaQueueTimer: NodeJS.Timeout | null = null;
 
 // Redis client
 let redis: Redis | null = null;
@@ -675,7 +676,22 @@ export async function startWorker(): Promise<void> {
     }
   }, WITHDRAWAL_CHECK_INTERVAL_MS);
   
-  await log('info', `Worker started. Position check: ${POSITION_CHECK_INTERVAL_MS / 1000}s, Queue processing: ${WITHDRAWAL_CHECK_INTERVAL_MS / 1000}s`);
+  // Start DCA processing (check every minute)
+  dcaQueueTimer = setInterval(async () => {
+    if (isRunning) {
+      try {
+        const { processDueSchedules } = await import('../services/dca-service.js');
+        const processed = await processDueSchedules();
+        if (processed > 0) {
+          await log('info', `[DCA] Processed ${processed} due schedules`);
+        }
+      } catch (error: any) {
+        await log('error', `[DCA] Processing error: ${error.message}`);
+      }
+    }
+  }, 60_000); // Check every minute
+  
+  await log('info', `Worker started. Position check: ${POSITION_CHECK_INTERVAL_MS / 1000}s, Queue processing: ${WITHDRAWAL_CHECK_INTERVAL_MS / 1000}s, DCA: 60s`);
 }
 
 /**
@@ -701,6 +717,11 @@ export async function stopWorker(): Promise<void> {
   if (swapQueueTimer) {
     clearInterval(swapQueueTimer);
     swapQueueTimer = null;
+  }
+  
+  if (dcaQueueTimer) {
+    clearInterval(dcaQueueTimer);
+    dcaQueueTimer = null;
   }
   
   await log('info', '🛑 Worker stopped');
