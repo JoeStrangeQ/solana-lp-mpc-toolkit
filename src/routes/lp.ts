@@ -11,7 +11,8 @@ import { withTimeout, PRIVY_SIGN_TIMEOUT_MS } from '../utils/resilience.js';
 import { ErrorCode, createError, classifyError, getHttpStatus, getFriendlyMessage } from '../utils/error-codes.js';
 import { arciumPrivacy } from '../privacy/index.js';
 import { buildAtomicLP } from '../lp/atomic.js';
-import { sendBundle, waitForBundle, type TipSpeed } from '../jito/index.js';
+import { sendBundle, waitForBundle, buildTipTransaction, type TipSpeed } from '../jito/index.js';
+import MeteoraDirectClient from '../dex/meteora.js';
 
 const app = new Hono();
 
@@ -263,6 +264,106 @@ async function lpExecuteHandler(c: any) {
 
 app.post('/atomic', async (c) => lpExecuteHandler(c));
 app.post('/execute', async (c) => lpExecuteHandler(c));
+
+// Add liquidity to an existing position
+app.post('/add', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { walletId, poolAddress, positionAddress, amountSol = 0.02, slippageBps = 300 } = body;
+
+    if (!walletId || !poolAddress || !positionAddress) {
+      return c.json({
+        error: 'Missing required fields',
+        required: ['walletId', 'poolAddress', 'positionAddress'],
+        optional: ['amountSol (default: 0.02)', 'slippageBps (default: 300)'],
+      }, 400);
+    }
+
+    const { client, wallet } = await loadWalletById(walletId);
+    const walletAddress = wallet.address;
+    const connection = getConnection();
+
+    // Instantiate MeteoraDirectClient
+    const meteoraClient = new MeteoraDirectClient(connection.rpcEndpoint);
+
+    const amountLamports = Math.floor(amountSol * 1e9);
+    
+    // Split equally between X and Y
+    const halfAmount = Math.floor(amountLamports / 2);
+
+    console.log(`[LP Add] Adding ${amountSol} SOL to position ${positionAddress}`);
+
+    // Build add liquidity transaction
+    const result = await meteoraClient.buildAddToExistingPositionTx({
+      poolAddress,
+      positionAddress,
+      userPublicKey: walletAddress,
+      amountX: halfAmount,
+      amountY: halfAmount,
+      slippageBps,
+    });
+
+    // Sign and send via Jito
+    const signedTxs: string[] = [];
+    for (const txBase64 of result.transactions) {
+      const signedTx: string = await withTimeout(
+        () => client.signTransaction(txBase64),
+        { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out' }
+      );
+      signedTxs.push(signedTx);
+    }
+
+    // Add tip transaction
+    const { blockhash } = await connection.getLatestBlockhash();
+    const { transaction: tipTx } = buildTipTransaction({ 
+      payerAddress: walletAddress, 
+      recentBlockhash: blockhash, 
+      speed: 'fast' as TipSpeed
+    });
+    const tipTxBase64 = Buffer.from(tipTx.serialize()).toString('base64');
+    const signedTipTx: string = await withTimeout(
+      () => client.signTransaction(tipTxBase64),
+      { timeoutMs: PRIVY_SIGN_TIMEOUT_MS, errorMessage: 'Wallet signing timed out' }
+    );
+    signedTxs.push(signedTipTx);
+
+    // Send bundle
+    const { bundleId } = await sendBundle(signedTxs);
+    const status = await waitForBundle(bundleId);
+
+    if (!status.landed) {
+      return c.json({
+        success: false,
+        error: 'Bundle failed to land',
+        bundleId,
+        details: status.error,
+      }, 500);
+    }
+
+    // Invalidate position cache
+    invalidatePositionCache(walletAddress);
+
+    console.log(`[LP Add] Liquidity added at slot ${status.slot}`);
+
+    return c.json({
+      success: true,
+      message: `Added ${amountSol} SOL to existing position`,
+      walletId,
+      walletAddress,
+      poolAddress,
+      positionAddress,
+      binRange: result.binRange,
+      bundle: {
+        bundleId,
+        landed: status.landed,
+        slot: status.slot,
+      },
+    });
+  } catch (error: any) {
+    console.error('[LP Add] Error:', error);
+    return c.json({ error: 'Add liquidity failed', details: error.message }, 500);
+  }
+});
 
 app.post('/prepare', async (c) => {
   try {
