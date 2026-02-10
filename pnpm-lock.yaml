@@ -53,6 +53,9 @@ importers:
       bs58:
         specifier: ^6.0.0
         version: 6.0.0
+      decimal.js:
+        specifier: ^10.6.0
+        version: 10.6.0
       grammy:
         specifier: ^1.39.3
         version: 1.39.3
