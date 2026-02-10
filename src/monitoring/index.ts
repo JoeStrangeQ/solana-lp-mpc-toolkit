@@ -36,6 +36,7 @@ export {
   setUserSettings,
   createDefaultSettings,
   getAllUsers,
+  getUsersWithWallets,
   getUserRules,
   addUserRule,
   removeUserRule,

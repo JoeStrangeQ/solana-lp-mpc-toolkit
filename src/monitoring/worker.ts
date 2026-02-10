@@ -21,6 +21,9 @@ import {
   getUserSettings,
   getUserRules,
   updateRuleTriggered,
+  getUsersWithWallets,
+  trackPosition,
+  getTrackedPositions,
   type TrackedPosition,
   type UserSettings,
 } from './userRules.js';
@@ -167,12 +170,84 @@ async function updateWorkerState(updates: Partial<WorkerState>): Promise<void> {
   }
 }
 
+// ============ Auto-Discovery ============
+
+// Counter to run auto-discovery less frequently
+let discoveryCounter = 0;
+const DISCOVERY_INTERVAL = 3; // Run every 3rd position check cycle (15 mins)
+
+async function autoDiscoverPositions(): Promise<number> {
+  let newPositions = 0;
+  
+  try {
+    const usersWithWallets = await getUsersWithWallets();
+    
+    if (usersWithWallets.length === 0) {
+      return 0;
+    }
+    
+    const { discoverAllPositions } = await import('../utils/position-discovery.js');
+    const connection = getConnection();
+    
+    for (const { userId, walletAddress, settings } of usersWithWallets) {
+      try {
+        // Get already tracked positions for this user
+        const alreadyTracked = await getTrackedPositions(userId);
+        const trackedAddresses = new Set(alreadyTracked.map(p => p.positionAddress));
+        
+        // Discover positions on-chain
+        const discovered = await discoverAllPositions(connection, walletAddress);
+        
+        // Track any new positions
+        for (const pos of discovered) {
+          if (trackedAddresses.has(pos.address)) {
+            continue; // Already tracked
+          }
+          
+          const position: TrackedPosition = {
+            positionAddress: pos.address,
+            poolAddress: pos.pool.address,
+            poolName: pos.pool.name || `${pos.pool.tokenX.symbol}-${pos.pool.tokenY.symbol}`,
+            userId,
+            binRange: pos.binRange,
+            createdAt: new Date().toISOString(),
+            lastInRange: pos.inRange,
+          };
+          
+          await trackPosition(position);
+          newPositions++;
+          await log('info', `Auto-discovered position ${pos.address.slice(0, 8)}...`, { 
+            userId, 
+            pool: position.poolName 
+          });
+        }
+      } catch (error: any) {
+        await log('warn', `Auto-discovery failed for user ${userId}`, { error: error.message });
+      }
+    }
+  } catch (error: any) {
+    await log('error', 'Auto-discovery failed', { error: error.message });
+  }
+  
+  return newPositions;
+}
+
 // ============ Position Checking ============
 
 async function checkAllPositions(): Promise<void> {
   const now = new Date().toISOString();
   
   await log('info', 'Starting position check cycle');
+  
+  // Run auto-discovery periodically
+  discoveryCounter++;
+  if (discoveryCounter >= DISCOVERY_INTERVAL) {
+    discoveryCounter = 0;
+    const newPositions = await autoDiscoverPositions();
+    if (newPositions > 0) {
+      await log('info', `Auto-discovered ${newPositions} new position(s)`);
+    }
+  }
   
   try {
     const positions = await getAllTrackedPositions();

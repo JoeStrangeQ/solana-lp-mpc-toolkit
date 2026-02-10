@@ -5,7 +5,7 @@ import type { BotContext } from '../types.js';
 import { getUserByChat } from '../../onboarding/index.js';
 import { discoverAllPositions } from '../../utils/position-discovery.js';
 import { getConnection } from '../../services/connection-pool.js';
-import { trackPosition, getTrackedPositions, createDefaultSettings, type TrackedPosition } from '../../monitoring/index.js';
+import { trackPosition, getTrackedPositions, createDefaultSettings, getUserSettings, setUserSettings, type TrackedPosition } from '../../monitoring/index.js';
 
 export async function trackCommand(ctx: BotContext): Promise<void> {
   const chatId = ctx.chat?.id;
@@ -36,8 +36,16 @@ export async function trackCommand(ctx: BotContext): Promise<void> {
       return;
     }
 
-    // Ensure user settings exist
-    await createDefaultSettings(userId, { chatId });
+    // Ensure user settings exist with wallet address for auto-discovery
+    let settings = await getUserSettings(userId);
+    if (!settings) {
+      settings = await createDefaultSettings(userId, { chatId });
+    }
+    // Save wallet address for auto-discovery
+    if (!settings.walletAddress || settings.walletAddress !== walletAddress) {
+      settings.walletAddress = walletAddress;
+      await setUserSettings(settings);
+    }
 
     // Track new positions
     let newTracked = 0;

@@ -17,6 +17,7 @@ const KEYS = {
 
 export interface UserSettings {
   userId: string;
+  walletAddress?: string; // Wallet address for auto-discovery
   telegram?: {
     chatId: number | string;
     username?: string;
@@ -153,6 +154,23 @@ export async function getAllUsers(): Promise<string[]> {
     console.error('[UserRules] Failed to get all users:', error.message);
     return [];
   }
+}
+
+/**
+ * Get all users with wallet addresses configured for auto-discovery
+ */
+export async function getUsersWithWallets(): Promise<{ userId: string; walletAddress: string; settings: UserSettings }[]> {
+  const users = await getAllUsers();
+  const results: { userId: string; walletAddress: string; settings: UserSettings }[] = [];
+  
+  for (const userId of users) {
+    const settings = await getUserSettings(userId);
+    if (settings?.walletAddress) {
+      results.push({ userId, walletAddress: settings.walletAddress, settings });
+    }
+  }
+  
+  return results;
 }
 
 // ============ User Rules ============
@@ -377,6 +395,7 @@ export default {
   setUserSettings,
   createDefaultSettings,
   getAllUsers,
+  getUsersWithWallets,
   getUserRules,
   addUserRule,
   removeUserRule,
