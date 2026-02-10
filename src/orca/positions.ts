@@ -8,7 +8,8 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { getWhirlpoolClient, getWhirlpoolCtx } from './client.js';
-import { PDAUtil, PriceMath, ORCA_WHIRLPOOL_PROGRAM_ID } from '@orca-so/whirlpools-sdk';
+import { PDAUtil, PriceMath, PoolUtil, ORCA_WHIRLPOOL_PROGRAM_ID } from '@orca-so/whirlpools-sdk';
+import BN from 'bn.js';
 import type { OrcaPositionInfo } from './types.js';
 
 /**
@@ -89,6 +90,22 @@ export async function discoverOrcaPositions(
           currentTick, decimalsA, decimalsB,
         ).toNumber();
 
+        // Calculate token amounts from liquidity
+        const sqrtPriceLowerX64 = PriceMath.tickIndexToSqrtPriceX64(posData.tickLowerIndex);
+        const sqrtPriceUpperX64 = PriceMath.tickIndexToSqrtPriceX64(posData.tickUpperIndex);
+        const sqrtPriceCurrentX64 = poolData.sqrtPrice;
+
+        const { tokenA: tokenAmountA, tokenB: tokenAmountB } = PoolUtil.getTokenAmountsFromLiquidity(
+          posData.liquidity,
+          sqrtPriceCurrentX64,
+          sqrtPriceLowerX64,
+          sqrtPriceUpperX64,
+          true, // round up
+        );
+
+        const amountADecimal = Number(tokenAmountA.toString()) / Math.pow(10, decimalsA);
+        const amountBDecimal = Number(tokenAmountB.toString()) / Math.pow(10, decimalsB);
+
         const mintAddress = mintToAddress.get(addrStr) || '';
 
         result.push({
@@ -99,11 +116,11 @@ export async function discoverOrcaPositions(
           tickLowerIndex: posData.tickLowerIndex,
           tickUpperIndex: posData.tickUpperIndex,
           liquidity: posData.liquidity.toString(),
-          tokenA: { amount: '0', symbol: tokenAInfo.mint.toBase58().slice(0, 6) },
-          tokenB: { amount: '0', symbol: tokenBInfo.mint.toBase58().slice(0, 6) },
+          tokenA: { amount: amountADecimal.toFixed(6), symbol: tokenAInfo.mint.toBase58().slice(0, 6) },
+          tokenB: { amount: amountBDecimal.toFixed(6), symbol: tokenBInfo.mint.toBase58().slice(0, 6) },
           fees: {
-            tokenA: posData.feeOwedA.toString(),
-            tokenB: posData.feeOwedB.toString(),
+            tokenA: (Number(posData.feeOwedA.toString()) / Math.pow(10, decimalsA)).toFixed(6),
+            tokenB: (Number(posData.feeOwedB.toString()) / Math.pow(10, decimalsB)).toFixed(6),
           },
           inRange,
           priceLower,
