@@ -11,18 +11,33 @@ import { assessPositionRisk } from '../risk/index.js';
 
 const app = new Hono();
 
-// Get positions by walletId
-app.get('/:walletId', async (c) => {
-  const walletId = c.req.param('walletId');
+// Helper to detect if a string is a Solana address (base58, ~32-44 chars)
+function isSolanaAddress(str: string): boolean {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(str);
+}
+
+// Get positions by walletId OR wallet address
+app.get('/:walletIdOrAddress', async (c) => {
+  const param = c.req.param('walletIdOrAddress');
 
   // Check if this might be a "risk" sub-path
-  if (walletId === 'risk') {
+  if (param === 'risk') {
     return c.notFound();
   }
 
   try {
-    const { wallet } = await loadWalletById(walletId);
-    const walletAddress = wallet.address;
+    let walletAddress: string;
+    let walletId: string | undefined;
+
+    // If it looks like a Solana address, use it directly
+    if (isSolanaAddress(param)) {
+      walletAddress = param;
+    } else {
+      // Otherwise, treat as Privy wallet ID and look up the address
+      const { wallet } = await loadWalletById(param);
+      walletAddress = wallet.address;
+      walletId = param;
+    }
 
     const positions = await getPositionsForWallet(walletAddress);
 
@@ -30,7 +45,7 @@ app.get('/:walletId', async (c) => {
       success: true,
       message: `Found ${positions.length} positions across Meteora and Orca`,
       data: {
-        walletId,
+        ...(walletId && { walletId }),
         walletAddress,
         positions,
         totalPositions: positions.length,
@@ -43,12 +58,20 @@ app.get('/:walletId', async (c) => {
 });
 
 // Risk assessment for all positions of a wallet
-app.get('/:walletId/risk', async (c) => {
-  const walletId = c.req.param('walletId');
+app.get('/:walletIdOrAddress/risk', async (c) => {
+  const param = c.req.param('walletIdOrAddress');
 
   try {
-    const { wallet } = await loadWalletById(walletId);
-    const walletAddress = wallet.address;
+    let walletAddress: string;
+    let walletId: string | undefined;
+
+    if (isSolanaAddress(param)) {
+      walletAddress = param;
+    } else {
+      const { wallet } = await loadWalletById(param);
+      walletAddress = wallet.address;
+      walletId = param;
+    }
 
     const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
     const positions = await discoverAllPositions(connection, walletAddress);
@@ -81,7 +104,7 @@ app.get('/:walletId/risk', async (c) => {
 
     return c.json({
       success: true,
-      walletId,
+      ...(walletId && { walletId }),
       walletAddress,
       totalPositions: positions.length,
       assessments,
