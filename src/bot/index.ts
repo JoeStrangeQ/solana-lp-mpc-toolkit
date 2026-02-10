@@ -38,6 +38,7 @@ import {
   aboutCommand,
   simulateCommand,
   rebalanceCommand,
+  trackCommand,
 } from './commands/index.js';
 import { handleCallback } from './callbacks.js';
 import { lpWizard } from './conversations/lp-wizard.js';
@@ -98,6 +99,7 @@ export function createBot(token?: string): Bot<BotContext> | null {
   bot.command('about', aboutCommand);
   bot.command('simulate', simulateCommand);
   bot.command('dca', dcaCommand);
+  bot.command('track', trackCommand);
 
   // Conversation entry points (via commands)
   bot.command('lp', async (ctx) => {

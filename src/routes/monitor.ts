@@ -501,6 +501,65 @@ export function userRoutes() {
     return c.json({ success: true, message: 'Position untracked' });
   });
 
+  // Auto-track all positions for a wallet
+  uApp.post('/:userId/positions/track-all', async (c) => {
+    const userId = c.req.param('userId');
+    const body = await c.req.json();
+    const { walletAddress, walletId } = body;
+
+    if (!walletAddress) {
+      return c.json({ error: 'Missing walletAddress' }, 400);
+    }
+
+    try {
+      // Discover all positions on-chain
+      const connection = new Connection(config.solana?.rpc || 'https://api.mainnet-beta.solana.com');
+      const { discoverAllPositions } = await import('../utils/position-discovery.js');
+      const discovered = await discoverAllPositions(connection, walletAddress);
+
+      if (discovered.length === 0) {
+        return c.json({
+          success: true,
+          message: 'No positions found to track',
+          tracked: 0,
+        });
+      }
+
+      // Track each discovered position
+      const tracked: TrackedPosition[] = [];
+      for (const pos of discovered) {
+        const position: TrackedPosition = {
+          positionAddress: pos.address,
+          poolAddress: pos.pool.address,
+          poolName: pos.pool.name || `${pos.pool.tokenX.symbol}-${pos.pool.tokenY.symbol}`,
+          userId,
+          walletId,
+          binRange: pos.binRange,
+          createdAt: new Date().toISOString(),
+          lastInRange: pos.inRange,
+        };
+        await trackPosition(position);
+        tracked.push(position);
+      }
+
+      console.log(`[Monitor] Auto-tracked ${tracked.length} positions for user ${userId}`);
+
+      return c.json({
+        success: true,
+        message: `Now tracking ${tracked.length} positions`,
+        tracked: tracked.length,
+        positions: tracked.map(p => ({
+          pool: p.poolName,
+          address: p.positionAddress.slice(0, 8) + '...',
+          binRange: p.binRange,
+        })),
+      });
+    } catch (error: any) {
+      console.error('[Monitor] Auto-track failed:', error);
+      return c.json({ error: 'Failed to auto-track positions', details: error.message }, 500);
+    }
+  });
+
   uApp.get('/:userId/rules', async (c) => {
     const userId = c.req.param('userId');
     const rules = await getUserRules(userId);
