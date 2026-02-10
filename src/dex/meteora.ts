@@ -168,6 +168,73 @@ export class MeteoraDirectClient {
   }
 
   /**
+   * Add liquidity to an EXISTING position
+   * Use this to top up a position or add more liquidity
+   */
+  async buildAddToExistingPositionTx(params: {
+    poolAddress: string;
+    positionAddress: string;
+    userPublicKey: string;
+    amountX: number; // Amount in lamports/base units
+    amountY: number;
+    slippageBps?: number;
+  }): Promise<{ transactions: string[]; binRange: { min: number; max: number } }> {
+    const { poolAddress, positionAddress, userPublicKey, amountX, amountY, slippageBps = 300 } = params;
+    
+    const pool = await DLMM.create(this.connection, new PublicKey(poolAddress));
+    const userPubkey = new PublicKey(userPublicKey);
+    
+    // Get position info
+    const positions = await pool.getPositionsByUserAndLbPair(userPubkey);
+    const position = positions.userPositions.find(
+      p => p.publicKey.toBase58() === positionAddress
+    );
+    
+    if (!position) {
+      throw new Error(`Position ${positionAddress} not found`);
+    }
+
+    const lowerBinId = position.positionData.lowerBinId;
+    const upperBinId = position.positionData.upperBinId;
+
+    // Add liquidity to existing position using addLiquidityByStrategy
+    const addLiquidityTx = await pool.addLiquidityByStrategy({
+      positionPubKey: position.publicKey,
+      user: userPubkey,
+      totalXAmount: new BN(amountX),
+      totalYAmount: new BN(amountY),
+      strategy: {
+        maxBinId: upperBinId,
+        minBinId: lowerBinId,
+        strategyType: StrategyType.Spot,
+      },
+      slippage: slippageBps / 10000,
+    });
+
+    // Get blockhash
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    
+    // Serialize transactions
+    const txArray = Array.isArray(addLiquidityTx) ? addLiquidityTx : [addLiquidityTx];
+    const serializedTxs: string[] = [];
+    
+    for (const tx of txArray) {
+      if ('recentBlockhash' in tx) {
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = userPubkey;
+        serializedTxs.push(tx.serialize({ requireAllSignatures: false }).toString('base64'));
+      } else {
+        serializedTxs.push(Buffer.from((tx as VersionedTransaction).serialize()).toString('base64'));
+      }
+    }
+
+    return {
+      transactions: serializedTxs,
+      binRange: { min: lowerBinId, max: upperBinId },
+    };
+  }
+
+  /**
    * Get user positions in a pool
    */
   async getUserPositions(poolAddress: string, userPublicKey: string) {
