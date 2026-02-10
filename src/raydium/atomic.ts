@@ -188,6 +188,13 @@ export async function buildRaydiumAtomicLP(
     epochInfo,
   });
 
+  // Set the SDK owner to the actual wallet (required for token account lookups)
+  const walletPubkey = new PublicKey(walletAddress);
+  raydium.setOwner(walletPubkey);
+  
+  // Fetch token accounts for the wallet (populates SDK cache)
+  await raydium.account.fetchWalletTokenAccounts({ forceUpdate: true });
+
   // Build open position transaction
   const { execute, extInfo } = await raydium.clmm.openPositionFromBase({
     poolInfo,
@@ -200,6 +207,9 @@ export async function buildRaydiumAtomicLP(
     baseAmount: inputAmountBN,
     otherAmountMax: liquidityRes.amountSlippageB.amount,
     txVersion: TX_VERSION,
+    associatedOnly: false,
+    checkCreateATAOwner: false,
+    feePayer: walletPubkey,
     computeBudgetConfig: {
       units: 600000,
       microLamports: 100000,
@@ -263,6 +273,11 @@ export async function buildRaydiumWithdraw(params: {
 
   const raydium = await getRaydiumClient();
   const connection = getRaydiumConnection();
+
+  // Set the SDK owner to the actual wallet (required for token account lookups)
+  const walletPubkey = new PublicKey(walletAddress);
+  raydium.setOwner(walletPubkey);
+  await raydium.account.fetchWalletTokenAccounts({ forceUpdate: true });
 
   // Get all owner positions
   const ownerPositions = await raydium.clmm.getOwnerPositionInfo({});
@@ -347,6 +362,11 @@ export async function buildRaydiumClaimFees(params: {
 
   const raydium = await getRaydiumClient();
   const connection = getRaydiumConnection();
+
+  // Set the SDK owner to the actual wallet (required for token account lookups)
+  const walletPubkey = new PublicKey(walletAddress);
+  raydium.setOwner(walletPubkey);
+  await raydium.account.fetchWalletTokenAccounts({ forceUpdate: true });
 
   // Get all owner positions
   const ownerPositions = await raydium.clmm.getOwnerPositionInfo({});
