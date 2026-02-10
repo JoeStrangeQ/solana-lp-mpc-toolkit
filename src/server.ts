@@ -42,6 +42,7 @@ import oracleRoutes from './routes/oracle.js';
 import ultraSwapRoutes from './routes/ultra-swap.js';
 import actionsRoutes from './routes/actions.js';
 import unifiedLpRoutes from './routes/unified-lp.js';
+import raydiumRoutes from './routes/raydium.js';
 
 // Import bot
 import { createBot, initBot, getBot, getBotWebhookHandler } from './bot/index.js';
@@ -140,6 +141,9 @@ app.route('/skill.md', skillRoutes);
 // Oracle & Ultra Swap routes
 app.route('/oracle', oracleRoutes);
 app.route('/ultra', ultraSwapRoutes);
+
+// Raydium CLMM routes
+app.route('/raydium', raydiumRoutes);
 
 // Solana Actions & Blinks
 app.route('/', actionsRoutes);
