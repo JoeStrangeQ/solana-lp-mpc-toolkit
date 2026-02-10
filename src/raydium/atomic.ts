@@ -9,6 +9,8 @@ import {
   PublicKey,
   VersionedTransaction,
   Connection,
+  TransactionMessage,
+  TransactionInstruction,
 } from '@solana/web3.js';
 import {
   ApiV3PoolInfoConcentratedItem,
@@ -16,6 +18,12 @@ import {
   PoolUtils,
   ClmmKeys,
 } from '@raydium-io/raydium-sdk-v2';
+import {
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountInstruction,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+} from '@solana/spl-token';
 import BN from 'bn.js';
 import { getRaydiumClient, getRaydiumConnection, TX_VERSION } from './client.js';
 import { config } from '../config/index.js';
@@ -167,6 +175,12 @@ export async function buildRaydiumAtomicLP(
     
     if (swapTxB64) {
       unsignedTransactions.push(swapTxB64);
+    } else {
+      // No swap route means we can't get the pool tokens
+      throw new Error(
+        `Cannot LP into this pool: No swap route found for ${poolInfo.mintA.symbol || mintA.slice(0, 8)}. ` +
+        `This pool doesn't contain SOL and Jupiter can't find a route. Try a SOL-paired pool instead.`
+      );
     }
   }
 
@@ -191,6 +205,58 @@ export async function buildRaydiumAtomicLP(
   // Set the SDK owner to the actual wallet (required for token account lookups)
   const walletPubkey = new PublicKey(walletAddress);
   raydium.setOwner(walletPubkey);
+
+  // Pre-create ATAs if they don't exist (Raydium SDK requires them)
+  const ataInstructions: TransactionInstruction[] = [];
+  const mintAPubkey = new PublicKey(mintA);
+  const mintBPubkey = new PublicKey(mintB);
+  
+  // Check and create ATA for mintA (if not SOL)
+  if (mintA !== SOL_MINT) {
+    const ataA = getAssociatedTokenAddressSync(mintAPubkey, walletPubkey);
+    const ataAInfo = await connection.getAccountInfo(ataA);
+    if (!ataAInfo) {
+      console.log(`[Raydium] Creating ATA for mintA: ${mintA}`);
+      ataInstructions.push(
+        createAssociatedTokenAccountInstruction(
+          walletPubkey, // payer
+          ataA,
+          walletPubkey, // owner
+          mintAPubkey
+        )
+      );
+    }
+  }
+  
+  // Check and create ATA for mintB (if not SOL)
+  if (mintB !== SOL_MINT) {
+    const ataB = getAssociatedTokenAddressSync(mintBPubkey, walletPubkey);
+    const ataBInfo = await connection.getAccountInfo(ataB);
+    if (!ataBInfo) {
+      console.log(`[Raydium] Creating ATA for mintB: ${mintB}`);
+      ataInstructions.push(
+        createAssociatedTokenAccountInstruction(
+          walletPubkey, // payer
+          ataB,
+          walletPubkey, // owner
+          mintBPubkey
+        )
+      );
+    }
+  }
+  
+  // If we need to create ATAs, add that transaction first
+  if (ataInstructions.length > 0) {
+    const { blockhash: ataBlockhash } = await connection.getLatestBlockhash('finalized');
+    const ataMessage = new TransactionMessage({
+      payerKey: walletPubkey,
+      recentBlockhash: ataBlockhash,
+      instructions: ataInstructions,
+    }).compileToV0Message();
+    const ataTx = new VersionedTransaction(ataMessage);
+    unsignedTransactions.push(Buffer.from(ataTx.serialize()).toString('base64'));
+    console.log(`[Raydium] Added ATA creation tx with ${ataInstructions.length} instruction(s)`);
+  }
   
   // Fetch token accounts for the wallet (populates SDK cache)
   await raydium.account.fetchWalletTokenAccounts({ forceUpdate: true });
