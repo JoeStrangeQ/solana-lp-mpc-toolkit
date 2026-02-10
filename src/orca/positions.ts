@@ -11,6 +11,7 @@ import { getWhirlpoolClient, getWhirlpoolCtx } from './client.js';
 import { PDAUtil, PriceMath, PoolUtil, ORCA_WHIRLPOOL_PROGRAM_ID } from '@orca-so/whirlpools-sdk';
 import BN from 'bn.js';
 import type { OrcaPositionInfo } from './types.js';
+import { resolveTokens } from '../utils/token-metadata.js';
 
 /**
  * Discover all Orca Whirlpool positions for a wallet.
@@ -61,7 +62,9 @@ export async function discoverOrcaPositions(
     // Batch fetch - getPositions returns Record<string, Position | null>
     const positionsMap = await client.getPositions(positionAddresses);
 
-    const result: OrcaPositionInfo[] = [];
+    // First pass: collect all unique token mints
+    const tokenMints = new Set<string>();
+    const positionData: Array<{ addrStr: string; posData: any; pool: any; poolData: any; tokenAInfo: any; tokenBInfo: any }> = [];
 
     for (const [addrStr, positionOrNull] of Object.entries(positionsMap)) {
       if (!positionOrNull) continue;
@@ -72,6 +75,21 @@ export async function discoverOrcaPositions(
         const tokenAInfo = pool.getTokenAInfo();
         const tokenBInfo = pool.getTokenBInfo();
 
+        tokenMints.add(tokenAInfo.mint.toBase58());
+        tokenMints.add(tokenBInfo.mint.toBase58());
+        positionData.push({ addrStr, posData, pool, poolData, tokenAInfo, tokenBInfo });
+      } catch (err) {
+        console.warn(`[Orca] Failed to load position ${addrStr}:`, err);
+      }
+    }
+
+    // Resolve all token metadata in one batch
+    const tokenMetadata = await resolveTokens(Array.from(tokenMints));
+
+    const result: OrcaPositionInfo[] = [];
+
+    for (const { addrStr, posData, pool, poolData, tokenAInfo, tokenBInfo } of positionData) {
+      try {
         const currentTick = poolData.tickCurrentIndex;
         const inRange =
           currentTick >= posData.tickLowerIndex &&
@@ -107,17 +125,21 @@ export async function discoverOrcaPositions(
         const amountBDecimal = Number(tokenAmountB.toString()) / Math.pow(10, decimalsB);
 
         const mintAddress = mintToAddress.get(addrStr) || '';
+        const mintA = tokenAInfo.mint.toBase58();
+        const mintB = tokenBInfo.mint.toBase58();
+        const metaA = tokenMetadata.get(mintA) || { symbol: mintA.slice(0, 6), name: 'Unknown', decimals: 9 };
+        const metaB = tokenMetadata.get(mintB) || { symbol: mintB.slice(0, 6), name: 'Unknown', decimals: 9 };
 
         result.push({
           address: addrStr,
           mintAddress,
           poolAddress: posData.whirlpool.toBase58(),
-          poolName: `${tokenAInfo.mint.toBase58().slice(0, 4)}-${tokenBInfo.mint.toBase58().slice(0, 4)}`,
+          poolName: `${metaA.symbol}-${metaB.symbol}`,
           tickLowerIndex: posData.tickLowerIndex,
           tickUpperIndex: posData.tickUpperIndex,
           liquidity: posData.liquidity.toString(),
-          tokenA: { amount: amountADecimal.toFixed(6), symbol: tokenAInfo.mint.toBase58().slice(0, 6) },
-          tokenB: { amount: amountBDecimal.toFixed(6), symbol: tokenBInfo.mint.toBase58().slice(0, 6) },
+          tokenA: { amount: amountADecimal.toFixed(6), symbol: metaA.symbol },
+          tokenB: { amount: amountBDecimal.toFixed(6), symbol: metaB.symbol },
           fees: {
             tokenA: (Number(posData.feeOwedA.toString()) / Math.pow(10, decimalsA)).toFixed(6),
             tokenB: (Number(posData.feeOwedB.toString()) / Math.pow(10, decimalsB)).toFixed(6),
@@ -129,7 +151,7 @@ export async function discoverOrcaPositions(
           dex: 'orca',
         });
       } catch (err) {
-        console.warn(`[Orca] Failed to load position ${addrStr}:`, err);
+        console.warn(`[Orca] Failed to process position ${addrStr}:`, err);
       }
     }
 
