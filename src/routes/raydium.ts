@@ -21,40 +21,62 @@ const raydiumRoutes = new Hono();
  */
 raydiumRoutes.get('/pools', async (c) => {
   const limit = parseInt(c.req.query('limit') || '10');
+  const mint = c.req.query('mint') || SOL_MINT;
+  const type = c.req.query('type') || 'concentrated'; // 'concentrated' or 'all'
   
   try {
-    const raydium = await getRaydiumClient();
+    // Use direct Raydium API for reliable pool listing
+    const apiUrl = new URL('https://api-v3.raydium.io/pools/info/mint');
+    apiUrl.searchParams.set('mint1', mint);
+    apiUrl.searchParams.set('poolType', type === 'all' ? 'all' : 'concentrated');
+    apiUrl.searchParams.set('poolSortField', 'default');
+    apiUrl.searchParams.set('sortType', 'desc');
+    apiUrl.searchParams.set('pageSize', limit.toString());
+    apiUrl.searchParams.set('page', '1');
     
-    // Fetch CLMM pools from Raydium API - use 'Concentrated' type filter
-    const poolsData = await raydium.api.fetchPoolByMints({
-      mint1: 'So11111111111111111111111111111111111111112', // SOL
-      mint2: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-    });
+    const response = await fetch(apiUrl.toString());
+    const result = await response.json() as {
+      success: boolean;
+      data?: { count: number; data: any[] };
+      msg?: string;
+    };
     
-    // Filter for concentrated pools and format
-    const allPools = Array.isArray(poolsData) ? poolsData : [];
-    const pools = allPools
-      .filter((p: any) => p.type === 'Concentrated')
-      .slice(0, limit)
-      .map((pool: any) => ({
-        id: pool.id,
-        pair: `${pool.mintA?.symbol || 'UNKNOWN'}-${pool.mintB?.symbol || 'UNKNOWN'}`,
-        tokenA: {
-          symbol: pool.mintA?.symbol || 'UNKNOWN',
-          mint: pool.mintA?.address,
-          decimals: pool.mintA?.decimals || 9,
-        },
-        tokenB: {
-          symbol: pool.mintB?.symbol || 'UNKNOWN',
-          mint: pool.mintB?.address,
-          decimals: pool.mintB?.decimals || 6,
-        },
-        tvl: pool.tvl || 0,
-        volume24h: pool.day?.volume || 0,
-        apr: (pool.day?.apr || 0) * 100,
-        price: pool.price || 0,
-        tickSpacing: pool.config?.tickSpacing || 1,
-      }));
+    if (!result.success) {
+      console.error('[Raydium] API error:', result.msg);
+      return c.json({
+        success: false,
+        error: result.msg || 'Failed to fetch pools from Raydium API',
+      }, 500);
+    }
+    
+    const allPools = result.data?.data || [];
+    
+    // Filter to only Concentrated (CLMM) pools if requested
+    const filteredPools = type === 'concentrated' 
+      ? allPools.filter((p: any) => p.type === 'Concentrated')
+      : allPools;
+    
+    const pools = filteredPools.slice(0, limit).map((pool: any) => ({
+      id: pool.id,
+      type: pool.type,
+      pair: `${pool.mintA?.symbol || 'UNKNOWN'}-${pool.mintB?.symbol || 'UNKNOWN'}`,
+      tokenA: {
+        symbol: pool.mintA?.symbol || 'UNKNOWN',
+        mint: pool.mintA?.address,
+        decimals: pool.mintA?.decimals || 9,
+      },
+      tokenB: {
+        symbol: pool.mintB?.symbol || 'UNKNOWN',
+        mint: pool.mintB?.address,
+        decimals: pool.mintB?.decimals || 6,
+      },
+      tvl: pool.tvl || 0,
+      volume24h: pool.day?.volume || 0,
+      apr: pool.day?.apr || 0,
+      price: pool.price || 0,
+      tickSpacing: pool.config?.tickSpacing || 1,
+      feeRate: pool.feeRate || 0,
+    }));
     
     return c.json({
       success: true,
