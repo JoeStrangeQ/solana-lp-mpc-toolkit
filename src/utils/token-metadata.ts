@@ -21,11 +21,17 @@ const KNOWN_TOKENS: Record<string, { symbol: string; name: string; decimals: num
   '7dHbWXmci3dT8UFYWYZweBLXgycu7Y3iL6trKn1Y7ARj': { symbol: 'stSOL', name: 'Lido Staked SOL', decimals: 9 },
   'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3': { symbol: 'PYTH', name: 'Pyth Network', decimals: 6 },
   'jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL': { symbol: 'JTO', name: 'Jito', decimals: 9 },
+  'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn': { symbol: 'JitoSOL', name: 'Jito Staked SOL', decimals: 9 },
   'WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk': { symbol: 'WEN', name: 'Wen', decimals: 5 },
   'HeLp6NuQkmYB4pYWo2zYs22mESHXPQYzXbB8n4V98jwC': { symbol: 'AI16Z', name: 'ai16z', decimals: 9 },
   'rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof': { symbol: 'RENDER', name: 'Render', decimals: 8 },
   'DG2mjFePc5f5sMJ87qiH8SM5zYRNLN8afKBUpb6vTTaY': { symbol: 'SHARK', name: 'Shark', decimals: 6 },
   'PreC1KtJ1sBPPqaeeqL6Qb15GTLCYVvyYEwxhdfTwfx': { symbol: 'XAI', name: 'xAI Token', decimals: 9 },
+  '98sMhvDwXj1RQi5c5Mndm3vPe9cBqPrbLaufMXFNMh5g': { symbol: 'HYPE', name: 'Hyperliquid', decimals: 9 },
+  'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE': { symbol: 'ORCA', name: 'Orca', decimals: 6 },
+  'TNSRxcUxoT9xBG3de7PiJyTDYu7kskLqcpddxnEJAS6': { symbol: 'TNSR', name: 'Tensor', decimals: 9 },
+  '27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4': { symbol: 'JLP', name: 'Jupiter LP', decimals: 6 },
+  'CKfatsPMUf8SkiURsDXs7eK6GWb4Jsd6UDbs7twMCWxo': { symbol: 'BOME', name: 'BOOK OF MEME', decimals: 6 },
 };
 
 // Cache for fetched metadata
