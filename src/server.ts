@@ -34,6 +34,7 @@ import {
   notifyRoutes,
   telegramRoutes,
   chatRoutes,
+  portfolioRoutes,
   initializeMonitoring,
   startMonitoringInterval,
 } from './routes/index.js';
@@ -144,6 +145,9 @@ app.route('/ultra', ultraSwapRoutes);
 
 // Raydium CLMM routes
 app.route('/raydium', raydiumRoutes);
+
+// Portfolio routes (aggregated across all DEXes)
+app.route('/portfolio', portfolioRoutes);
 
 // Solana Actions & Blinks
 app.route('/', actionsRoutes);

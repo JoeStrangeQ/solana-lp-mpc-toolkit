@@ -13,3 +13,4 @@ export { default as encryptRoutes } from './encrypt.js';
 export { default as monitorRoutes, workerRoutes, userRoutes, alertRoutes, riskRoutes, initializeMonitoring, startMonitoringInterval } from './monitor.js';
 export { default as notifyRoutes, telegramRoutes } from './notify.js';
 export { default as chatRoutes } from './chat.js';
+export { default as portfolioRoutes } from './portfolio.js';
