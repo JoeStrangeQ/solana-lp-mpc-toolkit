@@ -44,6 +44,7 @@ import ultraSwapRoutes from './routes/ultra-swap.js';
 import actionsRoutes from './routes/actions.js';
 import unifiedLpRoutes from './routes/unified-lp.js';
 import raydiumRoutes from './routes/raydium.js';
+import capabilitiesRoutes from './routes/capabilities.js';
 
 // Import bot
 import { createBot, initBot, getBot, getBotWebhookHandler } from './bot/index.js';
@@ -148,6 +149,9 @@ app.route('/raydium', raydiumRoutes);
 
 // Portfolio routes (aggregated across all DEXes)
 app.route('/portfolio', portfolioRoutes);
+
+// Capabilities showcase (for demos)
+app.route('/capabilities', capabilitiesRoutes);
 
 // Solana Actions & Blinks
 app.route('/', actionsRoutes);
