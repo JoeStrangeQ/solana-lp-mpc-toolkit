@@ -106,29 +106,25 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
   const ataInstructions: any[] = [];
   const blockhash = (await connection.getLatestBlockhash()).blockhash;
   
-  // Check and create ATA for token A (if not native SOL)
+  // Check and create ATA for token A (including WSOL for native SOL)
   const NATIVE_SOL = new PublicKey('So11111111111111111111111111111111111111112');
-  if (!tokenAMint.equals(NATIVE_SOL)) {
-    const ataA = await getAssociatedTokenAddress(tokenAMint, walletPubkey);
-    try {
-      await getAccount(connection, ataA);
-      console.log(`[Orca Withdraw] ATA for token A exists: ${ataA.toBase58()}`);
-    } catch {
-      console.log(`[Orca Withdraw] Creating ATA for token A: ${tokenAMint.toBase58()}`);
-      ataInstructions.push(createAssociatedTokenAccountInstruction(walletPubkey, ataA, walletPubkey, tokenAMint));
-    }
+  const ataA = await getAssociatedTokenAddress(tokenAMint, walletPubkey);
+  try {
+    await getAccount(connection, ataA);
+    console.log(`[Orca Withdraw] ATA for token A exists: ${ataA.toBase58()}`);
+  } catch {
+    console.log(`[Orca Withdraw] Creating ATA for token A: ${tokenAMint.toBase58()}`);
+    ataInstructions.push(createAssociatedTokenAccountInstruction(walletPubkey, ataA, walletPubkey, tokenAMint));
   }
   
-  // Check and create ATA for token B (if not native SOL)
-  if (!tokenBMint.equals(NATIVE_SOL)) {
-    const ataB = await getAssociatedTokenAddress(tokenBMint, walletPubkey);
-    try {
-      await getAccount(connection, ataB);
-      console.log(`[Orca Withdraw] ATA for token B exists: ${ataB.toBase58()}`);
-    } catch {
-      console.log(`[Orca Withdraw] Creating ATA for token B: ${tokenBMint.toBase58()}`);
-      ataInstructions.push(createAssociatedTokenAccountInstruction(walletPubkey, ataB, walletPubkey, tokenBMint));
-    }
+  // Check and create ATA for token B
+  const ataB = await getAssociatedTokenAddress(tokenBMint, walletPubkey);
+  try {
+    await getAccount(connection, ataB);
+    console.log(`[Orca Withdraw] ATA for token B exists: ${ataB.toBase58()}`);
+  } catch {
+    console.log(`[Orca Withdraw] Creating ATA for token B: ${tokenBMint.toBase58()}`);
+    ataInstructions.push(createAssociatedTokenAccountInstruction(walletPubkey, ataB, walletPubkey, tokenBMint));
   }
   
   const unsignedTransactions: string[] = [];
@@ -148,10 +144,11 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
   // This withdraws all liquidity and fees but leaves the position open (can be closed later)
   
   // Build decrease liquidity transaction
+  // Pass resolveATA=false since we create ATAs ourselves above
   console.log(`[Orca Withdraw] Building decreaseLiquidity tx for ${posData.liquidity.toString()} liquidity...`);
   const decreaseTxBuilder = await position.decreaseLiquidity(
     { liquidityAmount: posData.liquidity, tokenMinA: decreaseQuote.tokenMinA, tokenMinB: decreaseQuote.tokenMinB },
-    true, // resolveATA
+    false, // resolveATA - we handle this ourselves
     walletAddress, // destinationWallet
     walletAddress, // positionWallet
     walletAddress, // ataPayer
@@ -161,7 +158,7 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
   console.log(`[Orca Withdraw] Building collectFees tx...`);
   const feesTxBuilder = await position.collectFees(
     true, // updateFeesAndRewards
-    undefined, // ownerTokenAccountMap (will resolve)
+    undefined, // ownerTokenAccountMap
     walletAddress, // destinationWallet
     walletAddress, // positionWallet  
     walletAddress, // ataPayer
