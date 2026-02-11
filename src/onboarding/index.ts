@@ -404,6 +404,8 @@ export interface PositionDetails {
   pool: string;
   poolAddress: string;
   inRange: boolean;
+  tokenXMint: string;
+  tokenYMint: string;
   priceRange: {
     lower: number;
     upper: number;
@@ -440,6 +442,8 @@ export async function getUserPositions(walletAddress: string): Promise<PositionD
         pool: p.pool?.name || 'Unknown',
         poolAddress: p.pool?.address || '',
         inRange: p.inRange,
+        tokenXMint: p.pool?.tokenX?.mint || '',
+        tokenYMint: p.pool?.tokenY?.mint || '',
         priceRange: {
           lower: p.priceRange?.priceLower || 0,
           upper: p.priceRange?.priceUpper || 0,

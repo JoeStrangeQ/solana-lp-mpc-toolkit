@@ -22,8 +22,8 @@ export interface OrcaPositionInfo {
   tickLowerIndex: number;
   tickUpperIndex: number;
   liquidity: string;
-  tokenA: { amount: string; symbol: string };
-  tokenB: { amount: string; symbol: string };
+  tokenA: { mint: string; amount: string; symbol: string };
+  tokenB: { mint: string; amount: string; symbol: string };
   fees: { tokenA: string; tokenB: string };
   inRange: boolean;
   priceLower: number;
