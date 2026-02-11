@@ -164,8 +164,8 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
     walletAddress, // ataPayer
   );
   
-  // Combine into transaction list
-  const closeTxBuilders = [decreaseTxBuilder, feesTxBuilder];
+  // Try just decreaseLiquidity first (skip collectFees to isolate issue)
+  const closeTxBuilders = [decreaseTxBuilder];
 
   for (const txBuilder of closeTxBuilders) {
     const payload = await txBuilder.build();
