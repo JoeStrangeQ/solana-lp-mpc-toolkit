@@ -144,17 +144,31 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
     console.log(`[Orca Withdraw] Added ATA creation tx with ${ataInstructions.length} instructions`);
   }
 
-  // Use the SDK's closePosition which handles:
-  // 1. Decrease all liquidity
-  // 2. Collect fees
-  // 3. Close position account
-  const closeTxBuilders = await pool.closePosition(
-    positionPDA.publicKey,
-    slippage,
+  // Use decreaseLiquidity + collectFees separately (avoids closePosition rent issues)
+  // This withdraws all liquidity and fees but leaves the position open (can be closed later)
+  
+  // Build decrease liquidity transaction
+  console.log(`[Orca Withdraw] Building decreaseLiquidity tx for ${posData.liquidity.toString()} liquidity...`);
+  const decreaseTxBuilder = await position.decreaseLiquidity(
+    { liquidityAmount: posData.liquidity, tokenMinA: decreaseQuote.tokenMinA, tokenMinB: decreaseQuote.tokenMinB },
+    true, // resolveATA
     walletAddress, // destinationWallet
     walletAddress, // positionWallet
-    walletAddress, // payer
+    walletAddress, // ataPayer
   );
+  
+  // Build collect fees transaction
+  console.log(`[Orca Withdraw] Building collectFees tx...`);
+  const feesTxBuilder = await position.collectFees(
+    true, // updateFeesAndRewards
+    undefined, // ownerTokenAccountMap (will resolve)
+    walletAddress, // destinationWallet
+    walletAddress, // positionWallet  
+    walletAddress, // ataPayer
+  );
+  
+  // Combine into transaction list
+  const closeTxBuilders = [decreaseTxBuilder, feesTxBuilder];
 
   for (const txBuilder of closeTxBuilders) {
     const payload = await txBuilder.build();
