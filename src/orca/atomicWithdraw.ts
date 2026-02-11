@@ -14,11 +14,13 @@ import {
 } from '@orca-so/whirlpools-sdk';
 import { Percentage } from '@orca-so/common-sdk';
 import { arciumPrivacy } from '../privacy/index.js';
+import { discoverOrcaPositions } from './positions.js';
 
 export interface OrcaWithdrawParams {
   walletAddress: string;
   poolAddress: string;
-  positionMintAddress: string;
+  positionMintAddress?: string; // NFT mint - if not provided, will discover from wallet
+  positionAddress?: string; // Position PDA - used to identify which position if mint not given
   slippageBps?: number;
 }
 
@@ -29,7 +31,32 @@ export interface BuiltOrcaWithdraw {
 }
 
 export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<BuiltOrcaWithdraw> {
-  const { walletAddress, poolAddress, positionMintAddress, slippageBps = 300 } = params;
+  const { walletAddress, poolAddress, slippageBps = 300 } = params;
+  let { positionMintAddress, positionAddress } = params;
+  
+  // If no mintAddress but we have positionAddress (PDA), discover the mint
+  if (!positionMintAddress && positionAddress) {
+    console.log(`[Orca Withdraw] No mint provided, discovering from wallet...`);
+    const connection = getOrcaConnection();
+    const positions = await discoverOrcaPositions(connection, walletAddress);
+    
+    // Find position by address (PDA) or pool
+    const match = positions.find(p => 
+      p.address === positionAddress || 
+      (p.poolAddress === poolAddress && positions.length === 1)
+    );
+    
+    if (match?.mintAddress) {
+      positionMintAddress = match.mintAddress;
+      console.log(`[Orca Withdraw] Found mint: ${positionMintAddress}`);
+    } else {
+      throw new Error(`Could not find Orca position mint. Position: ${positionAddress}, Pool: ${poolAddress}`);
+    }
+  }
+  
+  if (!positionMintAddress) {
+    throw new Error('positionMintAddress is required for Orca withdrawal');
+  }
   
   // Encrypt strategy with Arcium before execution
   const encrypted = await arciumPrivacy.encryptStrategy({

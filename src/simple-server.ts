@@ -2350,7 +2350,8 @@ app.post('/lp/withdraw/execute', async (c) => {
           const orcaResult = await buildOrcaWithdraw({
             walletAddress,
             poolAddress,
-            positionMintAddress: positionMintAddress || positionAddress,  // Orca uses mint address
+            positionMintAddress,  // NFT mint (optional - will be discovered if not provided)
+            positionAddress,  // Position PDA (used for discovery if mint not provided)
             slippageBps: 300,
           });
           unsignedTransactions = orcaResult.unsignedTransactions;
