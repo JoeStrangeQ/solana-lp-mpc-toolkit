@@ -127,7 +127,8 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
       
       const walletIndex = oldStaticKeys.findIndex(k => k.equals(walletPubkey));
       const numOldSigners = oldMsg.header.numRequiredSignatures;
-      console.log(`[Orca Withdraw] Old message: ${numOldSigners} signers, wallet at index ${walletIndex}`);
+      console.log(`[Orca Withdraw] Tx #${closeTxBuilders.indexOf(txBuilder)}: Old message: ${numOldSigners} signers, wallet at index ${walletIndex}`);
+      console.log(`[Orca Withdraw] Old signers: ${oldStaticKeys.slice(0, numOldSigners).map(k => k.toBase58()).join(', ')}`);
       
       if (walletIndex > 0 && walletIndex < numOldSigners) {
         // Wallet is a signer but not at index 0
