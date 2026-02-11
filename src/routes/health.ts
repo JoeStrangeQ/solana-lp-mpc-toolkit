@@ -149,38 +149,7 @@ app.get('/stats', (c) => {
   });
 });
 
-// Quick Telegram bot health check
-app.get('/health/telegram', async (c) => {
-  try {
-    const bot = getBot();
-    if (!bot) {
-      return c.json({ status: 'error', error: 'Bot not initialized' }, 503);
-    }
-    
-    const startTime = Date.now();
-    const me = await bot.api.getMe();
-    const latencyMs = Date.now() - startTime;
-    
-    return c.json({
-      status: 'ok',
-      bot: {
-        id: me.id,
-        username: me.username,
-        firstName: me.first_name,
-      },
-      latencyMs,
-      timestamp: new Date().toISOString(),
-    });
-  } catch (err) {
-    return c.json({
-      status: 'error',
-      error: err instanceof Error ? err.message : 'Unknown error',
-      timestamp: new Date().toISOString(),
-    }, 503);
-  }
-});
-
-// Circuit breaker status
+// Circuit breaker status (duplicate /health/telegram removed - already defined above)
 app.get('/health/circuit-breakers', (c) => {
   return c.json({
     jupiterUltra: getCircuitBreakerStatus(),

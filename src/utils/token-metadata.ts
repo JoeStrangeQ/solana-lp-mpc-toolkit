@@ -32,6 +32,7 @@ const KNOWN_TOKENS: Record<string, { symbol: string; name: string; decimals: num
   'TNSRxcUxoT9xBG3de7PiJyTDYu7kskLqcpddxnEJAS6': { symbol: 'TNSR', name: 'Tensor', decimals: 9 },
   '27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4': { symbol: 'JLP', name: 'Jupiter LP', decimals: 6 },
   'CKfatsPMUf8SkiURsDXs7eK6GWb4Jsd6UDbs7twMCWxo': { symbol: 'BOME', name: 'BOOK OF MEME', decimals: 6 },
+  'pumpCmXqMfrsAkQ5r49WcJnRayYRqmXz6ae8H7H9Dfn': { symbol: 'PUMP', name: 'pump.fun', decimals: 9 },
 };
 
 // Cache for fetched metadata
