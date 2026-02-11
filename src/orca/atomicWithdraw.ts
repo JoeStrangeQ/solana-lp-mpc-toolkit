@@ -5,7 +5,7 @@
  * Uses the SDK's closePosition which handles all three steps.
  */
 
-import { PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { PublicKey, VersionedTransaction, MessageV0, Connection } from '@solana/web3.js';
 import { getWhirlpoolClient, getOrcaConnection, getWhirlpoolCtx } from './client.js';
 import {
   PDAUtil,
@@ -110,26 +110,81 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
   );
 
   const unsignedTransactions: string[] = [];
+  const walletPubkey = new PublicKey(walletAddress);
 
   for (const txBuilder of closeTxBuilders) {
     const payload = await txBuilder.build();
-    const tx = payload.transaction;
-
-    // Sign with any SDK-generated signers
-    if (payload.signers.length > 0) {
-      if (tx instanceof VersionedTransaction) {
-        tx.sign(payload.signers);
-      } else {
-        tx.partialSign(...payload.signers);
-      }
-    }
+    let tx = payload.transaction;
 
     if (tx instanceof VersionedTransaction) {
+      // CRITICAL FIX: The SDK uses a dummy wallet as fee payer (first account).
+      // We need to rebuild the message to:
+      // 1. Remove the dummy fee payer entirely
+      // 2. Put the real wallet first
+      // 3. Renumber all account references
+      const oldMsg = tx.message;
+      const oldStaticKeys = oldMsg.staticAccountKeys;
+      
+      const walletIndex = oldStaticKeys.findIndex(k => k.equals(walletPubkey));
+      const numOldSigners = oldMsg.header.numRequiredSignatures;
+      console.log(`[Orca Withdraw] Old message: ${numOldSigners} signers, wallet at index ${walletIndex}`);
+      
+      if (walletIndex > 0 && walletIndex < numOldSigners) {
+        // Wallet is a signer but not at index 0
+        // Remove index 0 (dummy) and shift wallet to front
+        
+        const newStaticKeys = [
+          walletPubkey, // Wallet first (fee payer)
+          ...oldStaticKeys.slice(1, walletIndex), // Before wallet
+          ...oldStaticKeys.slice(walletIndex + 1), // After wallet
+        ];
+        
+        const remapIndex = (oldIdx: number): number => {
+          if (oldIdx === 0) return 0;
+          if (oldIdx === walletIndex) return 0;
+          if (oldIdx < walletIndex) return oldIdx;
+          return oldIdx - 1;
+        };
+        
+        const newHeader = {
+          numRequiredSignatures: numOldSigners - 1,
+          numReadonlySignedAccounts: oldMsg.header.numReadonlySignedAccounts,
+          numReadonlyUnsignedAccounts: oldMsg.header.numReadonlyUnsignedAccounts,
+        };
+        
+        const newInstructions = oldMsg.compiledInstructions.map(ix => ({
+          programIdIndex: remapIndex(ix.programIdIndex),
+          accountKeyIndexes: ix.accountKeyIndexes.map(remapIndex),
+          data: ix.data,
+        }));
+        
+        const newMsg = new MessageV0({
+          header: newHeader,
+          staticAccountKeys: newStaticKeys,
+          recentBlockhash: oldMsg.recentBlockhash,
+          compiledInstructions: newInstructions,
+          addressTableLookups: oldMsg.addressTableLookups,
+        });
+        
+        tx = new VersionedTransaction(newMsg);
+        console.log(`[Orca Withdraw] Rebuilt tx: removed dummy, wallet now at 0, ${newHeader.numRequiredSignatures} signers`);
+      }
+
+      // Pre-sign with SDK keypairs
+      if (payload.signers.length > 0) {
+        tx.sign(payload.signers);
+        console.log(`[Orca Withdraw] Pre-signed with ${payload.signers.length} keypairs`);
+      }
+
       unsignedTransactions.push(
         Buffer.from(tx.serialize()).toString('base64'),
       );
     } else {
-      tx.feePayer = new PublicKey(walletAddress);
+      // Legacy transaction
+      tx.feePayer = walletPubkey;
+      if (payload.signers.length > 0) {
+        tx.partialSign(...payload.signers);
+      }
       const serialized = tx.serialize({ requireAllSignatures: false });
       unsignedTransactions.push(serialized.toString('base64'));
     }
