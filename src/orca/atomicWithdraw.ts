@@ -5,7 +5,8 @@
  * Uses the SDK's closePosition which handles all three steps.
  */
 
-import { PublicKey, VersionedTransaction, MessageV0, Connection } from '@solana/web3.js';
+import { PublicKey, VersionedTransaction, MessageV0, Connection, Transaction, SystemProgram, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, getAccount, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { getWhirlpoolClient, getOrcaConnection, getWhirlpoolCtx } from './client.js';
 import {
   PDAUtil,
@@ -97,6 +98,52 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
     tokenExtensionCtx,
   });
 
+  // Ensure ATAs exist for both tokens (fixes InsufficientFundsForRent error)
+  const walletPubkey = new PublicKey(walletAddress);
+  const tokenAMint = poolData.tokenMintA;
+  const tokenBMint = poolData.tokenMintB;
+  
+  const ataInstructions: any[] = [];
+  const blockhash = (await connection.getLatestBlockhash()).blockhash;
+  
+  // Check and create ATA for token A (if not native SOL)
+  const NATIVE_SOL = new PublicKey('So11111111111111111111111111111111111111112');
+  if (!tokenAMint.equals(NATIVE_SOL)) {
+    const ataA = await getAssociatedTokenAddress(tokenAMint, walletPubkey);
+    try {
+      await getAccount(connection, ataA);
+      console.log(`[Orca Withdraw] ATA for token A exists: ${ataA.toBase58()}`);
+    } catch {
+      console.log(`[Orca Withdraw] Creating ATA for token A: ${tokenAMint.toBase58()}`);
+      ataInstructions.push(createAssociatedTokenAccountInstruction(walletPubkey, ataA, walletPubkey, tokenAMint));
+    }
+  }
+  
+  // Check and create ATA for token B (if not native SOL)
+  if (!tokenBMint.equals(NATIVE_SOL)) {
+    const ataB = await getAssociatedTokenAddress(tokenBMint, walletPubkey);
+    try {
+      await getAccount(connection, ataB);
+      console.log(`[Orca Withdraw] ATA for token B exists: ${ataB.toBase58()}`);
+    } catch {
+      console.log(`[Orca Withdraw] Creating ATA for token B: ${tokenBMint.toBase58()}`);
+      ataInstructions.push(createAssociatedTokenAccountInstruction(walletPubkey, ataB, walletPubkey, tokenBMint));
+    }
+  }
+  
+  const unsignedTransactions: string[] = [];
+  
+  // If we need to create ATAs, add that transaction first
+  if (ataInstructions.length > 0) {
+    const ataTx = new Transaction();
+    ataTx.recentBlockhash = blockhash;
+    ataTx.feePayer = walletPubkey;
+    ataInstructions.forEach(ix => ataTx.add(ix));
+    const serialized = ataTx.serialize({ requireAllSignatures: false });
+    unsignedTransactions.push(serialized.toString('base64'));
+    console.log(`[Orca Withdraw] Added ATA creation tx with ${ataInstructions.length} instructions`);
+  }
+
   // Use the SDK's closePosition which handles:
   // 1. Decrease all liquidity
   // 2. Collect fees
@@ -108,9 +155,6 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
     walletAddress, // positionWallet
     walletAddress, // payer
   );
-
-  const unsignedTransactions: string[] = [];
-  const walletPubkey = new PublicKey(walletAddress);
 
   for (const txBuilder of closeTxBuilders) {
     const payload = await txBuilder.build();
