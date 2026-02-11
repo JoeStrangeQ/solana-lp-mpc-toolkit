@@ -138,8 +138,8 @@ export async function discoverOrcaPositions(
           tickLowerIndex: posData.tickLowerIndex,
           tickUpperIndex: posData.tickUpperIndex,
           liquidity: posData.liquidity.toString(),
-          tokenA: { amount: amountADecimal.toFixed(6), symbol: metaA.symbol },
-          tokenB: { amount: amountBDecimal.toFixed(6), symbol: metaB.symbol },
+          tokenA: { mint: mintA, amount: amountADecimal.toFixed(6), symbol: metaA.symbol },
+          tokenB: { mint: mintB, amount: amountBDecimal.toFixed(6), symbol: metaB.symbol },
           fees: {
             tokenA: (Number(posData.feeOwedA.toString()) / Math.pow(10, decimalsA)).toFixed(6),
             tokenB: (Number(posData.feeOwedB.toString()) / Math.pow(10, decimalsB)).toFixed(6),
