@@ -15,6 +15,7 @@ import { resolveTokens, binIdToPrice, calculatePriceRange, calculateHumanPriceRa
 import { discoverAllPositions, getPositionBinRange, getPoolInfo } from './utils/position-discovery';
 import { buildAtomicLP } from './lp/atomic';
 import { buildAtomicWithdraw } from './lp/atomicWithdraw';
+import { buildOrcaWithdraw } from './orca/atomicWithdraw.js';
 import { executeRebalance } from './lp/atomicRebalance';
 import { sendBundle, waitForBundle, TipSpeed } from './jito';
 import {
@@ -2308,9 +2309,11 @@ app.post('/lp/withdraw/execute', async (c) => {
       walletId,
       poolAddress,
       positionAddress,
+      positionMintAddress,  // Required for Orca (the NFT mint)
       tipSpeed = 'fast',
       convertToSol = true,
       chatId,  // Optional: for Telegram notification
+      dex = 'meteora',  // 'meteora' or 'orca'
     } = body;
 
     if (!walletId || !poolAddress || !positionAddress) {
@@ -2320,14 +2323,16 @@ app.post('/lp/withdraw/execute', async (c) => {
           walletId: 'your-privy-wallet-id',
           poolAddress: 'pool-address',
           positionAddress: 'position-address-to-withdraw',
+          positionMintAddress: 'position-mint-for-orca (optional)',
           convertToSol: true,
+          dex: 'meteora',  // or 'orca'
         },
       }, 400);
     }
 
     // Return immediately and process in background
     const jobId = `wd_${Date.now()}_${positionAddress.slice(0, 8)}`;
-    console.log(`[Withdraw Execute] Starting background job ${jobId} for ${positionAddress}...`);
+    console.log(`[Withdraw Execute] Starting background job ${jobId} for ${positionAddress} (${dex})...`);
     
     // Process withdrawal in background (don't await)
     (async () => {
@@ -2336,22 +2341,37 @@ app.post('/lp/withdraw/execute', async (c) => {
         const { client, wallet } = await loadWalletById(walletId);
         const walletAddress = wallet.address;
 
-        console.log(`[Withdraw ${jobId}] Building transactions...`);
+        console.log(`[Withdraw ${jobId}] Building ${dex} transactions...`);
         
-        // Build atomic withdrawal
-        const result = await buildAtomicWithdraw({
-          walletAddress,
-          poolAddress,
-          positionAddress,
-          convertToSol,
-          tipSpeed: tipSpeed as TipSpeed,
-        });
+        let unsignedTransactions: string[];
+        
+        if (dex === 'orca') {
+          // Use Orca withdraw flow
+          const orcaResult = await buildOrcaWithdraw({
+            walletAddress,
+            poolAddress,
+            positionMintAddress: positionMintAddress || positionAddress,  // Orca uses mint address
+            slippageBps: 300,
+          });
+          unsignedTransactions = orcaResult.unsignedTransactions;
+          console.log(`[Withdraw ${jobId}] Orca: estimated ${orcaResult.estimatedWithdraw.tokenA} tokenA, ${orcaResult.estimatedWithdraw.tokenB} tokenB`);
+        } else {
+          // Use Meteora withdraw flow (default)
+          const result = await buildAtomicWithdraw({
+            walletAddress,
+            poolAddress,
+            positionAddress,
+            convertToSol,
+            tipSpeed: tipSpeed as TipSpeed,
+          });
+          unsignedTransactions = result.unsignedTransactions;
+        }
 
-        console.log(`[Withdraw ${jobId}] Signing ${result.unsignedTransactions.length} transactions...`);
+        console.log(`[Withdraw ${jobId}] Signing ${unsignedTransactions.length} transactions...`);
 
         // Sign all transactions with Privy (with timeout per signature)
         const signedTxs: string[] = [];
-        for (const unsignedTx of result.unsignedTransactions) {
+        for (const unsignedTx of unsignedTransactions) {
           try {
             const signedTx = await withTimeout(
               () => client.signTransaction(unsignedTx),
