@@ -172,64 +172,11 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
     let tx = payload.transaction;
 
     if (tx instanceof VersionedTransaction) {
-      // CRITICAL FIX: The SDK uses a dummy wallet as fee payer (first account).
-      // We need to rebuild the message to:
-      // 1. Remove the dummy fee payer entirely
-      // 2. Put the real wallet first
-      // 3. Renumber all account references
-      const oldMsg = tx.message;
-      const oldStaticKeys = oldMsg.staticAccountKeys;
-      
-      const walletIndex = oldStaticKeys.findIndex(k => k.equals(walletPubkey));
-      const numOldSigners = oldMsg.header.numRequiredSignatures;
-      console.log(`[Orca Withdraw] Tx #${closeTxBuilders.indexOf(txBuilder)}: Old message: ${numOldSigners} signers, wallet at index ${walletIndex}`);
-      console.log(`[Orca Withdraw] Old signers: ${oldStaticKeys.slice(0, numOldSigners).map(k => k.toBase58()).join(', ')}`);
-      
-      if (walletIndex > 0 && walletIndex < numOldSigners) {
-        // Wallet is a signer but not at index 0
-        // Remove the dummy at index 0, move wallet to front
-        // New layout: [wallet, accounts_1_to_walletIdx-1, accounts_walletIdx+1_to_end]
-        
-        const newStaticKeys = [
-          walletPubkey, // Wallet first (fee payer)
-          ...oldStaticKeys.slice(1, walletIndex), // Accounts between dummy and wallet
-          ...oldStaticKeys.slice(walletIndex + 1), // Accounts after wallet
-        ];
-        
-        // Remap all account indices:
-        // - Old 0 (dummy) -> 0 (now wallet fills this role)
-        // - Old walletIndex -> 0 (wallet moved to front)
-        // - Old 1 to walletIndex-1 -> same (they're still in same relative position)
-        // - Old walletIndex+1 to end -> shift down by 1 (wallet removed from middle)
-        const remapIndex = (oldIdx: number): number => {
-          if (oldIdx === 0 || oldIdx === walletIndex) return 0; // Both map to wallet at 0
-          if (oldIdx < walletIndex) return oldIdx; // Accounts before wallet keep their index
-          return oldIdx - 1; // Accounts after wallet shift down by 1 (wallet slot removed)
-        };
-        
-        const newHeader = {
-          numRequiredSignatures: numOldSigners - 1,
-          numReadonlySignedAccounts: oldMsg.header.numReadonlySignedAccounts,
-          numReadonlyUnsignedAccounts: oldMsg.header.numReadonlyUnsignedAccounts,
-        };
-        
-        const newInstructions = oldMsg.compiledInstructions.map(ix => ({
-          programIdIndex: remapIndex(ix.programIdIndex),
-          accountKeyIndexes: ix.accountKeyIndexes.map(remapIndex),
-          data: ix.data,
-        }));
-        
-        const newMsg = new MessageV0({
-          header: newHeader,
-          staticAccountKeys: newStaticKeys,
-          recentBlockhash: oldMsg.recentBlockhash,
-          compiledInstructions: newInstructions,
-          addressTableLookups: oldMsg.addressTableLookups,
-        });
-        
-        tx = new VersionedTransaction(newMsg);
-        console.log(`[Orca Withdraw] Rebuilt tx: removed dummy, wallet now at 0, ${newHeader.numRequiredSignatures} signers`);
-      }
+      // Log transaction structure for debugging
+      const msg = tx.message;
+      const numSigners = msg.header.numRequiredSignatures;
+      console.log(`[Orca Withdraw] Tx #${closeTxBuilders.indexOf(txBuilder)}: ${numSigners} signers required`);
+      console.log(`[Orca Withdraw] Signers: ${msg.staticAccountKeys.slice(0, numSigners).map(k => k.toBase58().slice(0,8)).join(', ')}`);
 
       // Pre-sign with SDK keypairs
       if (payload.signers.length > 0) {
