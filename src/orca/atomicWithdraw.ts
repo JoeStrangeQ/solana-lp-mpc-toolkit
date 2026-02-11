@@ -187,19 +187,24 @@ export async function buildOrcaWithdraw(params: OrcaWithdrawParams): Promise<Bui
       
       if (walletIndex > 0 && walletIndex < numOldSigners) {
         // Wallet is a signer but not at index 0
-        // Remove index 0 (dummy) and shift wallet to front
+        // Remove the dummy at index 0, move wallet to front
+        // New layout: [wallet, accounts_1_to_walletIdx-1, accounts_walletIdx+1_to_end]
         
         const newStaticKeys = [
           walletPubkey, // Wallet first (fee payer)
-          ...oldStaticKeys.slice(1, walletIndex), // Before wallet
-          ...oldStaticKeys.slice(walletIndex + 1), // After wallet
+          ...oldStaticKeys.slice(1, walletIndex), // Accounts between dummy and wallet
+          ...oldStaticKeys.slice(walletIndex + 1), // Accounts after wallet
         ];
         
+        // Remap all account indices:
+        // - Old 0 (dummy) -> 0 (now wallet fills this role)
+        // - Old walletIndex -> 0 (wallet moved to front)
+        // - Old 1 to walletIndex-1 -> same (they're still in same relative position)
+        // - Old walletIndex+1 to end -> shift down by 1 (wallet removed from middle)
         const remapIndex = (oldIdx: number): number => {
-          if (oldIdx === 0) return 0;
-          if (oldIdx === walletIndex) return 0;
-          if (oldIdx < walletIndex) return oldIdx;
-          return oldIdx - 1;
+          if (oldIdx === 0 || oldIdx === walletIndex) return 0; // Both map to wallet at 0
+          if (oldIdx < walletIndex) return oldIdx; // Accounts before wallet keep their index
+          return oldIdx - 1; // Accounts after wallet shift down by 1 (wallet slot removed)
         };
         
         const newHeader = {
