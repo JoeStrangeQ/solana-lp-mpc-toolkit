@@ -5,7 +5,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
-import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL, VersionedTransaction } from '@solana/web3.js';
+import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL, VersionedTransaction, TransactionMessage } from '@solana/web3.js';
+import BN from 'bn.js';
 import { arciumPrivacy } from './privacy';
 import { config } from './config';
 import { MeteoraDirectClient } from './dex/meteora';
@@ -4032,6 +4033,94 @@ app.post('/openclaw/connect', async (c) => {
 
 const port = parseInt(process.env.PORT || '3456');
 console.log(`🚀 LP Agent Toolkit - Starting on port ${port}...`);
+
+// Direct withdraw without Jito (for when bundles aren't landing)
+app.post('/lp/withdraw/direct', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { walletId, poolAddress, positionAddress } = body;
+
+    if (!walletId || !poolAddress || !positionAddress) {
+      return c.json({ error: 'Missing walletId, poolAddress, or positionAddress' }, 400);
+    }
+
+    const { client, wallet } = await loadWalletById(walletId);
+    const userPubkey = new PublicKey(wallet.address);
+    const connection = getConnection();
+
+    console.log('[Direct Withdraw] Loading pool...');
+    const pool = await DLMM.create(connection, new PublicKey(poolAddress));
+    const userPositions = await pool.getPositionsByUserAndLbPair(userPubkey);
+
+    const position = userPositions.userPositions.find(
+      (p: any) => p.publicKey.toBase58() === positionAddress
+    );
+
+    if (!position) {
+      return c.json({ error: 'Position not found on-chain' }, 404);
+    }
+
+    const positionData = position.positionData;
+    const withdrawTx = await pool.removeLiquidity({
+      position: position.publicKey,
+      user: userPubkey,
+      fromBinId: positionData.lowerBinId,
+      toBinId: positionData.upperBinId,
+      bps: new BN(10000),
+      shouldClaimAndClose: true,
+    });
+
+    const withdrawTxArray = Array.isArray(withdrawTx) ? withdrawTx : [withdrawTx];
+    const { blockhash } = await connection.getLatestBlockhash('finalized');
+
+    console.log(`[Direct Withdraw] ${withdrawTxArray.length} tx(s)...`);
+
+    const txHashes: string[] = [];
+    for (let i = 0; i < withdrawTxArray.length; i++) {
+      const tx = withdrawTxArray[i];
+      let serialized: string;
+
+      if ('recentBlockhash' in tx) {
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = userPubkey;
+        serialized = tx.serialize({ requireAllSignatures: false }).toString('base64');
+      } else if ('instructions' in tx) {
+        const msg = new TransactionMessage({
+          payerKey: userPubkey,
+          recentBlockhash: blockhash,
+          instructions: tx.instructions,
+        }).compileToV0Message();
+        const vtx = new VersionedTransaction(msg);
+        serialized = Buffer.from(vtx.serialize()).toString('base64');
+      } else {
+        continue;
+      }
+
+      console.log(`[Direct Withdraw] Signing+sending tx ${i + 1}/${withdrawTxArray.length}...`);
+      const txHash = await client.signAndSendTransaction(serialized);
+      console.log(`[Direct Withdraw] Tx ${i + 1} confirmed: ${txHash}`);
+      txHashes.push(txHash);
+
+      if (i < withdrawTxArray.length - 1) {
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+
+    await invalidatePositionCache(walletId);
+
+    return c.json({
+      success: true,
+      message: 'Position closed via direct RPC',
+      transactions: txHashes,
+      poolAddress,
+      positionAddress,
+    });
+  } catch (error: any) {
+    console.error('[Direct Withdraw] Error:', error);
+    return c.json({ error: 'Direct withdraw failed', details: error.message }, 500);
+  }
+});
+
 
 // Auto-start worker on boot
 startWorker().catch(err => {
