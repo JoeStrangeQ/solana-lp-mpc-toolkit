@@ -223,20 +223,6 @@ Treasury: `fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt`
 
 ---
 
-## 📊 Tech Stack
-
-- **Framework:** Hono (edge-ready)
-- **Bot:** grammY (Telegram)
-- **DEXes:** Meteora DLMM, Orca Whirlpools
-- **Swaps:** Jupiter (excludes Meteora DLMM routes)
-- **Bundles:** Jito Block Engine
-- **Wallets:** Privy MPC
-- **Privacy:** Arcium Encryption
-- **Cache:** Upstash Redis
-- **Deploy:** Railway
-
----
-
 ## 🔗 Links
 
 | Resource | URL |
@@ -265,31 +251,6 @@ Treasury: `fAihKpm56DA9v8KU7dSifA1Qh4ZXCjgp6xF5apVaoPt`
 4. **AI-Native Design** — Natural language, agent-friendly API
 5. **Privacy Layer** — Arcium encryption for strategies
 6. **MPC Custody** — No exposed private keys
-
----
-
-## 📝 Changelog (Feb 8, 2026)
-
-### New Features
-- ✅ Orca Whirlpool integration (LP + position discovery)
-- ✅ Unified pool view (Meteora + Orca + Raydium data)
-- ✅ Strategy selector with bin counts (6/16/50 bins)
-- ✅ Pool display shows bin step / tick spacing
-- ✅ Pre-flight simulation for all LP flows
-- ✅ Smart simulation for dependent transactions
-
-### Bug Fixes
-- ✅ Orca fee payer fix (transaction rebuilding)
-- ✅ Auto-cleanup of closed positions from monitoring
-- ✅ Exclude Meteora DLMM from Jupiter swaps (bitmap extension fix)
-- ✅ FEE_RESERVE consistency (0.15 SOL everywhere)
-- ✅ Better error messages for low-liquidity tokens
-
-### UX Improvements
-- ✅ Strategy buttons show bin counts
-- ✅ Pool list shows bin step (Meteora) / tick spacing (Orca)
-- ✅ Clear error messages for common failures
-- ✅ Human-friendly yield display ($X/day per $100)
 
 ---
 
