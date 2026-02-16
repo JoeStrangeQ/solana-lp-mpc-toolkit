@@ -60,9 +60,18 @@ function initRedis(): Redis | null {
   }
   
   try {
-    redis = new Redis({ url, token });
-    redisAvailable = true;
-    console.log('[Redis] ✅ Connected to Upstash Redis');
+    const client = new Redis({ url, token });
+    // Ping to verify connectivity (catches over-limit errors early)
+    client.ping().then(() => {
+      redisAvailable = true;
+      console.log('[Redis] ✅ Connected to Upstash Redis');
+    }).catch((err: any) => {
+      console.warn(`[Redis] ⚠️ Redis ping failed (falling back to in-memory): ${err.message}`);
+      redisAvailable = false;
+      redis = null;
+    });
+    redis = client;
+    redisAvailable = true; // Optimistic; ping will correct if needed
     return redis;
   } catch (error: any) {
     console.error(`[Redis] ❌ Failed to connect: ${error.message}`);
