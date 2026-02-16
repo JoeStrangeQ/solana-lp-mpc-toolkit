@@ -740,14 +740,22 @@ export async function startWorker(): Promise<void> {
   // Start withdrawal queue processing
   withdrawalQueueTimer = setInterval(async () => {
     if (isRunning) {
-      await processWithdrawalQueue();
+      try {
+        await processWithdrawalQueue();
+      } catch (error: any) {
+        await log('warn', `[WithdrawalQueue] Error (non-fatal): ${error.message}`);
+      }
     }
   }, WITHDRAWAL_CHECK_INTERVAL_MS);
   
   // Start swap queue processing
   swapQueueTimer = setInterval(async () => {
     if (isRunning) {
-      await processSwapQueue();
+      try {
+        await processSwapQueue();
+      } catch (error: any) {
+        await log('warn', `[SwapQueue] Error (non-fatal): ${error.message}`);
+      }
     }
   }, WITHDRAWAL_CHECK_INTERVAL_MS);
   
